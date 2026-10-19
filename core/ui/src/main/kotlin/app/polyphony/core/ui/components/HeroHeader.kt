@@ -65,7 +65,8 @@ fun HeroScaffold(
     }
     val barAlpha by animateFloatAsState(if (collapsed) 1f else 0f, tween(200), label = "barAlpha")
     val surface = MaterialTheme.colorScheme.surface
-    Box(modifier.fillMaxSize()) {
+    // Opaque root: without it the previous screen ghosts through during navigation transitions.
+    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         content(PaddingValues(bottom = LocalContentBottomPadding.current))
         TopAppBar(
             title = {
