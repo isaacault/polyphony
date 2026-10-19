@@ -3,6 +3,12 @@ package app.polyphony.core.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.math.abs
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -106,13 +112,29 @@ fun FastScroller(
             verticalArrangement = Arrangement.SpaceEvenly,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            letters.forEach { letter ->
+            letters.forEachIndexed { index, letter ->
                 val enabled = availableLetters.isEmpty() || letter in availableLetters
+                // The letter under the finger grows, its neighbours a little, so the position is obvious.
+                val distance = if (active && currentIndex >= 0) abs(index - currentIndex) else Int.MAX_VALUE
+                val scale by animateFloatAsState(
+                    targetValue = when (distance) { 0 -> 2.0f; 1 -> 1.4f; 2 -> 1.15f; else -> 1f },
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "letterScale",
+                )
                 Text(
                     text = letter.toString(),
                     style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (active && currentIndex >= 0 && letters[currentIndex] == letter) FontWeight.Bold else FontWeight.Medium,
-                    color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outlineVariant,
+                    fontWeight = if (distance == 0) FontWeight.Bold else FontWeight.Medium,
+                    color = when {
+                        distance == 0 -> MaterialTheme.colorScheme.primary
+                        enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+                        else -> MaterialTheme.colorScheme.outlineVariant
+                    },
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        transformOrigin = TransformOrigin(1f, 0.5f)
+                    },
                 )
             }
         }
@@ -123,11 +145,11 @@ fun FastScroller(
             modifier = Modifier.align(Alignment.TopEnd),
         ) {
             val perLetter = if (letters.isEmpty()) 0.dp else maxHeight / letters.size
-            val bubbleOffset = perLetter * currentIndex.coerceAtLeast(0) + perLetter / 2 - 28.dp
+            val bubbleOffset = perLetter * currentIndex.coerceAtLeast(0) + perLetter / 2 - 32.dp
             Surface(
                 modifier = Modifier
-                    .offset(x = (-40).dp, y = bubbleOffset.coerceAtLeast(0.dp))
-                    .size(56.dp),
+                    .offset(x = (-56).dp, y = bubbleOffset.coerceAtLeast(0.dp))
+                    .size(64.dp),
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -137,7 +159,7 @@ fun FastScroller(
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = letters.getOrNull(currentIndex)?.toString() ?: "",
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                     )
                 }

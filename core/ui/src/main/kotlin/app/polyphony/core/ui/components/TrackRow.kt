@@ -145,13 +145,8 @@ fun TrackRow(
         if (trailing != null) {
             trailing()
         }
-        if (onMoreClick != null) {
-            IconButton(onClick = onMoreClick) {
-                Icon(Icons.Rounded.MoreVert, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        } else {
-            Spacer(Modifier.width(Dimens.itemSpacing))
-        }
+        // Options are reached by long-press (see combinedClickable above); no overflow button.
+        Spacer(Modifier.width(Dimens.itemSpacing))
     }
 }
 

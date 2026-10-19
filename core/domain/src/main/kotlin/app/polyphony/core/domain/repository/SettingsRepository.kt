@@ -30,6 +30,10 @@ enum class PlayerArtworkStyle { ROUNDED, SQUARE, CIRCLE }
 @Serializable
 enum class LibraryLayout { LIST, GRID }
 
+/** Library tabs, in the order the user wants them. */
+@Serializable
+enum class LibrarySection { ARTISTS, ALBUMS, SONGS, PLAYLISTS, GENRES }
+
 /** Motion used when moving between screens (the Now Playing sheet always slides). */
 @Serializable
 enum class NavTransitionStyle { NONE, FADE, SLIDE }
@@ -55,6 +59,8 @@ data class AppearanceSettings(
     val albumsLayout: LibraryLayout = LibraryLayout.LIST,
     val playlistsLayout: LibraryLayout = LibraryLayout.LIST,
     val navTransition: NavTransitionStyle = NavTransitionStyle.FADE,
+    /** Enabled Library tabs in display order; an empty list means all, in default order. */
+    val libraryTabs: List<LibrarySection> = LibrarySection.entries.toList(),
 )
 
 @Serializable

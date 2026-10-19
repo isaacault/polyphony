@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,8 +49,10 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val navigator = LocalNavigator.current
-    val tabs = LibraryTab.entries
-    val pagerState = rememberPagerState(initialPage = tabs.indexOf(LibraryTab.fromKey(initialTab))) { tabs.size }
+    val tabs by viewModel.libraryTabs.collectAsStateWithLifecycle()
+    val pagerState = key(tabs) {
+        rememberPagerState(initialPage = tabs.indexOf(LibraryTab.fromKey(initialTab)).coerceAtLeast(0)) { tabs.size }
+    }
     val scope = rememberCoroutineScope()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val sync by viewModel.syncState.collectAsStateWithLifecycle()

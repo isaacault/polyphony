@@ -39,6 +39,21 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.polyphony.R
 import app.polyphony.core.domain.repository.AppearanceSettings
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import app.polyphony.core.domain.repository.LibrarySection
+import app.polyphony.ui.settings.components.ActionPreference
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import app.polyphony.core.domain.repository.LibraryLayout
 import app.polyphony.core.domain.repository.NavTransitionStyle
 import app.polyphony.core.domain.repository.PlayerArtworkStyle
@@ -93,6 +108,7 @@ class AppearanceViewModel @Inject constructor(
 
 @Composable
 fun AppearanceSettingsScreen(viewModel: AppearanceViewModel = hiltViewModel()) {
+    var tabsSheetOpen by remember { mutableStateOf(false) }
     val navigator = LocalNavigator.current
     val settings by viewModel.state.collectAsStateWithLifecycle()
     val supportsDynamic = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -178,6 +194,12 @@ fun AppearanceSettingsScreen(viewModel: AppearanceViewModel = hiltViewModel()) {
         }
 
         preferenceCategory(key = "library", titleRes = R.string.settings_appearance_library) {
+            val tabLabels = LibrarySection.entries.associateWith { stringResource(it.labelRes()) }
+            ActionPreference(
+                title = stringResource(R.string.settings_appearance_library_tabs),
+                summary = s.libraryTabs.ifEmpty { LibrarySection.entries }.joinToString(" · ") { tabLabels[it].orEmpty() },
+                onClick = { tabsSheetOpen = true },
+            )
             val layoutOptions = listOf(
                 ListOption(LibraryLayout.LIST, stringResource(R.string.settings_layout_list)),
                 ListOption(LibraryLayout.GRID, stringResource(R.string.settings_layout_grid)),
@@ -219,6 +241,15 @@ fun AppearanceSettingsScreen(viewModel: AppearanceViewModel = hiltViewModel()) {
             )
         }
     }
+    val currentTabs = settings?.libraryTabs
+    if (tabsSheetOpen && currentTabs != null) {
+        LibraryTabsSheet(
+            current = currentTabs.ifEmpty { LibrarySection.entries },
+            onChange = { tabs -> viewModel.update { it.copy(libraryTabs = tabs) } },
+            onDismiss = { tabsSheetOpen = false },
+        )
+    }
+
 }
 
 /** A tiny mock of a list row and chips so colour choices read instantly. */
@@ -328,5 +359,85 @@ private fun AccentSwatches(
                 }
             }
         }
+    }
+}
+
+private fun LibrarySection.labelRes(): Int = when (this) {
+    LibrarySection.ARTISTS -> R.string.browse_tab_artists
+    LibrarySection.ALBUMS -> R.string.browse_tab_albums
+    LibrarySection.SONGS -> R.string.browse_tab_songs
+    LibrarySection.PLAYLISTS -> R.string.browse_tab_playlists
+    LibrarySection.GENRES -> R.string.browse_tab_genres
+}
+
+/** Reorder and toggle Library tabs. At least one tab stays enabled. */
+@Composable
+private fun LibraryTabsSheet(
+    current: List<LibrarySection>,
+    onChange: (List<LibrarySection>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    // Enabled tabs first in their order, then the disabled ones.
+    var order by remember(current) { mutableStateOf(current + LibrarySection.entries.filter { it !in current }) }
+    var enabled by remember(current) { mutableStateOf(current.toSet()) }
+    val listState = rememberLazyListState()
+    val haptics = LocalHapticFeedback.current
+    val reorderable = rememberReorderableLazyListState(listState) { from, to ->
+        order = order.toMutableList().apply { add(to.index, removeAt(from.index)) }
+        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        onChange(order.filter { it in enabled })
+    }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Text(
+            stringResource(R.string.settings_appearance_library_tabs),
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+        )
+        Text(
+            stringResource(R.string.settings_appearance_library_tabs_hint),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        LazyColumn(state = listState, modifier = Modifier.padding(vertical = 12.dp)) {
+            items(order, key = { it.name }) { section ->
+                ReorderableItem(reorderable, key = section.name) { dragging ->
+                    val on = section in enabled
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(if (dragging) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainerLow)
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                    ) {
+                        Icon(
+                            Icons.Rounded.DragHandle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .draggableHandle(
+                                    onDragStarted = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
+                                    onDragStopped = { haptics.performHapticFeedback(HapticFeedbackType.GestureEnd) },
+                                )
+                                .padding(12.dp),
+                        )
+                        Text(
+                            stringResource(section.labelRes()),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f).padding(start = 4.dp),
+                        )
+                        Switch(
+                            checked = on,
+                            onCheckedChange = { checked ->
+                                if (!checked && enabled.size <= 1) return@Switch
+                                enabled = if (checked) enabled + section else enabled - section
+                                onChange(order.filter { it in enabled })
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }

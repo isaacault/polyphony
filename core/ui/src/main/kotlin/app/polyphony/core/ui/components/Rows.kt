@@ -57,7 +57,7 @@ fun MediaRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick ?: onMoreClick)
             .padding(start = Dimens.screenPadding, end = 4.dp, top = 6.dp, bottom = 6.dp)
             .heightIn(min = 56.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -77,9 +77,6 @@ fun MediaRow(
             }
         }
         when {
-            onMoreClick != null -> IconButton(onClick = onMoreClick) {
-                Icon(Icons.Rounded.MoreVert, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
             showChevron -> Icon(
                 Icons.Rounded.ChevronRight,
                 contentDescription = null,

@@ -16,6 +16,8 @@ import app.polyphony.core.domain.playback.PlaybackState
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.LibrarySyncManager
 import app.polyphony.core.domain.repository.SettingsRepository
+import kotlinx.coroutines.flow.distinctUntilChanged
+import app.polyphony.core.domain.repository.LibrarySection
 import app.polyphony.core.domain.repository.AppearanceSettings
 import app.polyphony.core.domain.repository.LibraryLayout
 import app.polyphony.core.domain.repository.SyncState
@@ -55,6 +57,12 @@ class LibraryViewModel @Inject constructor(
     val albumAscending: StateFlow<Boolean> = savedState.getStateFlow(KEY_ALBUM_ASC, true)
     val trackSort: StateFlow<TrackSort> = savedState.getStateFlow(KEY_TRACK_SORT, TrackSort.TITLE.name).map { TrackSort.valueOf(it) }.asState(TrackSort.TITLE)
     val trackAscending: StateFlow<Boolean> = savedState.getStateFlow(KEY_TRACK_ASC, true)
+    /** Enabled Library tabs in the user's order (Appearance → Library tabs). */
+    val libraryTabs: StateFlow<ImmutableList<LibraryTab>> = settings.settings
+        .map { s -> s.appearance.libraryTabs.ifEmpty { LibrarySection.entries }.map { LibraryTab.valueOf(it.name) }.toImmutableList() }
+        .distinctUntilChanged()
+        .asState(LibraryTab.entries.toImmutableList())
+
     // Layouts are real settings (Appearance → Library layout) so they persist and can be set per type.
     val artistsGrid: StateFlow<Boolean> = settings.settings.map { it.appearance.artistsLayout == LibraryLayout.GRID }.asState(false)
     val albumsGrid: StateFlow<Boolean> = settings.settings.map { it.appearance.albumsLayout == LibraryLayout.GRID }.asState(false)
