@@ -4,6 +4,8 @@
   <em>One player. Every voice.</em>
 </p>
 
+[![Build](https://github.com/isaacault/polyphony/actions/workflows/build.yml/badge.svg)](https://github.com/isaacault/polyphony/actions/workflows/build.yml) [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+
 Polyphony is an open-source Android music player for people who self-host their music. It is
 built to feel like Symfonium — artwork-forward, fast, and smooth — and to be unapologetically
 open: GPL-3.0, no accounts, no analytics, your traffic goes only to your own server.
@@ -122,7 +124,7 @@ Adding a backend means implementing `MediaProvider` + `MediaProviderFactory` in 
 
 ## Contributing
 
-Issues and pull requests are welcome. Keep the dependency rule (`app → … → core:domain`),
+Issues and pull requests are welcome at https://github.com/isaacault/polyphony. Keep the dependency rule (`app → … → core:domain`),
 follow DESIGN.md, add unit tests for pure logic, and run `./gradlew test` before pushing.
 
 ## License

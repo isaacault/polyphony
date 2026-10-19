@@ -35,7 +35,7 @@ import app.polyphony.ui.settings.components.PreferenceRow
 import app.polyphony.ui.settings.components.SettingsScaffold
 import app.polyphony.ui.settings.components.preferenceCategory
 
-const val SOURCE_URL = "https://github.com/polyphony-app/polyphony"
+const val SOURCE_URL = "https://github.com/isaacault/polyphony"
 const val ISSUES_URL = "$SOURCE_URL/issues"
 const val LICENSE_URL = "https://www.gnu.org/licenses/gpl-3.0.html"
 
