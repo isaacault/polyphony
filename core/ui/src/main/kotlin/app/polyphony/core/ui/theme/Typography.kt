@@ -9,8 +9,8 @@ import androidx.compose.ui.unit.sp
 private val Default = Typography()
 
 /**
- * Material 3 type scale with slightly tighter, heavier titles — close to Symfonium's dense but
- * legible lists. Uses the system font so it follows the user's font preference.
+ * Material 3 type scale with slightly tighter, heavier titles — for dense but legible
+ * lists. Uses the system font so it follows the user's font preference.
  */
 val PolyphonyTypography = Typography(
     displayLarge = Default.displayLarge.copy(fontFamily = FontFamily.Default),

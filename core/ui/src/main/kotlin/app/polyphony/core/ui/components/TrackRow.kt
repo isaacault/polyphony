@@ -35,7 +35,7 @@ import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.core.ui.util.formatDuration
 
 /**
- * A dense, Symfonium-style track row. Shows artwork (or the track number inside an album) and
+ * A dense track row. Shows artwork (or the track number inside an album) and
  * swaps in [PlayingIndicator] for the current track.
  */
 @Composable

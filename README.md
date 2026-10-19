@@ -7,8 +7,7 @@
 [![Build](https://github.com/isaacault/polyphony/actions/workflows/build.yml/badge.svg)](https://github.com/isaacault/polyphony/actions/workflows/build.yml) [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
 Polyphony is an open-source Android music player for people who self-host their music. It is
-built to feel like Symfonium — artwork-forward, fast, and smooth — and to be unapologetically
-open: GPL-3.0, no accounts, no analytics, your traffic goes only to your own server.
+built to be artwork-forward, fast and smooth, and unapologetically open: GPL-3.0, no accounts, no analytics, your traffic goes only to your own server.
 
 | Home | Album | Now Playing | Queue |
 |------|-------|-------------|-------|
@@ -59,7 +58,7 @@ open: GPL-3.0, no accounts, no analytics, your traffic goes only to your own ser
   matches
 - Offline mode shows only what is on device; downloaded files are preferred for playback
 
-**Streaming quality engine** (the part Symfonium users asked for most)
+**Streaming quality engine**
 - Transcoding *profiles* (built-in: Original, Lossless capped to 16/48, High Opus 256k, Balanced
   Opus 128k, Data saver Opus 64k, Cast compatible MP3 320k) plus your own
 - *Rules*: a default profile, a Wi-Fi profile, a mobile-data profile, and "treat metered Wi-Fi as
@@ -129,10 +128,10 @@ follow DESIGN.md, add unit tests for pure logic, and run `./gradlew test` before
 
 ## License
 
-GPL-3.0-or-later. Polyphony is an independent project and is not affiliated with Symfonium,
-Jellyfin, Navidrome or Google.
+GPL-3.0-or-later. Polyphony is an independent project and is not affiliated with Jellyfin,
+Navidrome or Google.
 
 ## Acknowledgements
 
 AndroidX Media3, the Jellyfin Kotlin SDK, Coil, material-kolor, Reorderable, and the
-OpenSubsonic project — and Symfonium, for setting the bar.
+OpenSubsonic project.

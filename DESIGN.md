@@ -1,7 +1,7 @@
 # Polyphony design language
 
-Polyphony's goal is the feel of Symfonium: dense but calm, artwork-forward, instant, and
-animated just enough to feel physical. Everything below is a rule unless marked "prefer".
+Polyphony's look is dense but calm, artwork-forward, instant, and animated just enough to
+feel physical. Everything below is a rule unless marked "prefer".
 
 ## Foundations
 
