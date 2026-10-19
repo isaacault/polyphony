@@ -1,0 +1,145 @@
+package app.polyphony.ui.browse.library
+
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import app.polyphony.core.domain.model.Album
+import app.polyphony.core.domain.model.AlbumSort
+import app.polyphony.core.domain.model.Artist
+import app.polyphony.core.domain.model.ArtistSort
+import app.polyphony.core.domain.model.Genre
+import app.polyphony.core.domain.model.Playlist
+import app.polyphony.core.domain.model.Track
+import app.polyphony.core.domain.model.TrackSort
+import app.polyphony.core.domain.playback.PlaybackController
+import app.polyphony.core.domain.playback.PlaybackState
+import app.polyphony.core.domain.repository.LibraryRepository
+import app.polyphony.core.domain.repository.LibrarySyncManager
+import app.polyphony.core.domain.repository.SettingsRepository
+import app.polyphony.core.domain.repository.SyncState
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+enum class LibraryTab(val key: String) {
+    ARTISTS("artists"), ALBUMS("albums"), SONGS("songs"), PLAYLISTS("playlists"), GENRES("genres");
+
+    companion object {
+        fun fromKey(key: String?): LibraryTab = entries.firstOrNull { it.key == key } ?: ARTISTS
+    }
+}
+
+@HiltViewModel
+class LibraryViewModel @Inject constructor(
+    private val library: LibraryRepository,
+    private val syncManager: LibrarySyncManager,
+    settings: SettingsRepository,
+    private val playback: PlaybackController,
+    private val savedState: SavedStateHandle,
+) : ViewModel() {
+
+    // ---- persisted view options ----
+    val artistSort: StateFlow<ArtistSort> = savedState.getStateFlow(KEY_ARTIST_SORT, ArtistSort.NAME.name).map { ArtistSort.valueOf(it) }.asState(ArtistSort.NAME)
+    val albumSort: StateFlow<AlbumSort> = savedState.getStateFlow(KEY_ALBUM_SORT, AlbumSort.NAME.name).map { AlbumSort.valueOf(it) }.asState(AlbumSort.NAME)
+    val albumAscending: StateFlow<Boolean> = savedState.getStateFlow(KEY_ALBUM_ASC, true)
+    val trackSort: StateFlow<TrackSort> = savedState.getStateFlow(KEY_TRACK_SORT, TrackSort.TITLE.name).map { TrackSort.valueOf(it) }.asState(TrackSort.TITLE)
+    val trackAscending: StateFlow<Boolean> = savedState.getStateFlow(KEY_TRACK_ASC, true)
+    val artistsGrid: StateFlow<Boolean> = savedState.getStateFlow(KEY_ARTISTS_GRID, true)
+    val albumsGrid: StateFlow<Boolean> = savedState.getStateFlow(KEY_ALBUMS_GRID, true)
+    val playlistsGrid: StateFlow<Boolean> = savedState.getStateFlow(KEY_PLAYLISTS_GRID, false)
+
+    fun setArtistSort(sort: ArtistSort) { savedState[KEY_ARTIST_SORT] = sort.name }
+    fun setAlbumSort(sort: AlbumSort, ascending: Boolean) { savedState[KEY_ALBUM_SORT] = sort.name; savedState[KEY_ALBUM_ASC] = ascending }
+    fun setTrackSort(sort: TrackSort, ascending: Boolean) { savedState[KEY_TRACK_SORT] = sort.name; savedState[KEY_TRACK_ASC] = ascending }
+    fun setArtistsGrid(grid: Boolean) { savedState[KEY_ARTISTS_GRID] = grid }
+    fun setAlbumsGrid(grid: Boolean) { savedState[KEY_ALBUMS_GRID] = grid }
+    fun setPlaylistsGrid(grid: Boolean) { savedState[KEY_PLAYLISTS_GRID] = grid }
+
+    // ---- content (null = first load pending) ----
+    val artists: StateFlow<ImmutableList<Artist>?> = artistSort
+        .flatMapLatest { library.artists(it) }
+        .map { it.toImmutableList() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val albums: StateFlow<ImmutableList<Album>?> = combine(albumSort, albumAscending) { s, a -> s to a }
+        .flatMapLatest { (sort, asc) -> library.albums(sort, asc) }
+        .map { it.toImmutableList() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val tracks: StateFlow<ImmutableList<Track>?> = combine(trackSort, trackAscending) { s, a -> s to a }
+        .flatMapLatest { (sort, asc) -> library.tracks(sort, asc) }
+        .map { it.toImmutableList() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val playlists: StateFlow<ImmutableList<Playlist>?> = library.playlists()
+        .map { it.toImmutableList() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val genres: StateFlow<ImmutableList<Genre>?> = library.genres()
+        .map { it.toImmutableList() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val gridColumns: StateFlow<Int> = settings.settings.map { it.appearance.gridColumns }.asState(0)
+    val showTrackNumbers: StateFlow<Boolean> = settings.settings.map { it.appearance.showTrackNumbers }.asState(true)
+    val playbackState: StateFlow<PlaybackState> = playback.state
+    val syncState: StateFlow<SyncState> = syncManager.state
+
+    // ---- actions ----
+    fun playTrack(index: Int) {
+        val list = tracks.value ?: return
+        playback.playTracks(list, index, queueTitle = "Songs")
+    }
+
+    fun playAllSongs(shuffle: Boolean) {
+        viewModelScope.launch {
+            val list = tracks.value ?: library.tracks(trackSort.value, trackAscending.value).first()
+            if (list.isEmpty()) return@launch
+            if (shuffle && list.size > SHUFFLE_CAP) {
+                playback.playTracks(list.shuffled().take(SHUFFLE_CAP), 0, shuffle = false, queueTitle = "Shuffle all")
+            } else {
+                playback.playTracks(list, 0, shuffle = shuffle, queueTitle = if (shuffle) "Shuffle all" else "Songs")
+            }
+        }
+    }
+
+    /** Shuffle the whole library (server-side random when possible). */
+    fun shuffleLibrary() {
+        viewModelScope.launch {
+            val remote = runCatching { library.getRandomTracks(SHUFFLE_CAP) }.getOrDefault(emptyList())
+            val picks = if (remote.isNotEmpty()) remote else library.tracks().first().shuffled().take(SHUFFLE_CAP)
+            if (picks.isNotEmpty()) playback.playTracks(picks, 0, shuffle = false, queueTitle = "Shuffle all")
+        }
+    }
+
+    fun createPlaylist(name: String) {
+        viewModelScope.launch { runCatching { library.createPlaylist(name) } }
+    }
+
+    fun refresh() {
+        viewModelScope.launch { runCatching { syncManager.syncNow(false) } }
+    }
+
+    private fun <T> kotlinx.coroutines.flow.Flow<T>.asState(initial: T): StateFlow<T> =
+        stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)
+
+    private companion object {
+        const val KEY_ARTIST_SORT = "artistSort"
+        const val KEY_ALBUM_SORT = "albumSort"
+        const val KEY_ALBUM_ASC = "albumAsc"
+        const val KEY_TRACK_SORT = "trackSort"
+        const val KEY_TRACK_ASC = "trackAsc"
+        const val KEY_ARTISTS_GRID = "artistsGrid"
+        const val KEY_ALBUMS_GRID = "albumsGrid"
+        const val KEY_PLAYLISTS_GRID = "playlistsGrid"
+        const val SHUFFLE_CAP = 300
+    }
+}

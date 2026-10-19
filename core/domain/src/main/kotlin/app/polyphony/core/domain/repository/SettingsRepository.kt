@@ -1,0 +1,82 @@
+package app.polyphony.core.domain.repository
+
+import app.polyphony.core.domain.transcode.TranscodePolicy
+import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.Serializable
+
+interface SettingsRepository {
+    val settings: Flow<AppSettings>
+    suspend fun current(): AppSettings
+    suspend fun update(transform: (AppSettings) -> AppSettings)
+}
+
+@Serializable
+data class AppSettings(
+    val onboardingComplete: Boolean = false,
+    val appearance: AppearanceSettings = AppearanceSettings(),
+    val playback: PlaybackSettings = PlaybackSettings(),
+    val transcode: TranscodePolicy = TranscodePolicy(),
+    val library: LibrarySettings = LibrarySettings(),
+    val downloads: DownloadSettings = DownloadSettings(),
+)
+
+@Serializable
+enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
+@Serializable
+enum class PlayerArtworkStyle { ROUNDED, SQUARE, CIRCLE }
+
+@Serializable
+data class AppearanceSettings(
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    /** Material You colours from the wallpaper (Android 12+). */
+    val dynamicColor: Boolean = true,
+    /** Seed colour (ARGB) used when dynamic colour is off or unavailable. */
+    val accentSeedArgb: Long = 0xFF6750A4,
+    /** Pure-black dark surfaces for OLED screens. */
+    val pureBlack: Boolean = false,
+    /** Tint the Now Playing screen with colours extracted from the artwork. */
+    val artworkColorsInPlayer: Boolean = true,
+    /** 0 = automatic based on width. */
+    val gridColumns: Int = 0,
+    val playerArtworkStyle: PlayerArtworkStyle = PlayerArtworkStyle.ROUNDED,
+    val showTrackNumbers: Boolean = true,
+    val blurredPlayerBackground: Boolean = true,
+)
+
+@Serializable
+enum class ReplayGainMode { OFF, TRACK, ALBUM, AUTO }
+
+@Serializable
+data class PlaybackSettings(
+    val gapless: Boolean = true,
+    val crossfadeMs: Int = 0,
+    val replayGainMode: ReplayGainMode = ReplayGainMode.OFF,
+    val replayGainPreampDb: Float = 0f,
+    val replayGainPreventClipping: Boolean = true,
+    val skipSilence: Boolean = false,
+    val pauseOnDisconnect: Boolean = true,
+    val resumeOnConnect: Boolean = false,
+    val duckOnTransientFocusLoss: Boolean = true,
+    val scrobble: Boolean = true,
+    /** Report "played" after this fraction of the track (or 4 minutes, whichever comes first). */
+    val scrobbleThreshold: Float = 0.5f,
+    val streamCacheSizeMb: Int = 1024,
+    val preloadNextTrack: Boolean = true,
+    val previousRestartsAfterMs: Long = 3_000,
+    val rememberQueue: Boolean = true,
+    val hapticFeedback: Boolean = true,
+    val playbackSpeed: Float = 1f,
+    /** Preferred audio session usage for the equaliser hookup. */
+    val externalEqualizer: Boolean = true,
+)
+
+@Serializable
+data class LibrarySettings(
+    val autoSyncHours: Int = 6,
+    val syncOnWifiOnly: Boolean = true,
+    val syncOnLaunch: Boolean = true,
+    val showCompilationsUnderArtists: Boolean = false,
+    val artworkCacheSizeMb: Int = 512,
+    val randomAlbumSeed: Long = 0L,
+)

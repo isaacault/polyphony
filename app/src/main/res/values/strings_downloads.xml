@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Scope / offline mode -->
+    <string name="dl_downloaded_only">Downloaded only</string>
+    <string name="dl_offline_banner">Offline mode · showing downloaded music</string>
+    <string name="dl_offline_banner_action">Turn off</string>
+
+    <!-- Actions -->
+    <string name="dl_action_download">Download</string>
+    <string name="dl_action_download_quality">Download in…</string>
+    <string name="dl_action_remove_download">Remove download</string>
+    <string name="dl_action_cancel_download">Cancel download</string>
+    <string name="dl_action_retry">Retry</string>
+    <string name="dl_action_pause_all">Pause all</string>
+    <string name="dl_action_resume_all">Resume all</string>
+    <string name="dl_action_retry_failed">Retry failed</string>
+    <string name="dl_action_remove_all">Remove all downloads</string>
+    <string name="dl_action_manage_rules">Manage rules</string>
+    <string name="dl_action_settings">Settings</string>
+    <string name="dl_action_new_rule">New rule</string>
+    <string name="dl_action_evaluate_now">Evaluate now</string>
+    <string name="dl_action_open_downloads">Open downloads</string>
+    <string name="dl_action_pick_quality">Choose quality</string>
+    <string name="dl_action_edit">Edit</string>
+    <string name="dl_action_delete">Delete</string>
+    <string name="dl_action_save">Save</string>
+    <string name="dl_action_cancel">Cancel</string>
+    <string name="dl_action_remove">Remove</string>
+    <string name="dl_action_keep_files">Keep files</string>
+    <string name="dl_action_remove_files">Remove files</string>
+
+    <!-- Collection button states -->
+    <string name="dl_state_not_downloaded">Download all</string>
+    <string name="dl_state_downloading">Downloading %1$d%%</string>
+    <string name="dl_state_partial">Partially downloaded</string>
+    <string name="dl_state_downloaded">Downloaded</string>
+    <string name="dl_started">Download started</string>
+    <string name="dl_confirm_remove_title">Remove downloads?</string>
+    <string name="dl_confirm_remove_text">The files for these songs will be deleted from this device.</string>
+    <string name="dl_confirm_cancel_title">Cancel download?</string>
+    <string name="dl_confirm_cancel_text">In-progress and queued songs will be removed from the download queue.</string>
+    <string name="dl_confirm_remove_all_title">Remove all downloads?</string>
+    <string name="dl_confirm_remove_all_text">Every downloaded song for this server will be deleted. Rules will re-download their music on the next evaluation unless you disable them.</string>
+
+    <!-- Downloads screen -->
+    <string name="dl_title">Downloads</string>
+    <string name="dl_tab_active">Active</string>
+    <string name="dl_tab_downloaded">Downloaded</string>
+    <string name="dl_tab_rules">Rules</string>
+    <string name="dl_storage_title">Storage</string>
+    <string name="dl_storage_used_of">%1$s of %2$s used</string>
+    <string name="dl_storage_used_unlimited">%1$s used · no limit</string>
+    <string name="dl_storage_free">%1$s free on device</string>
+    <string name="dl_storage_files">%1$d files</string>
+    <string name="dl_active_empty_title">Nothing downloading</string>
+    <string name="dl_active_empty_body">Songs you download or that a rule picks up will show their progress here.</string>
+    <string name="dl_downloaded_empty_title">No downloads yet</string>
+    <string name="dl_downloaded_empty_body">Use the download button on an album, playlist or artist, or create a rule to keep music on this device automatically.</string>
+    <string name="dl_rules_empty_title">No download rules</string>
+    <string name="dl_rules_empty_body">Rules keep favourites, playlists, recent additions and more downloaded automatically, and clean up what no longer matches.</string>
+    <string name="dl_status_queued">Queued</string>
+    <string name="dl_status_downloading">Downloading</string>
+    <string name="dl_status_paused">Paused</string>
+    <string name="dl_status_failed">Failed</string>
+    <string name="dl_status_completed">Downloaded</string>
+    <string name="dl_rule_evaluating">Checking rules…</string>
+    <string name="dl_rule_last_evaluated">Last checked %1$s</string>
+    <string name="dl_rule_disabled">Disabled</string>
+    <string name="dl_rule_quality_default">Default quality</string>
+    <string name="dl_rule_max_tracks">Up to %1$d songs</string>
+    <string name="dl_home_section">Downloaded</string>
+    <string name="dl_home_summary">%1$d songs on this device · %2$s</string>
+    <string name="dl_see_all">See all</string>
+    <plurals name="dl_count_songs">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
+    <string name="dl_delete_rule_title">Delete rule?</string>
+    <string name="dl_delete_rule_text">Should the songs this rule downloaded be removed from the device too?</string>
+
+    <!-- Rule editor -->
+    <string name="dl_rule_new_title">New download rule</string>
+    <string name="dl_rule_edit_title">Edit download rule</string>
+    <string name="dl_rule_section_what">What to keep downloaded</string>
+    <string name="dl_rule_section_options">Options</string>
+    <string name="dl_rule_target_favorites">Favourite songs</string>
+    <string name="dl_rule_target_playlist">Playlist</string>
+    <string name="dl_rule_target_album">Album</string>
+    <string name="dl_rule_target_artist">Artist</string>
+    <string name="dl_rule_target_genre">Genre</string>
+    <string name="dl_rule_target_recently_added">Recently added albums</string>
+    <string name="dl_rule_target_most_played">Most played songs</string>
+    <string name="dl_rule_target_recently_played">Recently played songs</string>
+    <string name="dl_rule_pick_playlist">Choose a playlist</string>
+    <string name="dl_rule_pick_album">Choose an album</string>
+    <string name="dl_rule_pick_artist">Choose an artist</string>
+    <string name="dl_rule_pick_genre">Choose a genre</string>
+    <string name="dl_rule_pick_search">Search</string>
+    <string name="dl_rule_nothing_selected">Nothing selected</string>
+    <string name="dl_rule_count_albums">Number of albums</string>
+    <string name="dl_rule_count_tracks">Number of songs</string>
+    <string name="dl_rule_quality">Quality</string>
+    <string name="dl_rule_quality_use_default">Use default download quality</string>
+    <string name="dl_rule_max_tracks_title">Maximum songs</string>
+    <string name="dl_rule_max_tracks_none">No limit</string>
+    <string name="dl_rule_enabled">Enabled</string>
+    <string name="dl_rule_enabled_summary">Disabled rules keep their files but stop adding new ones.</string>
+    <string name="dl_rule_saved">Rule saved</string>
+    <string name="dl_rule_needs_target">Pick what this rule should keep downloaded first.</string>
+
+    <!-- Settings -->
+    <string name="dl_settings_title">Downloads</string>
+    <string name="dl_settings_summary_used">%1$s on device</string>
+    <string name="dl_settings_summary_none">Offline music and download rules</string>
+    <string name="dl_settings_cat_network">Network</string>
+    <string name="dl_settings_cat_storage">Storage</string>
+    <string name="dl_settings_cat_rules">Rules</string>
+    <string name="dl_settings_cat_playback">Offline playback</string>
+    <string name="dl_settings_wifi_only">Download on Wi-Fi only</string>
+    <string name="dl_settings_charging_only">Only while charging</string>
+    <string name="dl_settings_storage_cap">Storage limit</string>
+    <string name="dl_settings_storage_unlimited">Unlimited</string>
+    <string name="dl_settings_default_quality">Default download quality</string>
+    <string name="dl_settings_remove_unmatched">Remove songs a rule no longer matches</string>
+    <string name="dl_settings_remove_unmatched_summary">Only applies to rule-managed downloads, never to songs you downloaded yourself.</string>
+    <string name="dl_settings_evict_lrp">Evict least recently played first</string>
+    <string name="dl_settings_evict_lrp_summary">When over the storage limit, rule-managed songs you haven\'t played in the longest time are removed first.</string>
+    <string name="dl_settings_location">Location</string>
+    <string name="dl_settings_location_internal">Internal storage</string>
+    <string name="dl_settings_location_external">External storage</string>
+    <string name="dl_settings_location_free">%1$s free</string>
+    <string name="dl_settings_offline_mode">Offline mode</string>
+    <string name="dl_settings_offline_mode_summary">Browse and play only what is downloaded.</string>
+    <string name="dl_settings_prefer_downloaded">Prefer downloaded files for playback</string>
+    <string name="dl_settings_prefer_downloaded_summary">Play the local copy whenever one exists, even on Wi-Fi.</string>
+    <string name="dl_settings_interval">Check rules every</string>
+    <string name="dl_settings_concurrent">Parallel downloads</string>
+    <string name="dl_settings_hours">%1$d h</string>
+</resources>

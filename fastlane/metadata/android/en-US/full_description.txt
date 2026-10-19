@@ -1,0 +1,11 @@
+Polyphony is an open-source Android music player for self-hosted libraries.
+
+• Subsonic, OpenSubsonic, Navidrome and Jellyfin servers; several at once
+• A local library cache so browsing and search are instant and work offline
+• Gapless playback, ReplayGain, lyrics, sleep timer, scrobbling, equaliser hookup
+• Google Cast with seamless hand-off between your phone and the receiver
+• Transcoding profiles with rules per network (Wi-Fi / mobile data), per Cast device, and an
+  adaptive mode that lowers quality when the connection stalls and restores it afterwards
+• Material 3 Expressive design with dynamic colour and artwork-tinted Now Playing
+
+No accounts, no tracking. Your music stays between your device and your server.

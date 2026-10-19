@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dlna_section_title">UPnP / DLNA</string>
+    <string name="dlna_searching">Searching for renderers on your Wi-Fi…</string>
+    <string name="dlna_connected">Connected</string>
+    <string name="dlna_connecting">Connecting…</string>
+    <string name="dlna_disconnect">Disconnect</string>
+    <string name="dlna_volume">Volume</string>
+    <string name="dlna_hint">Renderers appear automatically; make sure the phone is on the same network.</string>
+    <string name="cast_section_title">Google Cast</string>
+</resources>

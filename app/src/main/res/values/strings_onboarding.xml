@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_tagline">One player. Every voice.</string>
+    <string name="onboarding_pitch">Stream your own music collection from Navidrome, Subsonic or Jellyfin — with casting, offline-ready browsing and smart quality rules.</string>
+    <string name="onboarding_feature_servers">Your servers, one library</string>
+    <string name="onboarding_feature_servers_desc">Subsonic, OpenSubsonic, Navidrome and Jellyfin, side by side.</string>
+    <string name="onboarding_feature_cast">Cast anywhere</string>
+    <string name="onboarding_feature_cast_desc">Play to Chromecast speakers and TVs with per-device quality settings.</string>
+    <string name="onboarding_feature_quality">Quality that adapts</string>
+    <string name="onboarding_feature_quality_desc">Different transcoding on Wi-Fi, mobile data, or when the network slows down.</string>
+    <string name="onboarding_get_started">Get started</string>
+
+    <string name="server_type_title">What are you connecting to?</string>
+    <string name="server_type_subtitle">You can add more servers later in Settings.</string>
+    <string name="server_type_subsonic_title">Subsonic · Navidrome</string>
+    <string name="server_type_subsonic_desc">Navidrome, Airsonic, Gonic, Ampache and any OpenSubsonic-compatible server.</string>
+    <string name="server_type_jellyfin_title">Jellyfin</string>
+    <string name="server_type_jellyfin_desc">Your Jellyfin music libraries, with favourites, playlists and playback reporting.</string>
+
+    <string name="connect_title">Connect to %1$s</string>
+    <string name="connect_name">Server name</string>
+    <string name="connect_name_hint">Optional — shown in the app</string>
+    <string name="connect_url">Server address</string>
+    <string name="connect_url_hint">https://music.example.com</string>
+    <string name="connect_url_help">Include the port if needed, e.g. http://192.168.1.10:%1$d</string>
+    <string name="connect_username">Username</string>
+    <string name="connect_password">Password</string>
+    <string name="connect_show_password">Show password</string>
+    <string name="connect_hide_password">Hide password</string>
+    <string name="connect_advanced">Advanced</string>
+    <string name="connect_legacy_auth">Legacy authentication</string>
+    <string name="connect_legacy_auth_desc">Send the password directly instead of a salted token. Only for very old servers.</string>
+    <string name="connect_trust_self_signed">Trust self-signed certificate</string>
+    <string name="connect_trust_self_signed_desc">Skips TLS verification for this server only.</string>
+    <string name="connect_custom_headers">Custom HTTP headers</string>
+    <string name="connect_custom_headers_desc">For reverse proxies such as Cloudflare Access or Authelia.</string>
+    <string name="connect_header_name">Header</string>
+    <string name="connect_header_value">Value</string>
+    <string name="connect_add_header">Add header</string>
+    <string name="connect_remove_header">Remove header</string>
+    <string name="connect_button">Test &amp; connect</string>
+    <string name="connect_connecting">Connecting…</string>
+    <string name="connect_success">Connected</string>
+    <string name="connect_back">Back</string>
+
+    <string name="connect_error_unauthorized">Wrong username or password.</string>
+    <string name="connect_error_not_found">No server found at that address. Check the URL and port.</string>
+    <string name="connect_error_network">Couldn’t reach the server: %1$s</string>
+    <string name="connect_error_server">The server returned an error (%1$d): %2$s</string>
+    <string name="connect_error_unsupported">This server isn’t supported: %1$s</string>
+    <string name="connect_error_unknown">Something went wrong: %1$s</string>
+    <string name="connect_error_url">Enter a valid server address.</string>
+    <string name="connect_error_username">Enter your username.</string>
+</resources>
