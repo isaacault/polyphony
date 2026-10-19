@@ -14,12 +14,14 @@ import app.polyphony.core.domain.playback.PlaybackPosition
 import app.polyphony.core.domain.playback.PlaybackState
 import app.polyphony.core.domain.playback.RepeatMode
 import app.polyphony.core.domain.transcode.OutputTarget
+import app.polyphony.core.domain.transcode.TranscodeDecision
 import app.polyphony.core.playback.PlaybackService
 import app.polyphony.core.playback.cast.CastManager
 import app.polyphony.core.playback.di.PlaybackScope
 import app.polyphony.core.playback.engine.LatencyMonitor
 import app.polyphony.core.playback.engine.ServerLookup
 import app.polyphony.core.playback.engine.TranscodeDecisionEngine
+import app.polyphony.core.playback.stream.StreamResolver
 import app.polyphony.core.playback.queue.MediaItemFactory
 import app.polyphony.core.playback.queue.QueueMath
 import app.polyphony.core.playback.queue.QueueStore
@@ -58,6 +60,7 @@ class PlaybackControllerImpl @Inject constructor(
     private val latencyMonitor: LatencyMonitor,
     private val castManager: CastManager,
     private val dlnaController: DlnaController,
+    private val streamResolver: StreamResolver,
 ) : PlaybackController {
 
     private val _state = MutableStateFlow(PlaybackState())
@@ -84,7 +87,7 @@ class PlaybackControllerImpl @Inject constructor(
         castManager.initialize()
         connect()
         scope.launch {
-            combine(engine.decision, latencyMonitor.degraded, castManager.state, dlnaController.state) { decision, degraded, cast, dlna ->
+            combine(engine.decision, latencyMonitor.degraded, castManager.state, dlnaController.state, streamResolver.applied) { decision, degraded, cast, dlna, _ ->
                 val dlnaTarget = dlna.target
                 val castTarget = cast.target
                 val target: OutputTarget = when {
@@ -95,7 +98,7 @@ class PlaybackControllerImpl @Inject constructor(
                 Triple(decision, degraded, target)
             }.collect { (decision, degraded, target) ->
                 _state.update {
-                    it.copy(transcode = decision, latencyDegraded = degraded, outputTarget = target)
+                    it.copy(transcode = effectiveDecision(it.currentTrack?.id, decision), latencyDegraded = degraded, outputTarget = target)
                 }
             }
         }
@@ -173,19 +176,37 @@ class PlaybackControllerImpl @Inject constructor(
         applyExtras(c.sessionExtras)
     }
 
+    /**
+     * The decision shown in the UI: what the stream resolver actually applied to the current
+     * item (e.g. a downloaded file) when it matches, otherwise the engine's live decision.
+     */
+    private fun effectiveDecision(currentTrackId: String?, live: TranscodeDecision): TranscodeDecision {
+        if (currentTrackId == null) return live
+        return streamResolver.applied.value[currentTrackId] ?: live
+    }
+
     private fun syncQueue(player: Player) {
         val count = player.mediaItemCount
         val tracks = ArrayList<Track>(count)
         for (i in 0 until count) {
             tracks += trackFor(player.getMediaItemAt(i))
         }
-        _state.update { it.copy(queue = tracks.toImmutableList(), currentIndex = player.currentMediaItemIndex) }
+        _state.update {
+            val index = player.currentMediaItemIndex
+            it.copy(
+                queue = tracks.toImmutableList(),
+                currentIndex = index,
+                transcode = effectiveDecision(tracks.getOrNull(index)?.id, engine.decision.value),
+            )
+        }
     }
 
     private fun syncPlayerFlags(player: Player) {
         _state.update {
+            val index = player.currentMediaItemIndex
             it.copy(
-                currentIndex = player.currentMediaItemIndex,
+                currentIndex = index,
+                transcode = effectiveDecision(it.queue.getOrNull(index)?.id, engine.decision.value),
                 isPlaying = player.isPlaying,
                 isBuffering = player.playbackState == Player.STATE_BUFFERING,
                 shuffleEnabled = player.shuffleModeEnabled,
