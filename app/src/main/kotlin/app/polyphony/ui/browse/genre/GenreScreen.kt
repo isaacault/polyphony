@@ -43,6 +43,7 @@ import app.polyphony.core.ui.components.TrackRow
 import app.polyphony.core.ui.components.listContentPadding
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.ui.browse.AlbumGrid
+import app.polyphony.ui.browse.AlbumList
 import app.polyphony.ui.common.AlbumOptionsSheet
 import app.polyphony.ui.common.TrackOptionsSheet
 import kotlinx.coroutines.launch
@@ -53,6 +54,7 @@ fun GenreScreen(viewModel: GenreViewModel = hiltViewModel()) {
     val albums by viewModel.albums.collectAsStateWithLifecycle()
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
     val columns by viewModel.gridColumns.collectAsStateWithLifecycle()
+    val grid by viewModel.albumsGrid.collectAsStateWithLifecycle()
     val playback by viewModel.playbackState.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState { 2 }
     val scope = rememberCoroutineScope()
@@ -98,12 +100,18 @@ fun GenreScreen(viewModel: GenreViewModel = hiltViewModel()) {
                 when {
                     list == null -> LoadingPlaceholder(PlaceholderStyle.GRID)
                     list.isEmpty() -> EmptyState(title = stringResource(R.string.browse_empty_albums), icon = Icons.Rounded.Category)
-                    else -> AlbumGrid(
+                    grid -> AlbumGrid(
                         albums = list,
                         columns = columns,
                         onAlbum = { navigator.openAlbum(it.id) },
                         onAlbumLong = { albumForOptions = it },
                         contentPadding = listContentPadding(top = 8.dp, horizontal = 12.dp, extraBottom = 96.dp),
+                    )
+                    else -> AlbumList(
+                        albums = list,
+                        onAlbum = { navigator.openAlbum(it.id) },
+                        onAlbumLong = { albumForOptions = it },
+                        contentPadding = listContentPadding(top = 8.dp, extraBottom = 96.dp),
                     )
                 }
             } else {

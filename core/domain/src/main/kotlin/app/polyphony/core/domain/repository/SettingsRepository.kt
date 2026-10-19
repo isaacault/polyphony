@@ -26,6 +26,10 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 @Serializable
 enum class PlayerArtworkStyle { ROUNDED, SQUARE, CIRCLE }
 
+/** How a library collection is laid out. */
+@Serializable
+enum class LibraryLayout { LIST, GRID }
+
 @Serializable
 data class AppearanceSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -42,6 +46,10 @@ data class AppearanceSettings(
     val playerArtworkStyle: PlayerArtworkStyle = PlayerArtworkStyle.ROUNDED,
     val showTrackNumbers: Boolean = true,
     val blurredPlayerBackground: Boolean = true,
+    /** Per-collection layout in the Library and "see all" lists. */
+    val artistsLayout: LibraryLayout = LibraryLayout.LIST,
+    val albumsLayout: LibraryLayout = LibraryLayout.LIST,
+    val playlistsLayout: LibraryLayout = LibraryLayout.LIST,
 )
 
 @Serializable

@@ -16,6 +16,8 @@ import app.polyphony.core.domain.playback.PlaybackState
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.LibrarySyncManager
 import app.polyphony.core.domain.repository.SettingsRepository
+import app.polyphony.core.domain.repository.AppearanceSettings
+import app.polyphony.core.domain.repository.LibraryLayout
 import app.polyphony.core.domain.repository.SyncState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
@@ -42,7 +44,7 @@ enum class LibraryTab(val key: String) {
 class LibraryViewModel @Inject constructor(
     private val library: LibraryRepository,
     private val syncManager: LibrarySyncManager,
-    settings: SettingsRepository,
+    private val settings: SettingsRepository,
     private val playback: PlaybackController,
     private val savedState: SavedStateHandle,
 ) : ViewModel() {
@@ -53,16 +55,22 @@ class LibraryViewModel @Inject constructor(
     val albumAscending: StateFlow<Boolean> = savedState.getStateFlow(KEY_ALBUM_ASC, true)
     val trackSort: StateFlow<TrackSort> = savedState.getStateFlow(KEY_TRACK_SORT, TrackSort.TITLE.name).map { TrackSort.valueOf(it) }.asState(TrackSort.TITLE)
     val trackAscending: StateFlow<Boolean> = savedState.getStateFlow(KEY_TRACK_ASC, true)
-    val artistsGrid: StateFlow<Boolean> = savedState.getStateFlow(KEY_ARTISTS_GRID, true)
-    val albumsGrid: StateFlow<Boolean> = savedState.getStateFlow(KEY_ALBUMS_GRID, true)
-    val playlistsGrid: StateFlow<Boolean> = savedState.getStateFlow(KEY_PLAYLISTS_GRID, false)
+    // Layouts are real settings (Appearance → Library layout) so they persist and can be set per type.
+    val artistsGrid: StateFlow<Boolean> = settings.settings.map { it.appearance.artistsLayout == LibraryLayout.GRID }.asState(false)
+    val albumsGrid: StateFlow<Boolean> = settings.settings.map { it.appearance.albumsLayout == LibraryLayout.GRID }.asState(false)
+    val playlistsGrid: StateFlow<Boolean> = settings.settings.map { it.appearance.playlistsLayout == LibraryLayout.GRID }.asState(false)
 
     fun setArtistSort(sort: ArtistSort) { savedState[KEY_ARTIST_SORT] = sort.name }
     fun setAlbumSort(sort: AlbumSort, ascending: Boolean) { savedState[KEY_ALBUM_SORT] = sort.name; savedState[KEY_ALBUM_ASC] = ascending }
     fun setTrackSort(sort: TrackSort, ascending: Boolean) { savedState[KEY_TRACK_SORT] = sort.name; savedState[KEY_TRACK_ASC] = ascending }
-    fun setArtistsGrid(grid: Boolean) { savedState[KEY_ARTISTS_GRID] = grid }
-    fun setAlbumsGrid(grid: Boolean) { savedState[KEY_ALBUMS_GRID] = grid }
-    fun setPlaylistsGrid(grid: Boolean) { savedState[KEY_PLAYLISTS_GRID] = grid }
+    fun setArtistsGrid(grid: Boolean) = updateAppearance { it.copy(artistsLayout = grid.toLayout()) }
+    fun setAlbumsGrid(grid: Boolean) = updateAppearance { it.copy(albumsLayout = grid.toLayout()) }
+    fun setPlaylistsGrid(grid: Boolean) = updateAppearance { it.copy(playlistsLayout = grid.toLayout()) }
+
+    private fun Boolean.toLayout() = if (this) LibraryLayout.GRID else LibraryLayout.LIST
+    private fun updateAppearance(transform: (AppearanceSettings) -> AppearanceSettings) {
+        viewModelScope.launch { settings.update { it.copy(appearance = transform(it.appearance)) } }
+    }
 
     // ---- content (null = first load pending) ----
     val artists: StateFlow<ImmutableList<Artist>?> = artistSort
@@ -137,9 +145,6 @@ class LibraryViewModel @Inject constructor(
         const val KEY_ALBUM_ASC = "albumAsc"
         const val KEY_TRACK_SORT = "trackSort"
         const val KEY_TRACK_ASC = "trackAsc"
-        const val KEY_ARTISTS_GRID = "artistsGrid"
-        const val KEY_ALBUMS_GRID = "albumsGrid"
-        const val KEY_PLAYLISTS_GRID = "playlistsGrid"
         const val SHUFFLE_CAP = 300
     }
 }

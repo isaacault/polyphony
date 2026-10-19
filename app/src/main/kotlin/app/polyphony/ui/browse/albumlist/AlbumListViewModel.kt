@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.repository.LibraryRepository
+import app.polyphony.core.domain.repository.LibraryLayout
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.navigation.AlbumListKind
 import app.polyphony.navigation.AlbumListRoute
@@ -42,6 +43,9 @@ class AlbumListViewModel @Inject constructor(
     }.map { it.toImmutableList() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    val albumsGrid: StateFlow<Boolean> = settings.settings.map { it.appearance.albumsLayout == LibraryLayout.GRID }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
     val gridColumns: StateFlow<Int> = settings.settings.map { it.appearance.gridColumns }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 

@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.polyphony.R
 import app.polyphony.core.domain.repository.AppearanceSettings
+import app.polyphony.core.domain.repository.LibraryLayout
 import app.polyphony.core.domain.repository.PlayerArtworkStyle
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.ThemeMode
@@ -162,6 +163,28 @@ fun AppearanceSettingsScreen(viewModel: AppearanceViewModel = hiltViewModel()) {
         }
 
         preferenceCategory(key = "library", titleRes = R.string.settings_appearance_library) {
+            val layoutOptions = listOf(
+                ListOption(LibraryLayout.LIST, stringResource(R.string.settings_layout_list)),
+                ListOption(LibraryLayout.GRID, stringResource(R.string.settings_layout_grid)),
+            )
+            SegmentedPreference(
+                title = stringResource(R.string.settings_appearance_layout_artists),
+                options = layoutOptions,
+                selected = s.artistsLayout,
+                onSelected = { l -> viewModel.update { it.copy(artistsLayout = l) } },
+            )
+            SegmentedPreference(
+                title = stringResource(R.string.settings_appearance_layout_albums),
+                options = layoutOptions,
+                selected = s.albumsLayout,
+                onSelected = { l -> viewModel.update { it.copy(albumsLayout = l) } },
+            )
+            SegmentedPreference(
+                title = stringResource(R.string.settings_appearance_layout_playlists),
+                options = layoutOptions,
+                selected = s.playlistsLayout,
+                onSelected = { l -> viewModel.update { it.copy(playlistsLayout = l) } },
+            )
             SegmentedPreference(
                 title = stringResource(R.string.settings_appearance_grid_columns),
                 options = listOf(

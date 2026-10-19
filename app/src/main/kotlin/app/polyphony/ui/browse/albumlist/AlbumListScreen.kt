@@ -30,6 +30,7 @@ import app.polyphony.core.ui.components.PlaceholderStyle
 import app.polyphony.navigation.AlbumListKind
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.ui.browse.AlbumGrid
+import app.polyphony.ui.browse.AlbumList
 import app.polyphony.ui.common.AlbumOptionsSheet
 
 @Composable
@@ -37,6 +38,7 @@ fun AlbumListScreen(viewModel: AlbumListViewModel = hiltViewModel()) {
     val navigator = LocalNavigator.current
     val albums by viewModel.albums.collectAsStateWithLifecycle()
     val columns by viewModel.gridColumns.collectAsStateWithLifecycle()
+    val grid by viewModel.albumsGrid.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     var albumForOptions by remember { mutableStateOf<Album?>(null) }
     val title = stringResource(
@@ -75,9 +77,15 @@ fun AlbumListScreen(viewModel: AlbumListViewModel = hiltViewModel()) {
         when {
             list == null -> LoadingPlaceholder(PlaceholderStyle.GRID, modifier = Modifier.padding(padding))
             list.isEmpty() -> EmptyState(title = stringResource(R.string.browse_empty_albums), modifier = Modifier.padding(padding))
-            else -> AlbumGrid(
+            grid -> AlbumGrid(
                 albums = list,
                 columns = columns,
+                onAlbum = { navigator.openAlbum(it.id) },
+                onAlbumLong = { albumForOptions = it },
+                modifier = Modifier.fillMaxSize().padding(padding),
+            )
+            else -> AlbumList(
+                albums = list,
                 onAlbum = { navigator.openAlbum(it.id) },
                 onAlbumLong = { albumForOptions = it },
                 modifier = Modifier.fillMaxSize().padding(padding),

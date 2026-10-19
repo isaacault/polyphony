@@ -275,4 +275,9 @@
     <string name="settings_about_issues_summary">Bugs, feature requests and feedback</string>
     <string name="settings_about_license_title">Licence</string>
     <string name="settings_about_acknowledgements">Built with</string>
+    <string name="settings_appearance_layout_artists">Artists layout</string>
+    <string name="settings_appearance_layout_albums">Albums layout</string>
+    <string name="settings_appearance_layout_playlists">Playlists layout</string>
+    <string name="settings_layout_list">List</string>
+    <string name="settings_layout_grid">Grid</string>
 </resources>

@@ -9,6 +9,8 @@ import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.SettingsRepository
+import kotlinx.coroutines.flow.distinctUntilChanged
+import app.polyphony.core.domain.repository.LibraryLayout
 import app.polyphony.navigation.GenreRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
@@ -38,6 +40,12 @@ class GenreViewModel @Inject constructor(
     val tracks: StateFlow<ImmutableList<Track>?> = library.tracksByGenre(genre)
         .map { it.toImmutableList() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val albumsGrid: StateFlow<Boolean> = settings.settings.map { it.appearance.albumsLayout == LibraryLayout.GRID }
+
+        .distinctUntilChanged()
+
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     val gridColumns: StateFlow<Int> = settings.settings.map { it.appearance.gridColumns }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
