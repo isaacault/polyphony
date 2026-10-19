@@ -13,9 +13,9 @@ built to be artwork-forward, fast and smooth, and unapologetically open: GPL-3.0
 |------|-------|-------------|-------|
 | ![Home](docs/screenshots/home.png) | ![Album](docs/screenshots/album.png) | ![Now Playing](docs/screenshots/now-playing.png) | ![Queue](docs/screenshots/queue.png) |
 
-| Library | Search | Streaming rules | Welcome |
-|---------|--------|-----------------|---------|
-| ![Library](docs/screenshots/library.png) | ![Search](docs/screenshots/search.png) | ![Streaming settings](docs/screenshots/streaming-settings.png) | ![Welcome](docs/screenshots/welcome.png) |
+| Library | Search | Streaming rules | Now Playing (dark) |
+|---------|--------|-----------------|--------------------|
+| ![Library](docs/screenshots/library.png) | ![Search](docs/screenshots/search.png) | ![Streaming settings](docs/screenshots/streaming-settings.png) | ![Now Playing, dark theme](docs/screenshots/now-playing-dark.png) |
 
 <sub>Screenshots from the debug build on an Android 16 emulator against a local Navidrome test library (generated tones with solid-colour covers, hence the flat artwork).</sub>
 

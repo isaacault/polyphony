@@ -64,6 +64,7 @@ fun WelcomeScreen(onGetStarted: () -> Unit) {
                 text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = stringResource(R.string.onboarding_tagline),
@@ -146,7 +147,11 @@ private fun FeatureRow(icon: ImageVector, title: Int, description: Int) {
             }
         }
         Column {
-            Text(stringResource(title), style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
             Text(
                 stringResource(description),
                 style = MaterialTheme.typography.bodyMedium,

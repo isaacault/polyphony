@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -105,6 +106,9 @@ fun PolyphonyShell(
         LocalPlayerSheet provides sheetState,
         LocalContentPadding provides PaddingValues(bottom = chrome),
         LocalContentBottomPadding provides chrome,
+        // Screens that are not built on Scaffold/Surface would otherwise inherit Compose's default
+        // black content colour, which is unreadable in dark theme.
+        LocalContentColor provides MaterialTheme.colorScheme.onBackground,
     ) {
         Box(
             Modifier
