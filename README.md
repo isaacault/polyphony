@@ -101,6 +101,21 @@ docker build -t polyphony-build .
 docker run --rm -v "$PWD":/src -v polyphony-gradle:/root/.gradle polyphony-build
 ```
 
+## Releases
+
+Signed builds are produced by the `Release` workflow whenever a `v*` tag is pushed:
+
+```sh
+scripts/bump_version.sh 0.2.0        # bumps version.properties, commits, tags v0.2.0
+git push origin main v0.2.0          # CI builds, signs, verifies and publishes the GitHub Release
+```
+
+Tags containing a dash (`v0.2.0-beta.1`) are published as pre-releases. Each release carries the
+universal APK, the Play bundle, the R8 mapping file and a `.sha256` checksum list. Release
+signing uses a keystore stored in repository secrets; `scripts/create_keystore.sh` creates one
+and uploads the secrets. Locally, `assembleRelease` signs with the debug key when no keystore is
+configured, so the R8 build can always be tested.
+
 ## Architecture
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the module graph, contracts and the transcoding

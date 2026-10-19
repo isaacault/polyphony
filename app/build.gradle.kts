@@ -1,3 +1,16 @@
+import java.util.Properties
+
+// Version comes from version.properties (bumped by scripts/bump_version.sh); signing comes from
+// keystore.properties (local, git-ignored) or POLYPHONY_* environment variables (CI secrets).
+val versionProps = Properties().apply { rootProject.file("version.properties").inputStream().use(::load) }
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use(::load)
+}
+fun signingValue(key: String, env: String): String? =
+    keystoreProps.getProperty(key)?.takeIf { it.isNotBlank() } ?: System.getenv(env)?.takeIf { it.isNotBlank() }
+val releaseKeystorePath = signingValue("storeFile", "POLYPHONY_KEYSTORE_PATH")
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -14,10 +27,25 @@ android {
         applicationId = "app.polyphony"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = versionProps.getProperty("VERSION_CODE").toInt()
+        versionName = versionProps.getProperty("VERSION_NAME")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+    }
+
+    signingConfigs {
+        create("release") {
+            if (releaseKeystorePath != null) {
+                storeFile = rootProject.file(releaseKeystorePath)
+                storePassword = signingValue("storePassword", "POLYPHONY_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "POLYPHONY_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "POLYPHONY_KEY_PASSWORD")
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
     }
 
     buildTypes {
@@ -29,6 +57,14 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Without a release keystore (local dev) fall back to the debug key so assembleRelease
+            // still produces an installable APK for R8 testing. CI always has the real key.
+            signingConfig = if (releaseKeystorePath != null) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn("Polyphony: no release keystore configured; signing release with the debug key.")
+                signingConfigs.getByName("debug")
+            }
         }
     }
     compileOptions {

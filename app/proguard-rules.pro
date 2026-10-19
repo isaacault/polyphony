@@ -24,3 +24,7 @@
 # Cast
 -keep class com.google.android.gms.cast.framework.** { *; }
 -keep class app.polyphony.core.playback.cast.** { *; }
+
+# SLF4J is an optional dependency of kotlin-logging (pulled in by the Jellyfin SDK); the
+# Android build has no SLF4J binding, which is fine.
+-dontwarn org.slf4j.**
