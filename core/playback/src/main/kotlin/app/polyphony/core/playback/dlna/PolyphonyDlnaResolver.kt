@@ -7,6 +7,7 @@ import app.polyphony.core.dlna.engine.ResolvedStream
 import app.polyphony.core.dlna.service.RendererFormatSupport
 import app.polyphony.core.domain.playback.DlnaRenderer
 import app.polyphony.core.playback.engine.ServerLookup
+import app.polyphony.core.playback.remote.RemoteUrlResolver
 import app.polyphony.core.playback.engine.TranscodeDecisionEngine
 import app.polyphony.core.playback.queue.MediaItemFactory
 import app.polyphony.core.playback.queue.QueueStore
@@ -24,6 +25,7 @@ class PolyphonyDlnaResolver @Inject constructor(
     private val queueStore: QueueStore,
     private val serverLookup: ServerLookup,
     private val engine: TranscodeDecisionEngine,
+    private val remoteUrls: RemoteUrlResolver,
 ) : DlnaMediaResolver {
 
     override suspend fun resolve(item: MediaItem, renderer: DlnaRenderer): ResolvedStream? {
@@ -40,14 +42,16 @@ class PolyphonyDlnaResolver @Inject constructor(
         if (choice.substituted) {
             Log.i(TAG, "${renderer.friendlyName} does not accept ${decision.profile.name}; using ${choice.profile.name} (${choice.mimeType})")
         }
+        val server = serverLookup.serverFor(track.serverId)
+        fun forReceiver(u: String) = if (server != null) remoteUrls.forReceiver(u, server) else u
         return ResolvedStream(
-            url = choice.request.url,
+            url = forReceiver(choice.request.url),
             mimeType = choice.mimeType,
             durationMs = track.durationMs.takeIf { it > 0 },
             title = track.title,
             artist = track.displayArtist,
             album = track.albumName,
-            artworkUrl = provider.artworkUrl(track.artworkId, 1200) ?: track.artworkUrl,
+            artworkUrl = (provider.artworkUrl(track.artworkId, 1200) ?: track.artworkUrl)?.let(::forReceiver),
             year = track.year,
             trackNumber = track.trackNumber,
         )

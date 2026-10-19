@@ -59,6 +59,10 @@ settings ──▶│ TranscodePolicy│   │ NetworkState │   │ OutputTarg
 - **Cast and DLNA** must send real URLs to the receiver, so the `MediaItemConverter` resolves them with the
   decision for the connected device. When the decision changes mid-session, the remaining queue
   is re-sent.
+- **Receiver URLs** pass through `RemoteUrlResolver` (core:playback): an explicit per-server
+  receiver address (`ServerOptions.REMOTE_BASE_URL`) replaces the base URL; otherwise plain-http
+  hosts the phone resolves to a private IPv4 get that IP substituted. HTTPS hosts are never
+  rewritten because the receiver would fail certificate validation.
 - **Per-device profiles** are keyed by `OutputTarget.key` (`cast:<deviceId>`, `dlna:<udn>`) and stored in
   `TranscodeProfileRepository`. Devices are remembered as soon as they are discovered so the
   Settings screen can list them even when not connected.

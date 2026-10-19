@@ -43,6 +43,15 @@ object ServerOptions {
 
     /** Jellyfin only: the server's reported product name/version at login time. */
     const val SERVER_VERSION = "serverVersion"
+
+    /**
+     * Optional base URL handed to Cast / DLNA receivers instead of [Server.baseUrl], e.g. a LAN
+     * address when the public hostname does not resolve or route from the receiver.
+     */
+    const val REMOTE_BASE_URL = "remoteBaseUrl"
+
+    /** "false" to stop substituting the phone-resolved LAN IP into receiver URLs. Default on. */
+    const val REMOTE_AUTO_LAN = "remoteAutoLan"
 }
 
 data class ServerInfo(

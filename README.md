@@ -66,6 +66,10 @@ built to be artwork-forward, fast and smooth, and unapologetically open: GPL-3.0
 - *Per-device profiles* for Cast and DLNA: every receiver seen on the network is remembered; pin a profile to
   each one (lossless for the hi-fi, Opus 128k for the kitchen speaker). A Cast default covers
   the rest.
+- *Receiver-reachable URLs*: receivers fetch audio themselves, so each server can carry a separate
+  address for Cast and DLNA (typically its LAN address) and, for plain-http servers, the app
+  swaps in the LAN IP the phone resolves automatically. Lets you keep a public hostname for
+  the phone without breaking casting at home.
 - *Adaptive latency*: rebuffers are counted in a sliding window; crossing the threshold caps
   quality with a profile you choose, shows a chip in the player, and recovers automatically
   after a quiet period or when you tap "Restore quality". Network changes reset it.

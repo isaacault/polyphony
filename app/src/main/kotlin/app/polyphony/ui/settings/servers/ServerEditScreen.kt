@@ -91,6 +91,8 @@ data class ServerEditUiState(
     val password: String = "",
     val legacyAuth: Boolean = false,
     val trustSelfSigned: Boolean = false,
+    val remoteBaseUrl: String = "",
+    val remoteAutoLan: Boolean = true,
     val headers: List<HeaderEntry> = emptyList(),
     val test: ConnectionTest? = null,
     val saving: Boolean = false,
@@ -130,6 +132,8 @@ class ServerEditViewModel @Inject constructor(
                         username = server.username,
                         legacyAuth = server.options[ServerOptions.LEGACY_AUTH] == "true",
                         trustSelfSigned = server.options[ServerOptions.TRUST_SELF_SIGNED] == "true",
+                        remoteBaseUrl = server.options[ServerOptions.REMOTE_BASE_URL].orEmpty(),
+                        remoteAutoLan = server.options[ServerOptions.REMOTE_AUTO_LAN] != "false",
                         headers = parseHeaders(server.options[ServerOptions.CUSTOM_HEADERS]),
                     )
                 }
@@ -143,6 +147,8 @@ class ServerEditViewModel @Inject constructor(
     fun onPassword(value: String) = _state.update { it.copy(password = value, test = null) }
     fun onLegacyAuth(value: Boolean) = _state.update { it.copy(legacyAuth = value, test = null) }
     fun onTrustSelfSigned(value: Boolean) = _state.update { it.copy(trustSelfSigned = value, test = null) }
+    fun onRemoteBaseUrl(value: String) = _state.update { it.copy(remoteBaseUrl = value) }
+    fun onRemoteAutoLan(value: Boolean) = _state.update { it.copy(remoteAutoLan = value) }
 
     fun addHeader() = _state.update { it.copy(headers = it.headers + HeaderEntry()) }
     fun removeHeader(index: Int) = _state.update { it.copy(headers = it.headers.filterIndexed { i, _ -> i != index }) }
@@ -219,11 +225,16 @@ class ServerEditViewModel @Inject constructor(
     }
 
     private fun buildOptions(base: Server, form: ServerEditUiState): Map<String, String> {
-        val managed = setOf(ServerOptions.LEGACY_AUTH, ServerOptions.TRUST_SELF_SIGNED, ServerOptions.CUSTOM_HEADERS)
+        val managed = setOf(
+            ServerOptions.LEGACY_AUTH, ServerOptions.TRUST_SELF_SIGNED, ServerOptions.CUSTOM_HEADERS,
+            ServerOptions.REMOTE_BASE_URL, ServerOptions.REMOTE_AUTO_LAN,
+        )
         return buildMap {
             base.options.filterKeys { it !in managed }.forEach { (k, v) -> put(k, v) }
             if (form.legacyAuth) put(ServerOptions.LEGACY_AUTH, "true")
             if (form.trustSelfSigned) put(ServerOptions.TRUST_SELF_SIGNED, "true")
+            form.remoteBaseUrl.trim().takeIf { it.isNotEmpty() }?.let { put(ServerOptions.REMOTE_BASE_URL, it) }
+            if (!form.remoteAutoLan) put(ServerOptions.REMOTE_AUTO_LAN, "false")
             val headers = form.headers.filter { it.key.isNotBlank() }
             if (headers.isNotEmpty()) {
                 put(
@@ -326,6 +337,24 @@ fun ServerEditScreen(viewModel: ServerEditViewModel = hiltViewModel()) {
                     summary = stringResource(R.string.settings_server_trust_self_signed_summary),
                     checked = state.trustSelfSigned,
                     onCheckedChange = viewModel::onTrustSelfSigned,
+                )
+                OutlinedTextField(
+                    value = state.remoteBaseUrl,
+                    onValueChange = viewModel::onRemoteBaseUrl,
+                    label = { Text(stringResource(R.string.settings_server_remote_url)) },
+                    placeholder = { Text("http://192.168.1.10:4533") },
+                    supportingText = { Text(stringResource(R.string.settings_server_remote_url_summary)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                SwitchPreference(
+                    title = stringResource(R.string.settings_server_remote_auto_lan),
+                    summary = stringResource(R.string.settings_server_remote_auto_lan_summary),
+                    checked = state.remoteAutoLan,
+                    onCheckedChange = viewModel::onRemoteAutoLan,
                 )
                 HeadersEditor(
                     headers = state.headers,

@@ -10,6 +10,7 @@ import app.polyphony.core.playback.engine.ServerLookup
 import app.polyphony.core.playback.engine.TranscodeDecisionEngine
 import app.polyphony.core.playback.queue.MediaItemFactory
 import app.polyphony.core.playback.queue.QueueStore
+import app.polyphony.core.playback.remote.RemoteUrlResolver
 import app.polyphony.core.playback.util.PlaybackJson
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaMetadata
@@ -31,6 +32,7 @@ class PolyphonyMediaItemConverter @Inject constructor(
     private val serverLookup: ServerLookup,
     private val engine: TranscodeDecisionEngine,
     private val castManager: CastManager,
+    private val remoteUrls: RemoteUrlResolver,
 ) : MediaItemConverter {
 
     override fun toMediaQueueItem(mediaItem: MediaItem): MediaQueueItem {
@@ -40,7 +42,10 @@ class PolyphonyMediaItemConverter @Inject constructor(
         val target = castManager.currentTargetSync() ?: OutputTarget.Local
         val decision = engine.decisionFor(target)
         val provider = serverLookup.providerFor(track.serverId)
-        val request = provider?.streamRequest(track, decision.profile)
+        val server = serverLookup.serverFor(track.serverId)
+        val request = provider?.streamRequest(track, decision.profile)?.let { req ->
+            if (server != null) req.copy(url = remoteUrls.forReceiver(req.url, server)) else req
+        }
 
         val metadata = MediaMetadata(MediaMetadata.MEDIA_TYPE_MUSIC_TRACK).apply {
             putString(MediaMetadata.KEY_TITLE, track.title)
@@ -49,7 +54,8 @@ class PolyphonyMediaItemConverter @Inject constructor(
             (track.albumArtistName ?: track.artistName)?.let { putString(MediaMetadata.KEY_ALBUM_ARTIST, it) }
             track.trackNumber?.let { putInt(MediaMetadata.KEY_TRACK_NUMBER, it) }
             track.discNumber?.let { putInt(MediaMetadata.KEY_DISC_NUMBER, it) }
-            val art = provider?.artworkUrl(track.artworkId, 1200) ?: track.artworkUrl
+            val art = (provider?.artworkUrl(track.artworkId, 1200) ?: track.artworkUrl)
+                ?.let { if (server != null) remoteUrls.forReceiver(it, server) else it }
             art?.let { addImage(WebImage(Uri.parse(it))) }
         }
         val customData = JSONObject().apply {
