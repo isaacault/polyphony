@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_channel_name">Playback</string>
+    <string name="action_favorite">Add to favourites</string>
+    <string name="action_unfavorite">Remove from favourites</string>
+    <string name="action_shuffle">Shuffle</string>
+    <string name="action_repeat">Repeat</string>
+</resources>

@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shell -->
+    <string name="tab_home">Home</string>
+    <string name="tab_library">Library</string>
+    <string name="tab_search">Search</string>
+    <string name="mini_player_open">Open player</string>
+
+    <!-- Now playing -->
+    <string name="player_collapse">Collapse player</string>
+    <string name="player_now_playing">Now playing</string>
+    <string name="player_playing_from">Playing from</string>
+    <string name="player_playing_on">Playing on</string>
+    <string name="player_more">More options</string>
+    <string name="player_shuffle">Shuffle</string>
+    <string name="player_previous">Previous</string>
+    <string name="player_play">Play</string>
+    <string name="player_pause">Pause</string>
+    <string name="player_next">Next</string>
+    <string name="player_repeat_off">Repeat off</string>
+    <string name="player_repeat_all">Repeat all</string>
+    <string name="player_repeat_one">Repeat one</string>
+    <string name="player_favorite_add">Add to favourites</string>
+    <string name="player_favorite_remove">Remove from favourites</string>
+    <string name="player_lyrics">Lyrics</string>
+    <string name="player_queue">Queue</string>
+    <string name="player_cast">Cast</string>
+    <string name="player_sleep_timer">Sleep timer</string>
+    <string name="player_sleep_timer_ends">Ends in %1$s</string>
+    <string name="player_speed">Playback speed</string>
+    <string name="player_speed_value">%1$s×</string>
+    <string name="player_go_to_album">Go to album</string>
+    <string name="player_go_to_artist">Go to artist</string>
+    <string name="player_add_to_playlist">Add to playlist</string>
+    <string name="player_song_info">Song info</string>
+    <string name="player_disconnect">Disconnect</string>
+    <string name="player_disconnect_from">Disconnect from %1$s</string>
+    <string name="player_streaming_settings">Streaming settings</string>
+    <string name="player_quality_original">Original</string>
+    <string name="player_quality_reduced">Reduced quality · Restore</string>
+    <string name="player_quality_restored">Quality restored</string>
+    <string name="player_toggle_remaining">Toggle remaining time</string>
+
+    <!-- Queue -->
+    <string name="queue_title">Up next</string>
+    <string name="queue_summary">%1$d songs · %2$s</string>
+    <string name="queue_clear">Clear</string>
+    <string name="queue_save">Save as playlist</string>
+    <string name="queue_saved">Playlist “%1$s” created</string>
+    <string name="queue_empty">Nothing in the queue</string>
+    <string name="queue_remove">Remove from queue</string>
+    <string name="queue_drag">Drag to reorder</string>
+
+    <!-- Lyrics -->
+    <string name="lyrics_loading">Looking for lyrics…</string>
+    <string name="lyrics_none">No lyrics for this song</string>
+    <string name="lyrics_none_hint">Lyrics appear here when your server has them.</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_cancel">Cancel</string>
+    <string name="dialog_done">Done</string>
+    <string name="dialog_create">Create</string>
+    <string name="dialog_save">Save</string>
+    <string name="sleep_timer_cancel">Cancel timer</string>
+    <string name="sleep_timer_end_of_track">End of track</string>
+    <string name="sleep_timer_minutes">%1$d min</string>
+    <string name="sleep_timer_set">Sleep timer set</string>
+    <string name="sleep_timer_cleared">Sleep timer cancelled</string>
+    <string name="playlist_new">New playlist</string>
+    <string name="playlist_name">Playlist name</string>
+    <string name="playlist_none">No playlists yet</string>
+    <string name="playlist_added">Added to %1$s</string>
+    <string name="playlist_error">Couldn’t update playlist</string>
+    <string name="favorite_error">Couldn’t update favourite</string>
+
+    <!-- Song info -->
+    <string name="info_title">Title</string>
+    <string name="info_artist">Artist</string>
+    <string name="info_album">Album</string>
+    <string name="info_album_artist">Album artist</string>
+    <string name="info_year">Year</string>
+    <string name="info_genre">Genre</string>
+    <string name="info_track">Track</string>
+    <string name="info_duration">Duration</string>
+    <string name="info_format">Format</string>
+    <string name="info_bitrate">Bitrate</string>
+    <string name="info_size">Size</string>
+    <string name="info_plays">Plays</string>
+    <string name="info_path">Path</string>
+    <string name="info_output">Output</string>
+    <string name="info_streaming_as">Streaming as</string>
+    <string name="info_this_device">This device</string>
+
+    <!-- Cast -->
+    <string name="cast_title">Cast to</string>
+    <string name="cast_searching">Looking for devices on your network…</string>
+    <string name="cast_none">No cast devices found</string>
+    <string name="cast_none_hint">Make sure this phone and the device are on the same Wi-Fi network.</string>
+    <string name="cast_connected_to">Connected to %1$s</string>
+    <string name="cast_connecting">Connecting…</string>
+    <string name="cast_unavailable">Casting isn’t available on this device</string>
+</resources>

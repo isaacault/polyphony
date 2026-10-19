@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings owned by the browse feature (Home, Library, Search, details, common sheets). -->
+<resources>
+    <!-- navigation / chrome -->
+    <string name="browse_nav_library">Library</string>
+    <string name="browse_nav_search">Search</string>
+    <string name="browse_nav_settings">Settings</string>
+    <string name="browse_title_servers">Servers</string>
+    <string name="browse_action_manage_servers">Manage servers</string>
+    <string name="browse_action_back">Back</string>
+    <string name="browse_action_more">More options</string>
+    <string name="browse_action_see_all">See all</string>
+
+    <!-- greetings -->
+    <string name="browse_greeting_morning">Good morning</string>
+    <string name="browse_greeting_afternoon">Good afternoon</string>
+    <string name="browse_greeting_evening">Good evening</string>
+
+    <!-- home -->
+    <string name="browse_home_continue_listening">Continue listening</string>
+    <string name="browse_home_recently_added">Recently added</string>
+    <string name="browse_home_recently_played">Recently played</string>
+    <string name="browse_home_most_played">Most played</string>
+    <string name="browse_home_random_picks">Random picks</string>
+    <string name="browse_home_favorites">Favourites</string>
+    <string name="browse_home_playlists">Playlists</string>
+    <string name="browse_home_genres">Genres</string>
+    <string name="browse_home_empty_title">Your library is empty here</string>
+    <string name="browse_home_empty_body">Sync your server to browse artists, albums and playlists offline and instantly.</string>
+    <string name="browse_home_empty_syncing">Syncing your library… this can take a few minutes the first time.</string>
+    <string name="browse_action_sync_now">Sync now</string>
+    <string name="browse_action_reshuffle">Reshuffle</string>
+
+    <!-- library tabs -->
+    <string name="browse_tab_artists">Artists</string>
+    <string name="browse_tab_albums">Albums</string>
+    <string name="browse_tab_songs">Songs</string>
+    <string name="browse_tab_playlists">Playlists</string>
+    <string name="browse_tab_genres">Genres</string>
+    <plurals name="browse_count_artists">
+        <item quantity="one">%d artist</item>
+        <item quantity="other">%d artists</item>
+    </plurals>
+    <plurals name="browse_count_albums">
+        <item quantity="one">%d album</item>
+        <item quantity="other">%d albums</item>
+    </plurals>
+    <plurals name="browse_count_songs">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
+    <plurals name="browse_count_playlists">
+        <item quantity="one">%d playlist</item>
+        <item quantity="other">%d playlists</item>
+    </plurals>
+    <string name="browse_count_songs">%d songs</string>
+
+    <!-- empty states -->
+    <string name="browse_empty_artists">No artists yet</string>
+    <string name="browse_empty_albums">No albums yet</string>
+    <string name="browse_empty_songs">No songs yet</string>
+    <string name="browse_empty_genres">No genres yet</string>
+    <string name="browse_empty_playlists">No playlists yet</string>
+    <string name="browse_empty_playlists_hint">Create one here or on your server and it will show up after the next sync.</string>
+    <string name="browse_empty_library_hint">Pull down on Home to sync your library.</string>
+    <string name="browse_empty_favorites">Nothing here yet</string>
+    <string name="browse_empty_favorites_hint">Tap the heart on songs, albums and artists to collect them here.</string>
+    <string name="browse_empty_album_tracks">No songs in this album</string>
+    <string name="browse_empty_playlist_title">This playlist is empty</string>
+    <string name="browse_empty_playlist_body">Add songs from any track menu with “Add to playlist”.</string>
+
+    <!-- errors -->
+    <string name="browse_error_album_unavailable">This album could not be loaded from the server.</string>
+    <string name="browse_error_artist_unavailable">This artist could not be loaded from the server.</string>
+    <string name="browse_error_playlist_unavailable">This playlist could not be loaded from the server.</string>
+    <string name="browse_error_tracks_unavailable">The track list could not be loaded.</string>
+
+    <!-- actions -->
+    <string name="browse_action_play">Play</string>
+    <string name="browse_action_play_all">Play all</string>
+    <string name="browse_action_shuffle">Shuffle</string>
+    <string name="browse_action_shuffle_all">Shuffle all</string>
+    <string name="browse_action_play_next">Play next</string>
+    <string name="browse_action_add_to_queue">Add to queue</string>
+    <string name="browse_action_add_to_playlist">Add to playlist</string>
+    <string name="browse_action_remove_from_playlist">Remove from playlist</string>
+    <string name="browse_action_add_favorite">Add to favourites</string>
+    <string name="browse_action_remove_favorite">Remove from favourites</string>
+    <string name="browse_action_go_to_album">Go to album</string>
+    <string name="browse_action_go_to_artist">Go to artist</string>
+    <string name="browse_action_song_info">Song info</string>
+    <string name="browse_action_new_playlist">New playlist</string>
+    <string name="browse_action_create">Create</string>
+    <string name="browse_action_rename">Rename</string>
+    <string name="browse_action_delete">Delete</string>
+    <string name="browse_action_remove">Remove</string>
+    <string name="browse_action_save">Save</string>
+    <string name="browse_action_cancel">Cancel</string>
+    <string name="browse_action_confirm">Confirm</string>
+    <string name="browse_action_close">Close</string>
+    <string name="browse_action_clear">Clear</string>
+    <string name="browse_action_read_more">Read more</string>
+    <string name="browse_action_show_more">Show more</string>
+    <string name="browse_action_show_less">Show less</string>
+    <string name="browse_action_search_server">Search on server</string>
+
+    <!-- dialogs -->
+    <string name="browse_title_new_playlist">New playlist</string>
+    <string name="browse_title_add_to_playlist">Add to playlist</string>
+    <string name="browse_title_delete_playlist">Delete playlist?</string>
+    <string name="browse_confirm_delete_playlist">“%1$s” will be deleted from your server. This cannot be undone.</string>
+    <string name="browse_label_name">Name</string>
+    <string name="browse_label_playlist_name">Playlist name</string>
+
+    <!-- details -->
+    <string name="browse_unknown_artist">Unknown artist</string>
+    <string name="browse_disc_header">Disc %1$d</string>
+    <string name="browse_artist_top_songs">Top songs</string>
+    <string name="browse_artist_similar">Similar artists</string>
+    <string name="browse_playlist_public">Public</string>
+    <string name="browse_playlist_private">Private</string>
+
+    <!-- song info -->
+    <string name="browse_info_artist">Artist</string>
+    <string name="browse_info_album">Album</string>
+    <string name="browse_info_album_artist">Album artist</string>
+    <string name="browse_info_year">Year</string>
+    <string name="browse_info_genre">Genre</string>
+    <string name="browse_info_position">Position</string>
+    <string name="browse_info_duration">Duration</string>
+    <string name="browse_info_format">Format</string>
+    <string name="browse_info_bitrate">Bitrate</string>
+    <string name="browse_info_sample_rate">Sample rate</string>
+    <string name="browse_info_bit_depth">Bit depth</string>
+    <string name="browse_info_channels">Channels</string>
+    <string name="browse_info_size">Size</string>
+    <string name="browse_info_play_count">Play count</string>
+    <string name="browse_info_replay_gain">ReplayGain</string>
+    <string name="browse_info_path">Path</string>
+
+    <!-- search -->
+    <string name="browse_search_hint">Artists, albums, songs…</string>
+    <string name="browse_search_title">Search your library</string>
+    <string name="browse_search_body">Results appear instantly from your synced library. Search the server for anything newer.</string>
+    <string name="browse_search_recent">Recent searches</string>
+    <string name="browse_search_no_results">No results</string>
+    <string name="browse_search_no_results_remote">Nothing matched on the server either.</string>
+    <string name="browse_search_try_server">Nothing in your synced library. Try searching the server.</string>
+    <string name="browse_search_searching_server">Searching the server…</string>
+    <string name="browse_search_server_failed">The server search failed. Check your connection.</string>
+    <string name="browse_search_includes_server">Includes results from the server.</string>
+</resources>

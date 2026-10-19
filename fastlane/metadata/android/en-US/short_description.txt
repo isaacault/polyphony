@@ -1,0 +1,1 @@
+Open-source music player for Subsonic, Navidrome and Jellyfin with Cast and smart transcoding.
