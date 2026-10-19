@@ -1,6 +1,9 @@
 package app.polyphony.core.dlna.ssdp
 
 import android.content.Context
+import android.net.NetworkCapabilities
+import android.net.Network
+import android.net.ConnectivityManager
 import android.net.wifi.WifiManager
 import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
@@ -51,6 +54,28 @@ class SsdpDiscovery(
     private val appContext = context.applicationContext
     private val scope = parentScope + SupervisorJob(parentScope.coroutineContext[Job])
     private val wifi = appContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+    private val connectivity = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+
+    /** The Wi-Fi network itself (not a VPN on top of it), so discovery bypasses any tunnel. */
+    private fun wifiNetwork(): Network? = connectivity?.let { cm ->
+        @Suppress("DEPRECATION")
+        cm.allNetworks.firstOrNull { n ->
+            cm.getNetworkCapabilities(n)?.let { it.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && !it.hasTransport(NetworkCapabilities.TRANSPORT_VPN) } == true
+        }
+    }
+
+    private fun wifiInterface(network: Network?): NetworkInterface? = network
+        ?.let { connectivity?.getLinkProperties(it)?.interfaceName }
+        ?.let { name -> runCatching { NetworkInterface.getByName(name) }.getOrNull() }
+
+    /** Pin [socket] to Wi-Fi: traffic and multicast go out that interface even with a VPN active. */
+    private fun pinToWifi(socket: MulticastSocket, what: String) {
+        val network = wifiNetwork()
+        val nif = wifiInterface(network)
+        runCatching { network?.bindSocket(socket) }.onFailure { Log.w(TAG, "$what: bindSocket failed: ${it.message}") }
+        runCatching { nif?.let { socket.networkInterface = it } }.onFailure { Log.w(TAG, "$what: setNetworkInterface failed: ${it.message}") }
+        Log.i(TAG, "$what on ${nif?.name ?: "default route"}${if (network == null) " (no Wi-Fi network found)" else ""}")
+    }
     private var multicastLock: WifiManager.MulticastLock? = null
 
     private val _entries = MutableStateFlow<Map<String, SsdpEntry>>(emptyMap())
@@ -120,6 +145,7 @@ class SsdpDiscovery(
                     bind(InetSocketAddress(0))
                     soTimeout = RECEIVE_TIMEOUT_MS
                     runCatching { timeToLive = 4 }
+                    pinToWifi(this, "SSDP search socket")
                 }
             } catch (t: Throwable) {
                 Log.w(TAG, "Search socket failed: ${t.message}")
@@ -175,6 +201,7 @@ class SsdpDiscovery(
                 reuseAddress = true
                 bind(InetSocketAddress(SSDP_PORT))
                 soTimeout = RECEIVE_TIMEOUT_MS
+                pinToWifi(this, "SSDP NOTIFY listener")
             }
         } catch (t: Throwable) {
             Log.i(TAG, "NOTIFY listener unavailable (search-only mode): ${t.message}")
@@ -183,7 +210,8 @@ class SsdpDiscovery(
         listenSocket = socket
         val group = InetAddress.getByName(SSDP_ADDRESS)
         var joined = false
-        for (nif in candidateInterfaces()) {
+        val preferred = wifiInterface(wifiNetwork())
+        for (nif in listOfNotNull(preferred) + candidateInterfaces().filter { it != preferred }) {
             runCatching { socket.joinGroup(InetSocketAddress(group, SSDP_PORT), nif); joined = true }
         }
         if (!joined) {

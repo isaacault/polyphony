@@ -131,7 +131,18 @@ fun CastRouteSheet(
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
+        val hint by vm.networkHint.collectAsStateWithLifecycle()
         LazyColumn(Modifier.navigationBarsPadding().padding(bottom = 16.dp)) {
+            hint?.let { h ->
+                item(key = "network-hint") {
+                    NetworkHintRow(
+                        when (h) {
+                            RemoteOutputViewModel.NetworkHint.NOT_ON_WIFI -> stringResource(R.string.output_hint_not_on_wifi)
+                            RemoteOutputViewModel.NetworkHint.VPN_ACTIVE -> stringResource(R.string.output_hint_vpn)
+                        },
+                    )
+                }
+            }
             item(key = "title") {
                 Text(
                     text = stringResource(R.string.cast_title),
@@ -336,5 +347,17 @@ private fun RemoteVolumeRow(initial: Float, onChange: (Float) -> Unit) {
         )
         Spacer(Modifier.width(8.dp))
         Icon(Icons.Rounded.VolumeUp, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun NetworkHintRow(text: String) {
+    androidx.compose.material3.Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(12.dp))
     }
 }

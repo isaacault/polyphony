@@ -38,6 +38,9 @@ class StreamResolver @Inject constructor(
     private val settingsRepository: SettingsRepository,
 ) : ResolvingDataSource.Resolver {
 
+    /** Session memory of transcodes this server could not deliver. */
+    val fallbacks = TranscodeFallbackRegistry()
+
     private val _lastApplied = MutableStateFlow<AppliedDecision?>(null)
     /** Most recent resolution. Note: ExoPlayer preloads the next item, so this may be the *next* track. */
     val lastApplied: StateFlow<AppliedDecision?> = _lastApplied
@@ -67,7 +70,13 @@ class StreamResolver @Inject constructor(
         val provider = serverLookup.providerFor(serverId)
             ?: runBlocking { serverLookup.awaitProvider(serverId) }
             ?: throw IOException("Unknown server $serverId")
-        val decision = engine.localDecision()
+        var decision = engine.localDecision()
+        val codec = decision.profile.codec
+        if (!decision.profile.isPassthrough &&
+            (fallbacks.forcesPassthrough(trackId) || fallbacks.isBroken(serverId, codec))
+        ) {
+            decision = TranscodeDecision(TranscodeProfile.ORIGINAL, TranscodeDecision.Reason.FALLBACK)
+        }
         val request = provider.streamRequest(track, decision.profile)
         record(trackId, decision)
         return dataSpec.buildUpon()
@@ -99,6 +108,20 @@ class StreamResolver @Inject constructor(
             .setHttpRequestHeaders(emptyMap())
             .setKey("$trackId|local")
             .build()
+    }
+
+    /**
+     * Called by the service when a load fails. Returns true when the failing item was a transcoded
+     * stream, in which case it (and later tracks on that server/codec) will resolve to the original
+     * file and the caller should re-prepare.
+     */
+    fun markTranscodeFailure(trackId: String): Boolean {
+        val applied = _applied.value[trackId] ?: return false
+        if (applied.profile.isPassthrough || applied.reason == TranscodeDecision.Reason.DOWNLOADED) return false
+        val serverId = queueStore.get(trackId)?.serverId ?: return false
+        val first = fallbacks.markBroken(serverId, applied.profile.codec, trackId)
+        if (first) android.util.Log.w("PolyphonyPlayback", "Transcoding to ${applied.profile.codec} failed on server $serverId; falling back to original quality for this session")
+        return true
     }
 
     /** Keep the opaque URI in reported events so logs never leak auth tokens. */

@@ -11,6 +11,7 @@ import app.polyphony.core.domain.playback.CastController
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
+import app.polyphony.core.playback.stream.StreamResolver
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -34,6 +35,7 @@ class DiagnosticsExporter @Inject constructor(
     private val serverRepository: ServerRepository,
     private val playbackController: PlaybackController,
     private val castController: CastController,
+    private val streamResolver: StreamResolver,
 ) {
     private val json = Json { prettyPrint = true; encodeDefaults = true }
 
@@ -86,6 +88,7 @@ class DiagnosticsExporter @Inject constructor(
         appendLine("output: ${p.outputTarget.key} \"${p.outputTarget.displayName}\"")
         appendLine("decision: ${p.transcode?.profile?.name} (${p.transcode?.profile?.summary}) reason=${p.transcode?.reason} cappedByLatency=${p.transcode?.cappedByLatency} degraded=${p.latencyDegraded}")
         p.error?.let { appendLine("error: $it") }
+        appendLine("transcode fallbacks this session: ${streamResolver.fallbacks.summary}")
         val c = castController.state.value
         appendLine("cast: available=${c.isAvailable} connecting=${c.isConnecting} connected=${c.isConnected} target=${c.target?.key} \"${c.target?.displayName}\" volume=${c.volume}")
         appendLine()

@@ -199,7 +199,13 @@ class PlaybackService : MediaLibraryService() {
 
     private fun buildLocalPlayer(playback: PlaybackSettings): ExoPlayer {
         val cache = streamCache.get(playback.streamCacheSizeMb)
-        val upstream = OkHttpDataSource.Factory(okHttpClient)
+        // Streaming gets tighter timeouts than the shared client: a transcode that never starts
+        // should fail fast enough for the fallback to kick in, not hang for a minute.
+        val streamingClient = okHttpClient.newBuilder()
+            .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+        val upstream = OkHttpDataSource.Factory(streamingClient)
         val cached = CacheDataSource.Factory()
             .setCache(cache)
             .setUpstreamDataSourceFactory(upstream)
@@ -419,6 +425,12 @@ class PlaybackService : MediaLibraryService() {
     private val playerListener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
             Log.e(TAG, "Player error ${error.errorCodeName} on ${engine.currentTarget.key}: ${error.message}", error.cause)
+            val trackId = player.currentMediaItem?.mediaId ?: return
+            val loadFailure = error.errorCode in 2000..3999 || error.errorCode == PlaybackException.ERROR_CODE_UNSPECIFIED
+            if (loadFailure && !player.isRemotePlayback() && streamResolver.markTranscodeFailure(trackId)) {
+                Log.w(TAG, "Retrying ${player.currentMediaItem?.mediaMetadata?.title} at original quality")
+                reloadCurrentItem()
+            }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {

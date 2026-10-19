@@ -25,6 +25,8 @@ data class TranscodeDecision(
         DEFAULT("Default"),
         /** Served from a file on this device; no transcoding decision was involved. */
         DOWNLOADED("Downloaded"),
+        /** The server failed to deliver the transcoded stream; original quality was used instead. */
+        FALLBACK("Transcoding unavailable"),
     }
 
     val explanation: String
