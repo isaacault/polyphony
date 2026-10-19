@@ -5,78 +5,40 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.ui.graphics.TransformOrigin
 
 /**
- * Navigation transitions, one per kind of move, following Material 3 motion:
+ * Navigation transitions. Two kinds only, both quick and without scaling:
  *
- * - **Fade through** between peer destinations (bottom-bar tabs): the old screen fades out
- *   quickly, the new one fades and grows in. No direction, because tabs have none.
- * - **Shared axis X** for flows that read as a sequence (settings pages, onboarding steps):
- *   a short 30 dp slide with staggered fades, reversed on back.
- * - **Emerge / recede** for detail screens (album, artist, playlist…): the detail grows out of
- *   the list it came from and shrinks back into it. Because the pop variants are scale + fade,
- *   they also look right while a predictive-back gesture is scrubbing them.
- *
- * All transitions are tween-based so Navigation can seek them for predictive back.
+ * - **Tab switch** (bottom bar): a short crossfade. Tabs have no direction.
+ * - **Push / pop** (everything else): the new screen slides in from the right over the current
+ *   one, which drifts left a little and dims; back reverses it, with the leaving screen sliding
+ *   fully off to the right. Pop transitions are tween-based so a predictive-back swipe scrubs
+ *   them like a real swipe.
  */
 object NavMotion {
-    private const val OUT = 90
-    private const val IN = 210
-    private const val MOVE = 300
-    private const val BACK = 260
+    private const val TAB_IN = 180
+    private const val TAB_OUT = 120
+    private const val SLIDE = 240
 
-    // ---- Fade through (top-level tabs) ----
-    fun fadeThroughEnter(): EnterTransition =
-        fadeIn(tween(IN, delayMillis = OUT, easing = Motion.EmphasizedDecelerate)) +
-            scaleIn(tween(IN + OUT, easing = Motion.EmphasizedDecelerate), initialScale = 0.94f)
+    /** How far the screen underneath drifts, as a fraction of width (parallax). */
+    private const val PARALLAX = 0.25f
 
-    fun fadeThroughExit(): ExitTransition =
-        fadeOut(tween(OUT, easing = Motion.EmphasizedAccelerate))
+    fun tabEnter(): EnterTransition = fadeIn(tween(TAB_IN, easing = Motion.Standard))
+    fun tabExit(): ExitTransition = fadeOut(tween(TAB_OUT, easing = Motion.Standard))
 
-    // ---- Shared axis X (settings, onboarding) ----
-    fun sharedAxisEnter(offsetPx: Int): EnterTransition =
-        slideInHorizontally(tween(MOVE, easing = Motion.EmphasizedDecelerate)) { offsetPx } +
-            fadeIn(tween(IN, delayMillis = OUT, easing = Motion.EmphasizedDecelerate))
+    fun pushEnter(): EnterTransition =
+        slideInHorizontally(tween(SLIDE, easing = Motion.EmphasizedDecelerate)) { it }
 
-    fun sharedAxisExit(offsetPx: Int): ExitTransition =
-        slideOutHorizontally(tween(MOVE, easing = Motion.EmphasizedAccelerate)) { -offsetPx } +
-            fadeOut(tween(OUT, easing = Motion.EmphasizedAccelerate))
+    fun pushExit(): ExitTransition =
+        slideOutHorizontally(tween(SLIDE, easing = Motion.EmphasizedDecelerate)) { -(it * PARALLAX).toInt() } +
+            fadeOut(tween(SLIDE, easing = Motion.Standard), targetAlpha = 0.6f)
 
-    fun sharedAxisPopEnter(offsetPx: Int): EnterTransition =
-        slideInHorizontally(tween(MOVE, easing = Motion.EmphasizedDecelerate)) { -offsetPx } +
-            fadeIn(tween(IN, delayMillis = OUT, easing = Motion.EmphasizedDecelerate))
+    fun popEnter(): EnterTransition =
+        slideInHorizontally(tween(SLIDE, easing = Motion.EmphasizedDecelerate)) { -(it * PARALLAX).toInt() } +
+            fadeIn(tween(SLIDE, easing = Motion.Standard), initialAlpha = 0.6f)
 
-    fun sharedAxisPopExit(offsetPx: Int): ExitTransition =
-        slideOutHorizontally(tween(MOVE, easing = Motion.EmphasizedAccelerate)) { offsetPx } +
-            fadeOut(tween(MOVE, easing = Motion.Standard))
-
-    // ---- Emerge / recede (detail screens) ----
-    fun detailEnter(): EnterTransition =
-        fadeIn(tween(IN, delayMillis = 60, easing = Motion.EmphasizedDecelerate)) +
-            scaleIn(
-                tween(MOVE + 60, easing = Motion.EmphasizedDecelerate),
-                initialScale = 0.92f,
-                transformOrigin = TransformOrigin(0.5f, 0.35f),
-            )
-
-    /** The list behind a detail only dims; it must not move or it fights the emerging screen. */
-    fun detailExitBehind(): ExitTransition =
-        fadeOut(tween(OUT + 60, easing = Motion.EmphasizedAccelerate)) +
-            scaleOut(tween(MOVE, easing = Motion.Standard), targetScale = 0.98f)
-
-    fun detailPopExit(): ExitTransition =
-        scaleOut(
-            tween(BACK, easing = Motion.EmphasizedAccelerate),
-            targetScale = 0.9f,
-            transformOrigin = TransformOrigin(0.5f, 0.4f),
-        ) + fadeOut(tween(BACK, easing = Motion.Standard))
-
-    fun detailPopEnter(): EnterTransition =
-        fadeIn(tween(BACK, easing = Motion.EmphasizedDecelerate)) +
-            scaleIn(tween(BACK, easing = Motion.EmphasizedDecelerate), initialScale = 0.98f)
+    fun popExit(): ExitTransition =
+        slideOutHorizontally(tween(SLIDE, easing = Motion.EmphasizedDecelerate)) { it }
 }
