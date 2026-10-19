@@ -42,7 +42,7 @@ class DiagnosticsExporter @Inject constructor(
         dir.listFiles()?.forEach { it.delete() }
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
         val file = File(dir, "polyphony-diagnostics-$stamp.txt")
-        file.writeText(redact(buildReport()))
+        file.writeText(redactSecrets(buildReport()))
         FileProvider.getUriForFile(context, "${context.packageName}.files", file)
     }
 
@@ -108,10 +108,11 @@ class DiagnosticsExporter @Inject constructor(
             .start()
         process.inputStream.bufferedReader().use { it.readText() }
     }.getOrElse { "<logcat unavailable: ${it.message}>" }
-
-    private fun redact(text: String): String = text
-        .replace(Regex("(?i)([?&](?:t|s|p|u|api_key|apikey|token|access_token|password|x-emby-token)=)[^&\\s\"'<>]+"), "$1<redacted>")
-        .replace(Regex("(?i)(authorization:\\s*)[^\\n]+"), "$1<redacted>")
-        .replace(Regex("(?i)(token=\")[^\"]+(\")"), "$1<redacted>$2")
-        .replace(Regex("(?i)(\"(?:credential|password|accessToken|storePassword)\"\\s*:\\s*\")[^\"]*(\")"), "$1<redacted>$2")
 }
+
+/** Strips credentials, tokens and auth query parameters from a report. Kept pure for testing. */
+internal fun redactSecrets(text: String): String = text
+    .replace(Regex("(?i)([?&](?:t|s|p|u|api_key|apikey|token|access_token|password|x-emby-token)=)[^&\\s\"'<>]+"), "$1<redacted>")
+    .replace(Regex("(?i)(authorization:\\s*)[^\\n]+"), "$1<redacted>")
+    .replace(Regex("(?i)(token=\")[^\"]+(\")"), "$1<redacted>$2")
+    .replace(Regex("(?i)(\"(?:credential|password|accessToken|storePassword)\"\\s*:\\s*\")[^\"]*(\")"), "$1<redacted>$2")
