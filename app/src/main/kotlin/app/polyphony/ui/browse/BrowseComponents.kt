@@ -164,7 +164,8 @@ fun ScrollerHost(
     content: @Composable () -> Unit,
 ) {
     Box(modifier.fillMaxSize()) {
-        content()
+        // Keep row content clear of the alphabet rail, which overlays the end edge.
+        Box(Modifier.fillMaxSize().padding(end = if (scroller != null) 32.dp else 0.dp)) { content() }
         if (scroller != null) {
             Box(Modifier.align(Alignment.CenterEnd).padding(bottom = 8.dp)) { scroller() }
         }
