@@ -73,11 +73,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           PRE=""; [ "$PRERELEASE" = "true" ] && PRE="--prerelease"
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --title "Polyphony $VERSION" \
-            --generate-notes \
-            $PRE \
-            --verify-tag
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            # Release already exists (e.g. published manually while CI was queued): refresh assets.
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --title "Polyphony $VERSION" \
+              --generate-notes \
+              $PRE \
+              --verify-tag
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
