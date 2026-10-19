@@ -1,5 +1,7 @@
 package app.polyphony.core.playback.cast
 
+import android.util.Log
+
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -123,7 +125,10 @@ class CastManager @Inject constructor(
         override fun onSessionResuming(session: CastSession, sessionId: String) = onConnecting(session)
         override fun onSessionStarted(session: CastSession, sessionId: String) = onConnected(session)
         override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) = onConnected(session)
-        override fun onSessionStartFailed(session: CastSession, error: Int) = onDisconnected()
+        override fun onSessionStartFailed(session: CastSession, error: Int) {
+            Log.w(TAG, "Cast session start failed: error=$error device=${session.castDevice?.friendlyName}")
+            onDisconnected()
+        }
         override fun onSessionResumeFailed(session: CastSession, error: Int) = onDisconnected()
         override fun onSessionEnding(session: CastSession) = Unit
         override fun onSessionEnded(session: CastSession, error: Int) = onDisconnected()
@@ -137,12 +142,14 @@ class CastManager @Inject constructor(
 
     private fun onConnected(session: CastSession) {
         val target = session.castDevice?.toTarget() ?: return
+        Log.i(TAG, "Cast connected: ${target.friendlyName} model=${target.modelName} id=${target.deviceId}")
         val volume = runCatching { session.volume.toFloat() }.getOrDefault(1f)
         _state.update { it.copy(isConnecting = false, isConnected = true, target = target, volume = volume) }
         scope.launch { runCatching { transcodeProfileRepository.rememberRemoteDevice(target, connected = true) } }
     }
 
     private fun onDisconnected() {
+        if (_state.value.isConnected) Log.i(TAG, "Cast disconnected from ${_state.value.target?.displayName}")
         _state.update { it.copy(isConnecting = false, isConnected = false, target = null) }
     }
 
@@ -161,3 +168,5 @@ class CastManager @Inject constructor(
 
 internal fun CastDevice.toTarget(): OutputTarget.Cast =
     OutputTarget.Cast(deviceId = deviceId, friendlyName = friendlyName, modelName = modelName)
+
+private const val TAG = "PolyphonyCast"

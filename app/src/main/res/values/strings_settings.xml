@@ -286,4 +286,8 @@
     <string name="settings_transition_none">None</string>
     <string name="settings_transition_fade">Fade</string>
     <string name="settings_transition_slide">Slide</string>
+    <string name="settings_about_diagnostics">Diagnostics</string>
+    <string name="settings_about_export_diagnostics">Export diagnostics</string>
+    <string name="settings_about_export_diagnostics_summary">Share a text report with device info, settings, playback and Cast state, recent crashes and logs. Passwords and tokens are removed.</string>
+    <string name="settings_about_clear_crashes">Clear %1$d recorded crash reports</string>
 </resources>

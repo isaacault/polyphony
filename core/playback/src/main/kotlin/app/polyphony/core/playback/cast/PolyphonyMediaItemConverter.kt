@@ -1,6 +1,7 @@
 package app.polyphony.core.playback.cast
 
 import android.net.Uri
+import android.util.Log
 import androidx.media3.cast.MediaItemConverter
 import androidx.media3.common.MediaItem
 import app.polyphony.core.domain.model.Track
@@ -58,6 +59,11 @@ class PolyphonyMediaItemConverter @Inject constructor(
             put(KEY_TRACK_JSON, PlaybackJson.encodeToString(track))
         }
         val mime = request?.mimeType ?: track.mimeType ?: guessMime(track.container)
+        Log.i(
+            "PolyphonyCast",
+            "Queue item for ${target.key}: \"${track.title}\" ${track.container} -> ${decision.profile.name} (${decision.reason}) " +
+                "mime=$mime transcoded=${request?.isTranscoded} host=${request?.url?.let { Uri.parse(it).host }}",
+        )
         val info = MediaInfo.Builder(request?.url ?: "")
             .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
             .setContentType(mime)

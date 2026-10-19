@@ -12,6 +12,7 @@ import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import app.polyphony.core.domain.repository.DownloadRepository
+import app.polyphony.diagnostics.CrashRecorder
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.OkHttpClient
 import javax.inject.Inject
@@ -24,6 +25,11 @@ class PolyphonyApplication : Application(), Configuration.Provider, SingletonIma
 
     /** Injected eagerly so download rule observers and scheduling start with the process. */
     @Inject lateinit var downloadRepository: DownloadRepository
+
+    override fun onCreate() {
+        super.onCreate()
+        CrashRecorder.install(this)
+    }
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()

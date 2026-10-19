@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.datasource.DefaultDataSource
@@ -323,6 +324,7 @@ class PlaybackService : MediaLibraryService() {
         publishExtras()
         val targetKey = engine.currentTarget.key
         val profileId = decision.profile.id
+        Log.i(TAG, "Transcode decision for $targetKey: ${decision.profile.name} [${decision.profile.summary}] reason=${decision.reason} cappedByLatency=${decision.cappedByLatency}")
         if (lastAppliedProfileId == null || lastAppliedTargetKey != targetKey) {
             lastAppliedProfileId = profileId
             lastAppliedTargetKey = targetKey
@@ -415,6 +417,10 @@ class PlaybackService : MediaLibraryService() {
     // ---- player events ----
 
     private val playerListener = object : Player.Listener {
+        override fun onPlayerError(error: PlaybackException) {
+            Log.e(TAG, "Player error ${error.errorCodeName} on ${engine.currentTarget.key}: ${error.message}", error.cause)
+        }
+
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val track = mediaItem?.let { trackFor(it) }
             reporter.onTrackStarted(track)

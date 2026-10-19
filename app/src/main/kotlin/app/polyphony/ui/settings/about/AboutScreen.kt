@@ -29,6 +29,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.polyphony.BuildConfig
 import app.polyphony.R
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.polyphony.diagnostics.DiagnosticsViewModel
+import app.polyphony.ui.settings.components.ActionPreference
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.DeleteSweep
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.ui.settings.components.PreferenceCategory
 import app.polyphony.ui.settings.components.PreferenceRow
@@ -51,9 +59,11 @@ private val Acknowledgements = listOf(
 )
 
 @Composable
-fun AboutScreen() {
+fun AboutScreen(diagnostics: DiagnosticsViewModel = hiltViewModel()) {
     val navigator = LocalNavigator.current
     val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+    val diag by diagnostics.state.collectAsStateWithLifecycle()
 
     SettingsScaffold(title = stringResource(R.string.settings_about), onBack = { navigator.back() }) {
         item(key = "header") {
@@ -96,6 +106,24 @@ fun AboutScreen() {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
+                )
+            }
+        }
+
+        preferenceCategory(key = "diagnostics", titleRes = R.string.settings_about_diagnostics) {
+            ActionPreference(
+                title = stringResource(R.string.settings_about_export_diagnostics),
+                summary = diag.error ?: stringResource(R.string.settings_about_export_diagnostics_summary),
+                icon = Icons.Rounded.Description,
+                enabled = !diag.exporting,
+                onClick = { diagnostics.export { intent -> context.startActivity(intent) } },
+            )
+            if (diag.crashCount > 0) {
+                ActionPreference(
+                    title = stringResource(R.string.settings_about_clear_crashes, diag.crashCount),
+                    icon = Icons.Rounded.DeleteSweep,
+                    showChevron = false,
+                    onClick = { diagnostics.clearCrashes() },
                 )
             }
         }
