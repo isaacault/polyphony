@@ -24,7 +24,7 @@ if [ -f "$JKS" ]; then
   echo "Keystore already exists at $JKS; reusing it."
   PW="$(grep '^storePassword=' "$PROPS" | cut -d= -f2-)"
 else
-  PW="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40)"
+  PW="$(openssl rand -base64 60 | tr -dc 'A-Za-z0-9' | cut -c1-40)"
   keytool -genkeypair -keystore "$JKS" -storetype PKCS12 -alias "$ALIAS" -keyalg RSA -keysize 4096 \
     -validity 10000 -storepass "$PW" -keypass "$PW" \
     -dname "CN=Polyphony, OU=Release, O=${POLYPHONY_KEY_ORG:-Polyphony}, C=US" >/dev/null
