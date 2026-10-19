@@ -14,6 +14,7 @@ import app.polyphony.core.playback.queue.MediaItemFactory
 import app.polyphony.core.playback.queue.QueueStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.io.IOException
@@ -38,7 +39,23 @@ class StreamResolver @Inject constructor(
 ) : ResolvingDataSource.Resolver {
 
     private val _lastApplied = MutableStateFlow<AppliedDecision?>(null)
+    /** Most recent resolution. Note: ExoPlayer preloads the next item, so this may be the *next* track. */
     val lastApplied: StateFlow<AppliedDecision?> = _lastApplied
+
+    private val _applied = MutableStateFlow<Map<String, TranscodeDecision>>(emptyMap())
+    /** Decisions applied per track id (bounded), so the UI can show what the current item really uses. */
+    val applied: StateFlow<Map<String, TranscodeDecision>> = _applied
+
+    private fun record(trackId: String, decision: TranscodeDecision) {
+        _lastApplied.value = AppliedDecision(trackId, decision)
+        _applied.update { current ->
+            val next = LinkedHashMap(current)
+            next.remove(trackId)
+            next[trackId] = decision
+            while (next.size > 32) next.remove(next.keys.first())
+            next
+        }
+    }
 
     @Throws(IOException::class)
     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
@@ -52,7 +69,7 @@ class StreamResolver @Inject constructor(
             ?: throw IOException("Unknown server $serverId")
         val decision = engine.localDecision()
         val request = provider.streamRequest(track, decision.profile)
-        _lastApplied.value = AppliedDecision(trackId, decision)
+        record(trackId, decision)
         return dataSpec.buildUpon()
             .setUri(Uri.parse(request.url))
             .setHttpRequestHeaders(dataSpec.httpRequestHeaders + request.headers)
@@ -76,7 +93,7 @@ class StreamResolver @Inject constructor(
         val file = File(path)
         if (!file.exists()) return if (downloads.offlineMode) throw IOException("Downloaded file is missing") else null
         val profile = engine.profileById(local.profileId) ?: TranscodeProfile.ORIGINAL
-        _lastApplied.value = AppliedDecision(trackId, TranscodeDecision(profile, TranscodeDecision.Reason.DOWNLOADED))
+        record(trackId, TranscodeDecision(profile, TranscodeDecision.Reason.DOWNLOADED))
         return dataSpec.buildUpon()
             .setUri(Uri.fromFile(file))
             .setHttpRequestHeaders(emptyMap())
