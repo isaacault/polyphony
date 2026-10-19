@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
                     onboardingComplete = current.onboardingComplete,
                     deepLink = link,
                     onDeepLinkConsumed = { deepLink.value = null },
+                    navTransition = current.appearance.navTransition,
                 )
             }
         }

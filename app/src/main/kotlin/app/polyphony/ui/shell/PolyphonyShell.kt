@@ -38,6 +38,7 @@ import app.polyphony.core.ui.components.LocalContentBottomPadding
 import app.polyphony.core.ui.motion.Motion
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.PolyphonyNavHost
+import app.polyphony.core.domain.repository.NavTransitionStyle
 import app.polyphony.navigation.PolyphonyNavigator
 import app.polyphony.navigation.Route
 import app.polyphony.ui.player.PlayerViewModel
@@ -60,6 +61,7 @@ fun PolyphonyShell(
     startDestination: Route,
     deepLink: Uri?,
     onDeepLinkConsumed: () -> Unit,
+    navTransition: NavTransitionStyle = NavTransitionStyle.FADE,
 ) {
     val shellViewModel: ShellViewModel = hiltViewModel()
     val playerViewModel: PlayerViewModel = hiltViewModel()
@@ -119,6 +121,7 @@ fun PolyphonyShell(
                 navigator = navigator,
                 startDestination = startDestination,
                 modifier = Modifier.fillMaxSize(),
+                style = navTransition,
             )
 
             AnimatedVisibility(

@@ -25,6 +25,13 @@ object NavMotion {
     /** How far the screen underneath drifts, as a fraction of width (parallax). */
     private const val PARALLAX = 0.25f
 
+    private const val QUICK_IN = 120
+    private const val QUICK_OUT = 90
+
+    /** Crossfade quick enough to read as instant; avoids the flicker of a hard cut. */
+    fun quickFadeEnter(): EnterTransition = fadeIn(tween(QUICK_IN, easing = Motion.Standard))
+    fun quickFadeExit(): ExitTransition = fadeOut(tween(QUICK_OUT, easing = Motion.Standard))
+
     fun tabEnter(): EnterTransition = fadeIn(tween(TAB_IN, easing = Motion.Standard))
     fun tabExit(): ExitTransition = fadeOut(tween(TAB_OUT, easing = Motion.Standard))
 

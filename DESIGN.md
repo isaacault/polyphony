@@ -57,11 +57,17 @@ feel physical. Everything below is a rule unless marked "prefer".
 
 ## Motion
 
-- Use `Motion` tokens: fade-through between tabs; shared-axis X into detail screens; springs for
-  anything the finger drives. Durations 150/300/450 ms. Prefer `animateContentSize`,
-  `AnimatedVisibility`, and `Crossfade` over abrupt changes.
+- Screen-to-screen motion is a user setting (Appearance → Screen transitions): **None** (instant),
+  **Fade** (120 ms crossfade, the default) or **Slide** (new page slides in from the right over a
+  dimmed, parallaxed current page; back slides it fully off). Keep every option tween-based so
+  predictive back can scrub it, and never scale screens.
+- The Now Playing sheet always moves with the finger (`AnchoredDraggable` + spring); tabs under
+  Slide crossfade because they have no direction.
+- Inside screens prefer `animateContentSize`, `AnimatedVisibility` and `Crossfade` over abrupt
+  changes; springs for anything touch-driven. Durations 120 to 300 ms.
 - Haptics (`LocalHapticFeedback`) on: like/unlike, sheet snap, reorder pickup/drop, long-press.
-- Never animate on first composition of a list (no "popping in"); do crossfade images.
+- Every navigation destination must paint an opaque background; a transparent root ghosts the
+  previous screen through any transition.
 
 ## Performance rules
 

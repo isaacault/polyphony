@@ -30,6 +30,10 @@ enum class PlayerArtworkStyle { ROUNDED, SQUARE, CIRCLE }
 @Serializable
 enum class LibraryLayout { LIST, GRID }
 
+/** Motion used when moving between screens (the Now Playing sheet always slides). */
+@Serializable
+enum class NavTransitionStyle { NONE, FADE, SLIDE }
+
 @Serializable
 data class AppearanceSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -50,6 +54,7 @@ data class AppearanceSettings(
     val artistsLayout: LibraryLayout = LibraryLayout.LIST,
     val albumsLayout: LibraryLayout = LibraryLayout.LIST,
     val playlistsLayout: LibraryLayout = LibraryLayout.LIST,
+    val navTransition: NavTransitionStyle = NavTransitionStyle.FADE,
 )
 
 @Serializable

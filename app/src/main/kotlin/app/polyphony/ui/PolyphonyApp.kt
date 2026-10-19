@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.navigation.compose.rememberNavController
+import app.polyphony.core.domain.repository.NavTransitionStyle
 import app.polyphony.navigation.HomeRoute
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.navigation.OnboardingRoute
@@ -22,6 +23,7 @@ fun PolyphonyApp(
     onboardingComplete: Boolean,
     deepLink: Uri? = null,
     onDeepLinkConsumed: () -> Unit = {},
+    navTransition: NavTransitionStyle = NavTransitionStyle.FADE,
 ) {
     val navController = rememberNavController()
     val navigator = remember(navController) { PolyphonyNavigator(navController) }
@@ -32,6 +34,7 @@ fun PolyphonyApp(
             startDestination = startDestination,
             deepLink = deepLink,
             onDeepLinkConsumed = onDeepLinkConsumed,
+            navTransition = navTransition,
         )
     }
 }
