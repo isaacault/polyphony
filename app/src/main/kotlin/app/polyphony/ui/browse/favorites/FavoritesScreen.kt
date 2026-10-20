@@ -42,6 +42,7 @@ import app.polyphony.navigation.LocalNavigator
 import app.polyphony.ui.browse.AlbumGrid
 import app.polyphony.ui.browse.AlbumList
 import app.polyphony.ui.browse.ArtistGrid
+import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.AlbumOptionsSheet
 import app.polyphony.ui.common.TrackOptionsSheet
 import kotlinx.coroutines.launch
@@ -103,14 +104,16 @@ fun FavoritesScreen(viewModel: FavoritesViewModel = hiltViewModel()) {
                                 )
                             }
                             items(list, key = { it.id }, contentType = { "track" }) { track ->
-                                TrackRow(
-                                    track = track,
-                                    onClick = { viewModel.playTrack(list.indexOf(track)) },
-                                    isCurrent = track.id == playback.currentTrack?.id,
-                                    isPlaying = playback.isPlaying,
-                                    onLongClick = { trackForOptions = track },
-                                    onMoreClick = { trackForOptions = track },
-                                )
+                                TrackSwipeRow(track = track) {
+                                    TrackRow(
+                                        track = track,
+                                        onClick = { viewModel.playTrack(list.indexOf(track)) },
+                                        isCurrent = track.id == playback.currentTrack?.id,
+                                        isPlaying = playback.isPlaying,
+                                        onLongClick = { trackForOptions = track },
+                                        onMoreClick = { trackForOptions = track },
+                                    )
+                                }
                             }
                         }
                     }

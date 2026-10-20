@@ -57,6 +57,7 @@ import app.polyphony.core.ui.components.TrackRow
 import app.polyphony.core.ui.theme.ArtworkShapes
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.AlbumOptionsSheet
 import app.polyphony.ui.common.CollectionDownloadButton
 import app.polyphony.ui.common.rememberDownloadedIds
@@ -164,16 +165,18 @@ fun ArtistScreen(viewModel: ArtistViewModel = hiltViewModel()) {
                             item(key = "top-loading") { LoadingPlaceholder(PlaceholderStyle.LIST, count = 3) }
                         }
                         items(visibleTop, key = { "top-" + it.id }, contentType = { "track" }) { track ->
-                            TrackRow(
-                                track = track,
-                                onClick = { viewModel.playTopTrack(state.topTracks.indexOf(track)) },
-                                isCurrent = track.id == state.currentTrackId,
-                                isPlaying = state.isPlaying,
-                                subtitle = track.albumName,
-                                isDownloaded = track.id in downloadedIds,
-                                onLongClick = { trackForOptions = track },
-                                onMoreClick = { trackForOptions = track },
-                            )
+                            TrackSwipeRow(track = track) {
+                                TrackRow(
+                                    track = track,
+                                    onClick = { viewModel.playTopTrack(state.topTracks.indexOf(track)) },
+                                    isCurrent = track.id == state.currentTrackId,
+                                    isPlaying = state.isPlaying,
+                                    subtitle = track.albumName,
+                                    isDownloaded = track.id in downloadedIds,
+                                    onLongClick = { trackForOptions = track },
+                                    onMoreClick = { trackForOptions = track },
+                                )
+                            }
                         }
                         if (state.topTracks.size > 5) {
                             item(key = "top-more") {

@@ -59,6 +59,8 @@ import app.polyphony.core.domain.repository.NavTransitionStyle
 import app.polyphony.core.domain.repository.PlayerArtworkStyle
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.ThemeMode
+import app.polyphony.core.domain.repository.TrackSwipeAction
+import app.polyphony.ui.settings.components.ListPreference
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.ui.settings.components.ListOption
 import app.polyphony.ui.settings.components.PreferenceCategory
@@ -191,6 +193,23 @@ fun AppearanceSettingsScreen(viewModel: AppearanceViewModel = hiltViewModel()) {
                 selected = s.navTransition,
                 onSelected = { t -> viewModel.update { it.copy(navTransition = t) } },
             )
+        }
+
+        preferenceCategory(key = "gestures", titleRes = R.string.settings_appearance_gestures) {
+            val swipeOptions = TrackSwipeAction.entries.map { ListOption(it, stringResource(it.labelRes())) }
+            ListPreference(
+                title = stringResource(R.string.settings_swipe_left_to_right),
+                options = swipeOptions,
+                selected = s.swipeLeftToRight,
+                onSelected = { a -> viewModel.update { it.copy(swipeLeftToRight = a) } },
+            )
+            ListPreference(
+                title = stringResource(R.string.settings_swipe_right_to_left),
+                options = swipeOptions,
+                selected = s.swipeRightToLeft,
+                onSelected = { a -> viewModel.update { it.copy(swipeRightToLeft = a) } },
+            )
+            PreferenceNote(stringResource(R.string.settings_swipe_hint))
         }
 
         preferenceCategory(key = "library", titleRes = R.string.settings_appearance_library) {
@@ -440,4 +459,14 @@ private fun LibraryTabsSheet(
         }
         Spacer(Modifier.height(24.dp))
     }
+}
+
+private fun TrackSwipeAction.labelRes(): Int = when (this) {
+    TrackSwipeAction.NONE -> R.string.settings_swipe_action_none
+    TrackSwipeAction.ADD_TO_QUEUE -> R.string.settings_swipe_action_add_to_queue
+    TrackSwipeAction.PLAY_NEXT -> R.string.settings_swipe_action_play_next
+    TrackSwipeAction.ADD_TO_PLAYLIST -> R.string.settings_swipe_action_add_to_playlist
+    TrackSwipeAction.TOGGLE_FAVORITE -> R.string.settings_swipe_action_favorite
+    TrackSwipeAction.DOWNLOAD -> R.string.settings_swipe_action_download
+    TrackSwipeAction.SONG_INFO -> R.string.settings_swipe_action_info
 }

@@ -38,6 +38,10 @@ enum class LibrarySection { ARTISTS, ALBUMS, SONGS, PLAYLISTS, GENRES }
 @Serializable
 enum class NavTransitionStyle { NONE, FADE, SLIDE }
 
+/** What a horizontal swipe on a song row does once it passes the threshold and is released. */
+@Serializable
+enum class TrackSwipeAction { NONE, ADD_TO_QUEUE, PLAY_NEXT, ADD_TO_PLAYLIST, TOGGLE_FAVORITE, DOWNLOAD, SONG_INFO }
+
 @Serializable
 data class AppearanceSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -61,6 +65,9 @@ data class AppearanceSettings(
     val navTransition: NavTransitionStyle = NavTransitionStyle.FADE,
     /** Enabled Library tabs in display order; an empty list means all, in default order. */
     val libraryTabs: List<LibrarySection> = LibrarySection.entries.toList(),
+    /** Swipe gestures on song rows, by physical direction (not layout direction). */
+    val swipeLeftToRight: TrackSwipeAction = TrackSwipeAction.ADD_TO_QUEUE,
+    val swipeRightToLeft: TrackSwipeAction = TrackSwipeAction.NONE,
 )
 
 @Serializable

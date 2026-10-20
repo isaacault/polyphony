@@ -62,6 +62,7 @@ import app.polyphony.core.ui.components.TrackRow
 import app.polyphony.core.ui.components.listContentPadding
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.AlbumOptionsSheet
 import app.polyphony.ui.common.OfflineModeBanner
 import app.polyphony.ui.common.rememberDownloadedIds
@@ -175,15 +176,17 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                 if (state.tracks.isNotEmpty()) {
                     item(key = "h-tracks") { SectionHeader(title = stringResource(R.string.browse_tab_songs)) }
                     items(state.tracks, key = { "t-" + it.id }, contentType = { "track" }) { track ->
-                        TrackRow(
-                            track = track,
-                            onClick = { viewModel.playTrack(state.tracks.indexOf(track)) },
-                            isCurrent = track.id == state.currentTrackId,
-                            isPlaying = state.isPlaying,
-                            isDownloaded = track.id in downloadedIds,
-                            onLongClick = { trackForOptions = track },
-                            onMoreClick = { trackForOptions = track },
-                        )
+                        TrackSwipeRow(track = track) {
+                            TrackRow(
+                                track = track,
+                                onClick = { viewModel.playTrack(state.tracks.indexOf(track)) },
+                                isCurrent = track.id == state.currentTrackId,
+                                isPlaying = state.isPlaying,
+                                isDownloaded = track.id in downloadedIds,
+                                onLongClick = { trackForOptions = track },
+                                onMoreClick = { trackForOptions = track },
+                            )
+                        }
                     }
                 }
                 item(key = "remote") {
