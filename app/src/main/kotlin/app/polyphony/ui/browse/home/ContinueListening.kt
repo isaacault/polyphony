@@ -1,15 +1,17 @@
 package app.polyphony.ui.browse.home
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
+import app.polyphony.core.ui.theme.Dimens
+import kotlinx.collections.immutable.ImmutableList
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
@@ -30,81 +32,98 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.polyphony.R
 import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.RecentContext
 import app.polyphony.core.ui.components.ArtworkImage
-import app.polyphony.core.ui.theme.ArtworkShapes
 import app.polyphony.ui.common.OptionsSheet
 import app.polyphony.ui.common.SheetHeader
 import app.polyphony.ui.common.SheetItem
 
-/** A resumable collection on Home: artwork, its name and the track it will pick up at. */
+/**
+ * Spotify-style quick picks: up to six recently played collections as two columns of wide tiles,
+ * placed at the top of Home. A tap opens the collection; a long press offers resume, restart and
+ * remove.
+ */
 @Composable
-fun ContinueListeningCard(
-    entry: RecentContext,
-    onClick: () -> Unit,
+fun ContinueListeningGrid(
+    entries: ImmutableList<RecentContext>,
+    onClick: (RecentContext) -> Unit,
+    onLongClick: (RecentContext) -> Unit,
     modifier: Modifier = Modifier,
-    onLongClick: (() -> Unit)? = null,
-    width: Dp = 160.dp,
 ) {
-    val context = entry.context
-    val isArtist = context.kind == PlayContext.Kind.ARTIST
+    val rows = entries.take(MAX_QUICK_PICKS).chunked(2)
     Column(
-        modifier = modifier
-            .width(width)
-            .clip(MaterialTheme.shapes.medium)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(4.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = modifier.padding(horizontal = Dimens.screenPadding),
+        verticalArrangement = Arrangement.spacedBy(QUICK_PICK_GAP),
     ) {
-        ArtworkImage(
-            url = context.artworkUrl,
-            contentDescription = context.title,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f),
-            shape = if (isArtist) CircleShape else ArtworkShapes.gridTile,
-            placeholder = context.kind.icon,
-        )
-        Text(
-            text = context.title,
-            style = MaterialTheme.typography.titleSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 4.dp),
-        )
-        Row(
-            modifier = Modifier.padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = if (entry.trackId != null) Icons.Rounded.PlayArrow else context.kind.icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(14.dp),
-            )
-            Spacer(Modifier.width(2.dp))
-            Text(
-                text = entry.trackTitle ?: stringResource(context.kind.label),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        rows.forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(QUICK_PICK_GAP)) {
+                row.forEach { entry ->
+                    ContinueListeningTile(
+                        entry = entry,
+                        onClick = { onClick(entry) },
+                        onLongClick = { onLongClick(entry) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
         }
     }
 }
 
-/** Long-press options for a "Continue listening" tile. */
+/** One quick-pick tile: square artwork flush left, the collection's name beside it. */
+@Composable
+fun ContinueListeningTile(
+    entry: RecentContext,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = entry.context
+    val isArtist = context.kind == PlayContext.Kind.ARTIST
+    val shape = RoundedCornerShape(QUICK_PICK_RADIUS)
+    Row(
+        modifier = modifier
+            .height(QUICK_PICK_HEIGHT)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ArtworkImage(
+            url = context.artworkUrl,
+            contentDescription = null,
+            modifier = if (isArtist) Modifier.padding(4.dp).size(QUICK_PICK_HEIGHT - 8.dp) else Modifier.size(QUICK_PICK_HEIGHT),
+            shape = if (isArtist) CircleShape else RoundedCornerShape(topStart = QUICK_PICK_RADIUS, bottomStart = QUICK_PICK_RADIUS),
+            placeholder = context.kind.icon,
+        )
+        Text(
+            text = context.title,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 10.dp),
+        )
+    }
+}
+
+private const val MAX_QUICK_PICKS = 6
+private val QUICK_PICK_HEIGHT = 56.dp
+private val QUICK_PICK_GAP = 8.dp
+private val QUICK_PICK_RADIUS = 6.dp
+
+/** Long-press options for a quick-pick tile. Tapping the tile opens the collection; these resume or forget it. */
 @Composable
 fun ContinueListeningSheet(
     entry: RecentContext,
     onDismiss: () -> Unit,
+    onResume: () -> Unit,
     onPlayFromStart: () -> Unit,
-    onOpen: () -> Unit,
     onRemove: () -> Unit,
 ) {
     val context = entry.context
@@ -119,8 +138,10 @@ fun ContinueListeningSheet(
             )
         },
     ) {
+        val resumeLabel = entry.trackTitle?.let { stringResource(R.string.browse_continue_resume_track, it) }
+            ?: stringResource(R.string.browse_continue_resume)
+        SheetItem(Icons.Rounded.PlayArrow, resumeLabel) { onResume(); onDismiss() }
         SheetItem(Icons.Rounded.Replay, stringResource(R.string.browse_continue_play_from_start)) { onPlayFromStart(); onDismiss() }
-        SheetItem(context.kind.icon, stringResource(context.kind.openLabel)) { onOpen(); onDismiss() }
         SheetItem(Icons.Rounded.HistoryToggleOff, stringResource(R.string.browse_continue_remove)) { onRemove(); onDismiss() }
     }
 }
@@ -143,11 +164,3 @@ private val PlayContext.Kind.label: Int
         PlayContext.Kind.FAVORITES -> R.string.browse_kind_favorites
     }
 
-private val PlayContext.Kind.openLabel: Int
-    get() = when (this) {
-        PlayContext.Kind.ALBUM -> R.string.browse_action_go_to_album
-        PlayContext.Kind.ARTIST -> R.string.browse_action_go_to_artist
-        PlayContext.Kind.PLAYLIST -> R.string.browse_action_go_to_playlist
-        PlayContext.Kind.GENRE -> R.string.browse_action_go_to_genre
-        PlayContext.Kind.FAVORITES -> R.string.browse_action_go_to_favorites
-    }
