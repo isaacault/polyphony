@@ -23,7 +23,7 @@
   "milestones": [
     {"title": "M1 · Daily driver", "description": "Everything needed to use Polyphony as the only player with a Subsonic/Navidrome or Jellyfin server, including Cast and DLNA on real hardware."},
     {"title": "M2 · Parity", "description": "Feature depth people expect from a mature self-hosted music client: more providers, crossfade, equaliser, smart playlists, scrobbling, widgets."},
-    {"title": "M3 · Beyond", "description": "Things no comparable app offers: unified sources, request backends, bandwidth-aware quality, bit-perfect output."}
+    {"title": "M3 · Beyond", "description": "Things no comparable app offers: unified sources, bandwidth-aware quality, bit-perfect output."}
   ],
   "issues": [
     {"title": "Verify Google Cast on real receivers", "milestone": "M1 · Daily driver", "labels": ["area/cast", "type/verification", "priority/p0"],
@@ -120,10 +120,6 @@
      "body": "PKCE login with the user's own developer app, search, saved albums/tracks/playlists, save-to-library. Catalog-only provider capability (no stream URLs). Track Spotify API policy changes."},
     {"title": "Spotify playback: App Remote or Music Assistant bridge", "milestone": "M3 · Beyond", "labels": ["area/playback", "type/feature", "priority/p2"],
      "body": "Decide between (a) Spotify App Remote SDK (playback inside the Spotify app, our UI controls it) and (b) registering the phone as a Music Assistant player (Sendspin) so MA streams Spotify and other services. Embedding librespot is out of scope for licensing reasons."},
-    {"title": "Lidarr \"add to home library\" requests", "milestone": "M3 · Beyond", "labels": ["area/providers", "type/feature", "priority/p2"],
-     "body": "From any catalog item: resolve to MusicBrainz, add artist/album to Lidarr monitored, trigger search, show queue/import status, and surface the item once the next library sync finds it."},
-    {"title": "slskd / Soulseek search and download requests", "milestone": "M3 · Beyond", "labels": ["area/providers", "type/feature", "priority/p2"],
-     "body": "Search slskd, pick a result with quality hints, enqueue the download, and track completion; hand off to the library import path."},
     {"title": "Music Assistant player bridge (Sendspin)", "milestone": "M3 · Beyond", "labels": ["area/playback", "type/feature", "priority/p2"],
      "body": "Implement the Sendspin player protocol so Polyphony appears as a player in Music Assistant, enabling MA's providers (Spotify, Tidal, Qobuz, YouTube Music) to stream to the phone."},
     {"title": "Bit-perfect USB DAC output", "milestone": "M3 · Beyond", "labels": ["area/playback", "type/feature", "priority/p2"],
