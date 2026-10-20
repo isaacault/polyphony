@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,6 +61,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.polyphony.R
+import app.polyphony.core.ui.components.LocalContentBottomPadding
 import app.polyphony.core.ui.theme.Dimens
 
 /** One selectable option for list / segmented preferences. */
@@ -96,7 +98,9 @@ fun SettingsScaffold(
                 scrollBehavior = scrollBehavior,
             )
         },
-        floatingActionButton = floatingActionButton,
+        // Settings screens sit under the shell's mini player; lift the button above it like the
+        // hero and library screens do, instead of letting Scaffold pin it to the window edge.
+        floatingActionButton = { Box(Modifier.padding(bottom = LocalContentBottomPadding.current)) { floatingActionButton() } },
         snackbarHost = { snackbarHostState?.let { SnackbarHost(it) } },
     ) { padding ->
         LazyColumn(
@@ -105,7 +109,7 @@ fun SettingsScaffold(
                 start = Dimens.screenPadding,
                 end = Dimens.screenPadding,
                 top = padding.calculateTopPadding() + Dimens.tightSpacing,
-                bottom = padding.calculateBottomPadding() + Dimens.miniPlayerHeight + Dimens.sectionSpacing,
+                bottom = padding.calculateBottomPadding() + LocalContentBottomPadding.current + Dimens.sectionSpacing,
             ),
             verticalArrangement = Arrangement.spacedBy(Dimens.itemSpacing),
             content = content,
