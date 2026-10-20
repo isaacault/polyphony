@@ -14,12 +14,23 @@ class PolyphonyNavigator(val navController: NavHostController) {
 
     fun back(): Boolean = navController.popBackStack()
 
-    /** Switch between bottom-bar tabs, preserving each tab's back stack. */
+    /**
+     * Bottom-bar tap. Each tab keeps its own saved stack while the user is elsewhere, but a tap
+     * means "show me that tab", not "put me back inside whatever I had open there": after the
+     * switch, anything above the tab's root screen (an album, an artist, a playlist) is popped,
+     * so Home always shows Home and Library always shows the Library tabs.
+     */
     fun switchTab(route: Route) {
         navController.navigate(route) {
             popUpTo(navController.graph.startDestinationId) { saveState = true }
             launchSingleTop = true
             restoreState = true
+        }
+        when (route) {
+            is HomeRoute -> navController.popBackStack<HomeRoute>(inclusive = false)
+            is LibraryRoute -> navController.popBackStack<LibraryRoute>(inclusive = false)
+            is SearchRoute -> navController.popBackStack<SearchRoute>(inclusive = false)
+            else -> Unit
         }
     }
 
