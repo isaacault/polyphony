@@ -80,8 +80,8 @@ built to be artwork-forward, fast and smooth, and unapologetically open: GPL-3.0
 - Material 3 Expressive, dynamic colour (Material You) or your own accent, pure-black OLED mode
 - The Now Playing screen re-themes itself from the artwork, with a blurred backdrop, a swipeable
   artwork pager, a morphing play button, synced lyrics and a reorderable queue
-- Edge-to-edge, predictive back, fade-through and shared-axis transitions, haptics where they
-  make sense
+- Edge-to-edge, predictive back, instant screen changes with a spring-driven Now Playing sheet,
+  haptics where they make sense
 
 ## Building
 

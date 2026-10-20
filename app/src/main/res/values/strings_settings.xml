@@ -280,12 +280,6 @@
     <string name="settings_appearance_layout_playlists">Playlists layout</string>
     <string name="settings_layout_list">List</string>
     <string name="settings_layout_grid">Grid</string>
-    <string name="settings_appearance_motion">Motion</string>
-    <string name="settings_appearance_nav_transition">Screen transitions</string>
-    <string name="settings_appearance_nav_transition_summary">How screens change when you navigate. Now Playing always slides up.</string>
-    <string name="settings_transition_none">None</string>
-    <string name="settings_transition_fade">Fade</string>
-    <string name="settings_transition_slide">Slide</string>
     <string name="settings_about_diagnostics">Diagnostics</string>
     <string name="settings_about_export_diagnostics">Export diagnostics</string>
     <string name="settings_about_export_diagnostics_summary">Share a text report with device info, settings, playback and Cast state, recent crashes and logs. Passwords and tokens are removed.</string>

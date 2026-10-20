@@ -55,7 +55,6 @@ import app.polyphony.ui.settings.components.ActionPreference
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import app.polyphony.core.domain.repository.LibraryLayout
-import app.polyphony.core.domain.repository.NavTransitionStyle
 import app.polyphony.core.domain.repository.PlayerArtworkStyle
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.ThemeMode
@@ -178,20 +177,6 @@ fun AppearanceSettingsScreen(viewModel: AppearanceViewModel = hiltViewModel()) {
                 ),
                 selected = s.playerArtworkStyle,
                 onSelected = { style -> viewModel.update { it.copy(playerArtworkStyle = style) } },
-            )
-        }
-
-        preferenceCategory(key = "motion", titleRes = R.string.settings_appearance_motion) {
-            SegmentedPreference(
-                title = stringResource(R.string.settings_appearance_nav_transition),
-                summary = stringResource(R.string.settings_appearance_nav_transition_summary),
-                options = listOf(
-                    ListOption(NavTransitionStyle.NONE, stringResource(R.string.settings_transition_none)),
-                    ListOption(NavTransitionStyle.FADE, stringResource(R.string.settings_transition_fade)),
-                    ListOption(NavTransitionStyle.SLIDE, stringResource(R.string.settings_transition_slide)),
-                ),
-                selected = s.navTransition,
-                onSelected = { t -> viewModel.update { it.copy(navTransition = t) } },
             )
         }
 

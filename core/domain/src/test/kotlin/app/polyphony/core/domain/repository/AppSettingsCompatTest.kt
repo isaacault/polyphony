@@ -58,4 +58,10 @@ class AppSettingsCompatTest {
         val decoded = json.decodeFromString(AppSettings.serializer(), json.encodeToString(AppSettings.serializer(), settings))
         assertEquals(LibrarySection.SONGS, decoded.appearance.libraryDefaultTab)
     }
+
+    @Test
+    fun `the removed screen transition setting is ignored`() {
+        val decoded = json.decodeFromString(AppSettings.serializer(), """{"appearance":{"navTransition":"SLIDE","pureBlack":true}}""")
+        assertEquals(true, decoded.appearance.pureBlack)
+    }
 }

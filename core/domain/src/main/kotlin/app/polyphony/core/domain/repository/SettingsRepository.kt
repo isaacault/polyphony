@@ -37,10 +37,6 @@ enum class LibraryLayout { LIST, GRID }
 @Serializable
 enum class LibrarySection { ARTISTS, ALBUMS, SONGS, PLAYLISTS, GENRES }
 
-/** Motion used when moving between screens (the Now Playing sheet always slides). */
-@Serializable
-enum class NavTransitionStyle { NONE, FADE, SLIDE }
-
 /** What a horizontal swipe on a song row does once it passes the threshold and is released. */
 @Serializable
 enum class TrackSwipeAction { NONE, ADD_TO_QUEUE, PLAY_NEXT, ADD_TO_PLAYLIST, TOGGLE_FAVORITE, DOWNLOAD, SONG_INFO }
@@ -65,7 +61,6 @@ data class AppearanceSettings(
     val artistsLayout: LibraryLayout = LibraryLayout.LIST,
     val albumsLayout: LibraryLayout = LibraryLayout.LIST,
     val playlistsLayout: LibraryLayout = LibraryLayout.LIST,
-    val navTransition: NavTransitionStyle = NavTransitionStyle.FADE,
     /** Enabled Library tabs in display order; an empty list means all, in default order. */
     val libraryTabs: List<LibrarySection> = LibrarySection.entries.toList(),
     /** Tab the Library opens on when nothing asks for a specific one; falls back to the first enabled tab. */
