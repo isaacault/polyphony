@@ -1,6 +1,7 @@
 package app.polyphony.core.data.db.dao
 
 import app.polyphony.core.data.offline.OfflineTrackRef
+import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.RawQuery
@@ -19,6 +20,24 @@ interface TrackDao {
 
     @RawQuery(observedEntities = [TrackEntity::class])
     fun observeSorted(query: SupportSQLiteQuery): Flow<List<TrackEntity>>
+
+    /** [query] from `SortQueries.tracks`; Room's offset paging source, which supports jumping. */
+    @RawQuery(observedEntities = [TrackEntity::class])
+    fun pagingSorted(query: SupportSQLiteQuery): PagingSource<Int, TrackEntity>
+
+    /** [query] from `SortQueries.tracksSlice`. */
+    @RawQuery
+    suspend fun listSorted(query: SupportSQLiteQuery): List<TrackEntity>
+
+    /** [query] from `SortQueries.trackSortKeys`: one tiny row per track, in list order. */
+    @RawQuery(observedEntities = [TrackEntity::class])
+    fun observeSortKeys(query: SupportSQLiteQuery): Flow<List<SortKey>>
+
+    @Query("SELECT COUNT(*) FROM tracks WHERE serverId = :serverId")
+    fun observeCount(serverId: String): Flow<Int>
+
+    @Query("SELECT * FROM tracks WHERE serverId = :serverId ORDER BY RANDOM() LIMIT :limit")
+    suspend fun random(serverId: String, limit: Int): List<TrackEntity>
 
     @Query("SELECT * FROM tracks WHERE serverId = :serverId AND id = :id")
     fun observe(serverId: String, id: String): Flow<TrackEntity?>
@@ -98,3 +117,6 @@ interface TrackDao {
     @Query("SELECT id, albumId, artistId, genre FROM tracks WHERE serverId = :serverId AND id IN (:ids)")
     suspend fun getRefs(serverId: String, ids: List<String>): List<OfflineTrackRef>
 }
+
+/** First character of a sort column; see `SortQueries.trackSortKeys`. */
+data class SortKey(val k: String?)

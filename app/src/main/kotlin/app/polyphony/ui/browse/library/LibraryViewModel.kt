@@ -3,6 +3,9 @@ package app.polyphony.ui.browse.library
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import app.polyphony.core.domain.model.LetterIndex
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.AlbumSort
 import app.polyphony.core.domain.model.Artist
@@ -24,10 +27,10 @@ import app.polyphony.core.domain.repository.SyncState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -91,10 +94,20 @@ class LibraryViewModel @Inject constructor(
         .map { it.toImmutableList() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val tracks: StateFlow<ImmutableList<Track>?> = combine(trackSort, trackAscending) { s, a -> s to a }
-        .flatMapLatest { (sort, asc) -> library.tracks(sort, asc) }
-        .map { it.toImmutableList() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    private val trackOrder = combine(trackSort, trackAscending) { s, a -> s to a }
+
+    /** Songs tab rows, paged from the cache: a 50k-track library costs the same as a 500-track one. */
+    val pagedTracks: Flow<PagingData<Track>> = trackOrder
+        .flatMapLatest { (sort, asc) -> library.pagedTracks(sort, asc) }
+        .cachedIn(viewModelScope)
+
+    /** Total for the Songs header; `null` until the first count arrives. */
+    val trackCount: StateFlow<Int?> = library.trackCount().map<Int, Int?> { it }.asState(null)
+
+    /** Alphabet-rail positions for [pagedTracks], from sort keys only. */
+    val trackLetters: StateFlow<LetterIndex> = trackOrder
+        .flatMapLatest { (sort, asc) -> library.trackLetterIndex(sort, asc) }
+        .asState(LetterIndex.EMPTY)
 
     val playlists: StateFlow<ImmutableList<Playlist>?> = library.playlists()
         .map { it.toImmutableList() }
@@ -110,28 +123,37 @@ class LibraryViewModel @Inject constructor(
     val syncState: StateFlow<SyncState> = syncManager.state
 
     // ---- actions ----
-    fun playTrack(index: Int) {
-        val list = tracks.value ?: return
-        playback.playTracks(list, index, queueTitle = "Songs")
-    }
-
-    fun playAllSongs(shuffle: Boolean) {
+    /**
+     * Plays the song at [index] of the paged Songs list. The queue is that song plus the next
+     * [QUEUE_WINDOW] in the current order, not the whole library, so a 50k-track collection never
+     * becomes a 50k-item queue.
+     */
+    fun playTrackAt(index: Int, track: Track) {
         viewModelScope.launch {
-            val list = tracks.value ?: library.tracks(trackSort.value, trackAscending.value).first()
-            if (list.isEmpty()) return@launch
-            if (shuffle && list.size > SHUFFLE_CAP) {
-                playback.playTracks(list.shuffled().take(SHUFFLE_CAP), 0, shuffle = false, queueTitle = "Shuffle all")
-            } else {
-                playback.playTracks(list, 0, shuffle = shuffle, queueTitle = if (shuffle) "Shuffle all" else "Songs")
-            }
+            val slice = library.tracksSlice(trackSort.value, trackAscending.value, offset = index, limit = QUEUE_WINDOW)
+            // In offline mode the list is filtered after paging, so a list index is not a DB offset:
+            // anchor the queue on the song that was tapped either way.
+            val queue = if (slice.firstOrNull()?.id == track.id) slice else listOf(track) + slice.filter { it.id != track.id }
+            playback.playTracks(queue, 0, queueTitle = "Songs")
         }
     }
 
-    /** Shuffle the whole library (server-side random when possible). */
+    fun playAllSongs(shuffle: Boolean) {
+        if (shuffle) {
+            shuffleLibrary()
+            return
+        }
+        viewModelScope.launch {
+            val list = library.tracksSlice(trackSort.value, trackAscending.value, offset = 0, limit = QUEUE_WINDOW)
+            if (list.isNotEmpty()) playback.playTracks(list, 0, queueTitle = "Songs")
+        }
+    }
+
+    /** Shuffle the whole library: a server-side random pick when online, a cached random sample otherwise. */
     fun shuffleLibrary() {
         viewModelScope.launch {
             val remote = runCatching { library.getRandomTracks(SHUFFLE_CAP) }.getOrDefault(emptyList())
-            val picks = if (remote.isNotEmpty()) remote else library.tracks().first().shuffled().take(SHUFFLE_CAP)
+            val picks = remote.ifEmpty { library.randomCachedTracks(SHUFFLE_CAP) }
             if (picks.isNotEmpty()) playback.playTracks(picks, 0, shuffle = false, queueTitle = "Shuffle all")
         }
     }
@@ -154,5 +176,8 @@ class LibraryViewModel @Inject constructor(
         const val KEY_TRACK_SORT = "trackSort"
         const val KEY_TRACK_ASC = "trackAsc"
         const val SHUFFLE_CAP = 300
+
+        /** Longest queue the Songs tab builds from a tap or "Play all". */
+        const val QUEUE_WINDOW = 500
     }
 }

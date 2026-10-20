@@ -30,6 +30,12 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.LoadState
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemContentType
+import androidx.paging.compose.itemKey
+import app.polyphony.core.ui.components.TrackRowPlaceholder
+import kotlinx.collections.immutable.toImmutableList
 import app.polyphony.R
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.AlbumSort
@@ -187,7 +193,9 @@ internal fun AlbumsTab(vm: LibraryViewModel) {
 
 @Composable
 internal fun SongsTab(vm: LibraryViewModel) {
-    val tracks by vm.tracks.collectAsStateWithLifecycle()
+    val items = vm.pagedTracks.collectAsLazyPagingItems()
+    val count by vm.trackCount.collectAsStateWithLifecycle()
+    val letters by vm.trackLetters.collectAsStateWithLifecycle()
     val sort by vm.trackSort.collectAsStateWithLifecycle()
     val ascending by vm.trackAscending.collectAsStateWithLifecycle()
     val playback by vm.playbackState.collectAsStateWithLifecycle()
@@ -209,7 +217,7 @@ internal fun SongsTab(vm: LibraryViewModel) {
     val downloadedIds by rememberDownloadedIds()
     Column(Modifier.fillMaxSize()) {
         ListControlsRow(
-            countLabel = tracks?.let { pluralStringResource(R.plurals.browse_count_songs, it.size, it.size) },
+            countLabel = count?.let { pluralStringResource(R.plurals.browse_count_songs, it, it) },
             start = { SortMenu(sortOptions, sort, ascending, onChange = vm::setTrackSort) },
             end = {
                 IconButton(onClick = { vm.playAllSongs(shuffle = true) }) {
@@ -217,23 +225,20 @@ internal fun SongsTab(vm: LibraryViewModel) {
                 }
             },
         )
-        val list = tracks
+        val loading = items.loadState.refresh is LoadState.Loading
         when {
-            list == null -> LoadingPlaceholder(PlaceholderStyle.LIST)
-            list.isEmpty() -> EmptyState(title = stringResource(R.string.browse_empty_songs), body = stringResource(R.string.browse_empty_library_hint))
+            items.itemCount == 0 && (loading || count == null) -> LoadingPlaceholder(PlaceholderStyle.LIST)
+            items.itemCount == 0 -> EmptyState(title = stringResource(R.string.browse_empty_songs), body = stringResource(R.string.browse_empty_library_hint))
             else -> {
-                val nameOf: (Track) -> String? = when (sort) {
-                    TrackSort.ARTIST -> { t -> t.artistName }
-                    TrackSort.ALBUM -> { t -> t.albumName }
-                    else -> { t -> t.title }
-                }
+                val alphabetical = (sort == TrackSort.TITLE || sort == TrackSort.ARTIST || sort == TrackSort.ALBUM) && ascending
+                val available = remember(letters) { letters.available.toImmutableList() }
                 ScrollerHost(
-                    scroller = if ((sort == TrackSort.TITLE || sort == TrackSort.ARTIST || sort == TrackSort.ALBUM) && ascending) {
+                    scroller = if (alphabetical && available.isNotEmpty()) {
                         {
                             FastScroller(
-                                availableLetters = remember(list, sort) { availableLetters(list, nameOf) },
+                                availableLetters = available,
                                 onLetterSelected = { letter ->
-                                    val index = letterIndex(list, letter, nameOf) + 1 // +1 for the header item
+                                    val index = letters.indexFor(letter) + 1 // +1 for the header item
                                     scope.launch { listState.scrollToItem(index) }
                                 },
                             )
@@ -250,18 +255,26 @@ internal fun SongsTab(vm: LibraryViewModel) {
                                 modifier = Modifier.padding(vertical = 8.dp),
                             )
                         }
-                        items(list, key = { it.id }, contentType = { "track" }) { track ->
-                            val index = list.indexOf(track)
-                            TrackSwipeRow(track = track) {
-                                TrackRow(
-                                    track = track,
-                                    onClick = { vm.playTrack(index) },
-                                    isCurrent = track.id == currentId,
-                                    isPlaying = playback.isPlaying,
-                                    isDownloaded = track.id in downloadedIds,
-                                    onLongClick = { trackForOptions = track },
-                                    onMoreClick = { trackForOptions = track },
-                                )
+                        items(
+                            count = items.itemCount,
+                            key = items.itemKey { it.id },
+                            contentType = items.itemContentType { "track" },
+                        ) { index ->
+                            val track = items[index]
+                            if (track == null) {
+                                TrackRowPlaceholder()
+                            } else {
+                                TrackSwipeRow(track = track) {
+                                    TrackRow(
+                                        track = track,
+                                        onClick = { vm.playTrackAt(index, track) },
+                                        isCurrent = track.id == currentId,
+                                        isPlaying = playback.isPlaying,
+                                        isDownloaded = track.id in downloadedIds,
+                                        onLongClick = { trackForOptions = track },
+                                        onMoreClick = { trackForOptions = track },
+                                    )
+                                }
                             }
                         }
                     }

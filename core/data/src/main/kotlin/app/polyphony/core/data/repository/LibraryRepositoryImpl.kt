@@ -1,6 +1,11 @@
 package app.polyphony.core.data.repository
 
 import androidx.room.withTransaction
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.filter
+import androidx.paging.map
 import app.polyphony.core.data.db.PolyphonyDatabase
 import app.polyphony.core.data.db.SortQueries
 import app.polyphony.core.data.db.entity.AlbumEntity
@@ -30,6 +35,7 @@ import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.SearchResults
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.model.TrackSort
+import app.polyphony.core.domain.model.LetterIndex
 import app.polyphony.core.domain.provider.MediaProvider
 import app.polyphony.core.domain.provider.ProviderException
 import app.polyphony.core.domain.repository.DownloadRepository
@@ -46,7 +52,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
@@ -206,6 +214,69 @@ class LibraryRepositoryImpl @Inject constructor(
 
     override fun tracks(sort: TrackSort, ascending: Boolean): Flow<List<Track>> =
         scopedList { sid -> trackDao.observeSorted(SortQueries.tracks(sid, sort, ascending)).mapEach(TrackEntity::toDomain) }.offline(OfflineIndex::trackIds, Track::id)
+
+    override fun pagedTracks(sort: TrackSort, ascending: Boolean): Flow<PagingData<Track>> =
+        combine(activeServerId, offlineIndex) { sid, index -> sid to index }
+            .distinctUntilChanged()
+            .flatMapLatest { (sid, index) ->
+                if (sid == null) {
+                    flowOf(PagingData.empty())
+                } else {
+                    // Placeholders give the list its full length up front, so the alphabet rail can
+                    // jump anywhere and Room reloads around the target. In offline mode rows are
+                    // filtered after loading, which would leave blank placeholders, so they are off.
+                    val config = PagingConfig(
+                        pageSize = TRACK_PAGE,
+                        prefetchDistance = TRACK_PAGE,
+                        initialLoadSize = TRACK_PAGE * 2,
+                        enablePlaceholders = index == null,
+                        jumpThreshold = TRACK_PAGE * 3,
+                    )
+                    Pager(config) { trackDao.pagingSorted(SortQueries.tracks(sid, sort, ascending)) }.flow
+                        .map { data ->
+                            val mapped = data.map { it.toDomain() }
+                            if (index == null) mapped else mapped.filter { it.id in index.trackIds }
+                        }
+                }
+            }
+
+    override fun trackCount(): Flow<Int> =
+        combine(
+            activeServerId.flatMapLatest { sid -> if (sid == null) flowOf(0) else trackDao.observeCount(sid) },
+            offlineIndex,
+        ) { total, index -> index?.trackIds?.size ?: total }
+            .distinctUntilChanged()
+
+    override fun trackLetterIndex(sort: TrackSort, ascending: Boolean): Flow<LetterIndex> =
+        combine(activeServerId, offlineIndex) { sid, index -> sid to index }
+            .distinctUntilChanged()
+            .flatMapLatest { (sid, index) ->
+                // Offline mode shows a filtered subset whose positions the sort keys cannot predict.
+                if (sid == null || index != null) {
+                    flowOf(LetterIndex.EMPTY)
+                } else {
+                    trackDao.observeSortKeys(SortQueries.trackSortKeys(sid, sort, ascending))
+                        .map { keys -> LetterIndex.of(keys.map { it.k }) }
+                        .flowOn(io)
+                }
+            }
+            .distinctUntilChanged()
+
+    override suspend fun tracksSlice(sort: TrackSort, ascending: Boolean, offset: Int, limit: Int): List<Track> {
+        val sid = serverRepository.getActive()?.id ?: return emptyList()
+        val rows = trackDao.listSorted(SortQueries.tracksSlice(sid, sort, ascending, limit, offset.coerceAtLeast(0)))
+        return filterOffline(rows.map(TrackEntity::toDomain))
+    }
+
+    override suspend fun randomCachedTracks(limit: Int): List<Track> {
+        val sid = serverRepository.getActive()?.id ?: return emptyList()
+        return filterOffline(trackDao.random(sid, limit).map(TrackEntity::toDomain))
+    }
+
+    private suspend fun filterOffline(tracks: List<Track>): List<Track> {
+        val index = offlineIndex.first() ?: return tracks
+        return tracks.filter { it.id in index.trackIds }
+    }
 
     override fun track(id: String): Flow<Track?> =
         scopedItem { sid -> trackDao.observe(sid, id).map { it?.toDomain() } }
@@ -555,3 +626,6 @@ class LibraryRepositoryImpl @Inject constructor(
         const val HISTORY_LIMIT = 5_000
     }
 }
+
+/** Rows per page for [LibraryRepository.pagedTracks]; a screen shows about fifteen. */
+private const val TRACK_PAGE = 100

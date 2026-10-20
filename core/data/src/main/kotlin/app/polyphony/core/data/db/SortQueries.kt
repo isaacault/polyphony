@@ -50,7 +50,33 @@ internal object SortQueries {
         )
     }
 
-    fun tracks(serverId: String, sort: TrackSort, ascending: Boolean): SimpleSQLiteQuery {
+    fun tracks(serverId: String, sort: TrackSort, ascending: Boolean): SimpleSQLiteQuery =
+        SimpleSQLiteQuery("SELECT * FROM tracks WHERE serverId = ? ORDER BY ${trackOrder(sort, ascending)}", arrayOf(serverId))
+
+    /** One window of [tracks], in the same order. */
+    fun tracksSlice(serverId: String, sort: TrackSort, ascending: Boolean, limit: Int, offset: Int): SimpleSQLiteQuery =
+        SimpleSQLiteQuery(
+            "SELECT * FROM tracks WHERE serverId = ? ORDER BY ${trackOrder(sort, ascending)} LIMIT ? OFFSET ?",
+            arrayOf<Any>(serverId, limit, offset),
+        )
+
+    /**
+     * Only the first character of the column [tracks] sorts by, in list order: enough to build an
+     * alphabet-rail index without reading a row per track.
+     */
+    fun trackSortKeys(serverId: String, sort: TrackSort, ascending: Boolean): SimpleSQLiteQuery {
+        val column = when (sort) {
+            TrackSort.ARTIST -> "artistName"
+            TrackSort.ALBUM -> "albumName"
+            else -> "title"
+        }
+        return SimpleSQLiteQuery(
+            "SELECT substr(trim($column), 1, 1) AS k FROM tracks WHERE serverId = ? ORDER BY ${trackOrder(sort, ascending)}",
+            arrayOf(serverId),
+        )
+    }
+
+    private fun trackOrder(sort: TrackSort, ascending: Boolean): String {
         val (primary, naturalAsc) = when (sort) {
             TrackSort.TITLE -> "title COLLATE NOCASE" to true
             TrackSort.ARTIST -> "artistName COLLATE NOCASE" to true
@@ -66,10 +92,7 @@ internal object SortQueries {
                 ", albumName COLLATE NOCASE ASC, COALESCE(discNumber, 1) ASC, COALESCE(trackNumber, 0) ASC"
             else -> ", title COLLATE NOCASE ASC"
         }
-        return SimpleSQLiteQuery(
-            "SELECT * FROM tracks WHERE serverId = ? ORDER BY $primary $dir$tieBreak",
-            arrayOf(serverId),
-        )
+        return "$primary $dir$tieBreak"
     }
 
     private fun direction(naturalAsc: Boolean, ascending: Boolean): String =

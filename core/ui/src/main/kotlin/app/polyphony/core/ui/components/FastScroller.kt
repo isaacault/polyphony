@@ -46,11 +46,8 @@ import kotlinx.collections.immutable.toImmutableList
 
 val DefaultScrollerLetters: ImmutableList<Char> = (listOf('#') + ('A'..'Z')).toImmutableList()
 
-/** Bucket a display name into a scroller letter. */
-fun scrollerLetter(name: String?): Char {
-    val c = name?.trim()?.firstOrNull { !it.isWhitespace() }?.uppercaseChar() ?: return '#'
-    return if (c in 'A'..'Z') c else '#'
-}
+/** Bucket a display name into a scroller letter; one definition shared with the data layer's letter index. */
+fun scrollerLetter(name: String?): Char = app.polyphony.core.domain.model.scrollerLetter(name)
 
 /**
  * Vertical A–Z rail. Place it at the end of a `Box` that also holds the list; call

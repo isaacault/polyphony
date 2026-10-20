@@ -13,6 +13,7 @@ coreKtx = "1.19.1"
 coreSplashscreen = "1.2.0"
 annotation = "1.11.0"
 room = "2.8.5"
+paging = "3.5.3"
 datastore = "1.2.1"
 work = "2.12.0"
 hiltWork = "1.4.0"
@@ -87,6 +88,9 @@ hilt-work-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.
 
 # Persistence
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-paging = { group = "androidx.room", name = "room-paging", version.ref = "room" }
+androidx-paging-common = { group = "androidx.paging", name = "paging-common", version.ref = "paging" }
+androidx-paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "paging" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
