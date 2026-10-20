@@ -28,7 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -143,7 +143,7 @@ fun TrackSwipeScope(
     val downloaded = viewModel.downloadedIds.collectAsStateWithLifecycle()
     val haptics = rememberHaptics(config.value.haptics)
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
+    val resources = LocalResources.current
     var playlistTrack by remember { mutableStateOf<Track?>(null) }
     var infoTrack by remember { mutableStateOf<Track?>(null) }
 
@@ -151,8 +151,8 @@ fun TrackSwipeScope(
         scope.launch {
             snackbarHostState.currentSnackbarData?.dismiss()
             val result = snackbarHostState.showSnackbar(
-                message = context.getString(messageRes),
-                actionLabel = undo?.let { context.getString(R.string.browse_action_undo) },
+                message = resources.getString(messageRes),
+                actionLabel = undo?.let { resources.getString(R.string.browse_action_undo) },
                 duration = SnackbarDuration.Short,
             )
             if (result == SnackbarResult.ActionPerformed) undo?.invoke()

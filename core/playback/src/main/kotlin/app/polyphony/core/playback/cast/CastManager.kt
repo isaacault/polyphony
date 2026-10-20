@@ -159,7 +159,7 @@ class CastManager @Inject constructor(
     }
 
     private fun rememberRoute(route: MediaRouter.RouteInfo) {
-        if (route.isDefaultOrBluetooth) return
+        if (route.isDefault || route.isDeviceSpeaker) return
         val device = route.extras?.let { runCatching { CastDevice.getFromBundle(it) }.getOrNull() } ?: return
         val target = device.toTarget()
         scope.launch { runCatching { transcodeProfileRepository.rememberRemoteDevice(target, connected = false) } }

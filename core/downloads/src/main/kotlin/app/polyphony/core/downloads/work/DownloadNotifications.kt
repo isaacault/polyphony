@@ -1,5 +1,6 @@
 package app.polyphony.core.downloads.work
 
+import android.annotation.SuppressLint
 import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
@@ -59,6 +60,8 @@ class DownloadNotifications @Inject constructor(@ApplicationContext private val 
             ForegroundInfo(NOTIFICATION_ID, notification)
         }
 
+    // canPost() checks POST_NOTIFICATIONS (API 33+) and the channel state; lint cannot see through it.
+    @SuppressLint("MissingPermission")
     fun update(notification: Notification) {
         if (!canPost()) return
         runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification) }

@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -76,6 +77,7 @@ class PlaybackSettingsViewModel @Inject constructor(
 fun PlaybackSettingsScreen(viewModel: PlaybackSettingsViewModel = hiltViewModel()) {
     val navigator = LocalNavigator.current
     val context = LocalContext.current
+    val resources = LocalResources.current
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -104,7 +106,7 @@ fun PlaybackSettingsScreen(viewModel: PlaybackSettingsViewModel = hiltViewModel(
                 steps = 11,
                 valueLabel = { v ->
                     val sec = v.roundToInt()
-                    if (sec == 0) context.getString(R.string.settings_off) else context.getString(R.string.settings_seconds, sec)
+                    if (sec == 0) resources.getString(R.string.settings_off) else resources.getString(R.string.settings_seconds, sec)
                 },
                 onValueChangeFinished = { v -> viewModel.update { it.copy(crossfadeMs = v.roundToInt() * 1000) } },
             )

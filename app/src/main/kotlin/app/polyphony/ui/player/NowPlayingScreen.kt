@@ -1,5 +1,6 @@
 package app.polyphony.ui.player
 
+import androidx.compose.ui.text.toUpperCase
 import android.os.Build
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
@@ -499,7 +500,7 @@ private fun PlayerTopBar(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = overline.uppercase(Locale.getDefault()),
+                text = overline.toUpperCase(androidx.compose.ui.text.intl.Locale.current),
                 style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.2.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

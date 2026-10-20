@@ -210,7 +210,8 @@ fun CastRouteSheet(
                                 imageVector = when (route.deviceType) {
                                     MediaRouter.RouteInfo.DEVICE_TYPE_TV -> Icons.Rounded.Tv
                                     MediaRouter.RouteInfo.DEVICE_TYPE_SPEAKER -> Icons.Rounded.Speaker
-                                    else -> if (route.isGroup) Icons.Rounded.SpeakerGroup else Icons.Rounded.Cast
+                                    MediaRouter.RouteInfo.DEVICE_TYPE_GROUP -> Icons.Rounded.SpeakerGroup
+                                    else -> Icons.Rounded.Cast
                                 },
                                 contentDescription = null,
                                 tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
