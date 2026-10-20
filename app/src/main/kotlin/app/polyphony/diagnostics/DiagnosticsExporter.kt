@@ -2,13 +2,19 @@ package app.polyphony.diagnostics
 
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Process
 import androidx.core.content.FileProvider
 import app.polyphony.BuildConfig
 import app.polyphony.core.domain.playback.CastController
+import app.polyphony.core.dlna.DlnaManager
+import app.polyphony.core.domain.model.ServerOptions
 import app.polyphony.core.domain.playback.PlaybackController
+import app.polyphony.core.domain.repository.NetworkMonitor
+import app.polyphony.core.playback.cast.CastManager
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.playback.stream.StreamResolver
@@ -36,6 +42,9 @@ class DiagnosticsExporter @Inject constructor(
     private val playbackController: PlaybackController,
     private val castController: CastController,
     private val streamResolver: StreamResolver,
+    private val networkMonitor: NetworkMonitor,
+    private val castManager: CastManager,
+    private val dlnaManager: DlnaManager,
 ) {
     private val json = Json { prettyPrint = true; encodeDefaults = true }
 
@@ -67,7 +76,9 @@ class DiagnosticsExporter @Inject constructor(
         appendLine("== Servers ==")
         val active = runCatching { serverRepository.getActive() }.getOrNull()
         runCatching { serverRepository.servers.first() }.getOrDefault(emptyList()).forEach { s ->
-            appendLine("- ${s.type} ${s.displayHost} name=\"${s.name}\" user=${s.username} options=${s.options.keys}${if (s.id == active?.id) " (active)" else ""}")
+            val receiver = s.options[ServerOptions.REMOTE_BASE_URL]?.takeIf { it.isNotBlank() } ?: "(not set)"
+            val autoLan = s.options[ServerOptions.REMOTE_AUTO_LAN] != "false"
+            appendLine("- ${s.type} ${s.displayHost} name=\"${s.name}\" user=${s.username} receiverAddress=$receiver autoLan=$autoLan options=${s.options.keys}${if (s.id == active?.id) " (active)" else ""}")
         }
         appendLine()
 
@@ -93,6 +104,23 @@ class DiagnosticsExporter @Inject constructor(
         appendLine("cast: available=${c.isAvailable} connecting=${c.isConnecting} connected=${c.isConnected} target=${c.target?.key} \"${c.target?.displayName}\" volume=${c.volume}")
         appendLine()
 
+        appendLine("== Network ==")
+        val n = networkMonitor.state.value
+        appendLine("monitor: kind=${n.kind} metered=${n.isMetered} vpn=${n.isVpn}")
+        describeNetworks().forEach(::appendLine)
+        appendLine()
+
+        appendLine("== Discovery ==")
+        val dlna = runCatching { dlnaManager.diagnostics() }.getOrNull()
+        appendLine("ssdp: ${dlna?.ssdp?.summary() ?: "unavailable"}")
+        if (dlna != null) {
+            if (dlna.renderers.isEmpty()) appendLine("dlna renderers: none")
+            dlna.renderers.forEach { r -> appendLine("dlna renderer: \"${r.friendlyName}\" ${r.manufacturer} ${r.modelName} udn=${r.udn} formats=${r.supportedMimeTypes.size}") }
+            dlna.rejected.forEach { appendLine("dlna rejected: $it") }
+        }
+        runCatching { castManager.diagnostics() }.getOrDefault(listOf("cast: unavailable")).forEach { appendLine("cast $it") }
+        appendLine()
+
         val crashes = CrashRecorder.recent(context)
         appendLine("== Recent crashes (${crashes.size}) ==")
         crashes.take(3).forEach { f ->
@@ -103,6 +131,34 @@ class DiagnosticsExporter @Inject constructor(
 
         appendLine("== Logcat (this process, last 2500 lines) ==")
         appendLine(readLogcat())
+    }
+
+    /** Every network the system knows about, so a VPN or a missing Wi-Fi link is visible in the report. */
+    private fun describeNetworks(): List<String> {
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return listOf("connectivity: unavailable")
+        val active = cm.activeNetwork
+        @Suppress("DEPRECATION")
+        val networks = runCatching { cm.allNetworks.toList() }.getOrDefault(emptyList())
+        if (networks.isEmpty()) return listOf("networks: none")
+        return networks.map { network ->
+            val caps = cm.getNetworkCapabilities(network)
+            val link = cm.getLinkProperties(network)
+            val transports = buildList {
+                if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) add("WIFI")
+                if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true) add("CELLULAR")
+                if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true) add("ETHERNET")
+                if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true) add("VPN")
+                if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH) == true) add("BLUETOOTH")
+            }
+            val flags = buildList {
+                if (network == active) add("active")
+                if (caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true) add("validated")
+                if (caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) == false) add("metered")
+            }
+            "- ${transports.ifEmpty { listOf("?") }.joinToString("+")} ${link?.interfaceName ?: "?"} " +
+                "addrs=${link?.linkAddresses?.joinToString(",") ?: "?"} dns=${link?.dnsServers?.joinToString(",") { it.hostAddress ?: "?" } ?: "?"} " +
+                "routes=${link?.routes?.size ?: 0} ${flags.joinToString(" ")}"
+        }
     }
 
     private fun readLogcat(): String = runCatching {

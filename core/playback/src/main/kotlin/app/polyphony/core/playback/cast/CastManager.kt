@@ -57,6 +57,15 @@ class CastManager @Inject constructor(
     @Volatile
     private var initialised = false
 
+    /** Every MediaRouter route seen since start, for the diagnostics export (id -> description). */
+    private val routesSeen = java.util.concurrent.ConcurrentHashMap<String, String>()
+    @Volatile private var lastCastState: Int? = null
+
+    fun diagnostics(): List<String> = buildList {
+        add("supported=$isSupported initialised=$initialised context=${castContext != null} castState=${lastCastState ?: castContext?.castState}")
+        if (routesSeen.isEmpty()) add("routes: none seen") else routesSeen.values.sorted().forEach { add("route: $it") }
+    }
+
     /** True when Google Play services (and thus Cast) exist on this device. */
     val isSupported: Boolean by lazy {
         GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
@@ -87,7 +96,10 @@ class CastManager @Inject constructor(
     private fun attach(ctx: CastContext) {
         castContext = ctx
         _state.update { it.copy(isAvailable = ctx.castState != GmsCastState.NO_DEVICES_AVAILABLE) }
+        lastCastState = ctx.castState
         ctx.addCastStateListener { castState ->
+            if (castState != lastCastState) Log.i(TAG, "Cast state: $castState (1=no devices, 2=not connected, 3=connecting, 4=connected)")
+            lastCastState = castState
             _state.update { it.copy(isAvailable = castState != GmsCastState.NO_DEVICES_AVAILABLE) }
         }
         ctx.sessionManager.addSessionManagerListener(sessionListener, CastSession::class.java)
@@ -156,11 +168,17 @@ class CastManager @Inject constructor(
     private val routerCallback = object : MediaRouter.Callback() {
         override fun onRouteAdded(router: MediaRouter, route: MediaRouter.RouteInfo) = rememberRoute(route)
         override fun onRouteChanged(router: MediaRouter, route: MediaRouter.RouteInfo) = rememberRoute(route)
+        override fun onRouteRemoved(router: MediaRouter, route: MediaRouter.RouteInfo) {
+            if (routesSeen.remove(route.id) != null) Log.i(TAG, "Route removed: ${route.name}")
+        }
     }
 
     private fun rememberRoute(route: MediaRouter.RouteInfo) {
+        val device = route.extras?.let { runCatching { CastDevice.getFromBundle(it) }.getOrNull() }
+        val description = "${route.name} type=${route.deviceType} default=${route.isDefault} speaker=${route.isDeviceSpeaker} cast=${device != null}"
+        if (routesSeen.put(route.id, description) == null) Log.i(TAG, "Route seen: $description")
         if (route.isDefault || route.isDeviceSpeaker) return
-        val device = route.extras?.let { runCatching { CastDevice.getFromBundle(it) }.getOrNull() } ?: return
+        if (device == null) return
         val target = device.toTarget()
         scope.launch { runCatching { transcodeProfileRepository.rememberRemoteDevice(target, connected = false) } }
     }

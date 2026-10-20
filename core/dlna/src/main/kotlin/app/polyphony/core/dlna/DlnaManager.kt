@@ -65,6 +65,14 @@ class DlnaManager @Inject constructor(
 
     private val known = MutableStateFlow<Map<String, Known>>(emptyMap())
     private val inFlight: MutableSet<String> = Collections.synchronizedSet(HashSet())
+    private val rejected: MutableList<String> = Collections.synchronizedList(ArrayList())
+
+    /** Discovery state for the diagnostics export. */
+    fun diagnostics(): DlnaDiagnostics = DlnaDiagnostics(
+        ssdp = discovery.stats(),
+        renderers = renderers.value,
+        rejected = synchronized(rejected) { rejected.toList() },
+    )
 
     override val renderers: StateFlow<List<DlnaRenderer>> = known
         .map { map -> map.values.map { it.renderer }.sortedBy { it.friendlyName.lowercase() } }
@@ -160,9 +168,11 @@ class DlnaManager @Inject constructor(
                 lastSeenAt = System.currentTimeMillis(),
             )
             known.update { it + (udn to Known(device, renderer)) }
+            Log.i(TAG, "Renderer: ${device.friendlyName} (${device.manufacturer} ${device.modelName}) at $location, ${mimeTypes.size} sink formats")
             runCatching { transcodeProfileRepository.rememberRemoteDevice(renderer.target, connected = false) }
         } catch (t: Throwable) {
             Log.w(TAG, "Ignoring renderer at $location: ${t.message}")
+            synchronized(rejected) { if (rejected.size >= 8) rejected.removeAt(0); rejected += "$location: ${t.message}" }
         } finally {
             inFlight.remove(udn)
         }
@@ -243,3 +253,11 @@ class DlnaManager @Inject constructor(
         const val TAG = "DlnaManager"
     }
 }
+
+/** Snapshot of UPnP discovery for the diagnostics export. */
+data class DlnaDiagnostics(
+    val ssdp: app.polyphony.core.dlna.ssdp.SsdpStats,
+    val renderers: List<DlnaRenderer>,
+    /** Devices that announced themselves but whose description could not be used (most recent last). */
+    val rejected: List<String>,
+)
