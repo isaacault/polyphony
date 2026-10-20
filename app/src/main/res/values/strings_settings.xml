@@ -291,6 +291,7 @@
     <string name="settings_about_export_diagnostics_summary">Share a text report with device info, settings, playback and Cast state, recent crashes and logs. Passwords and tokens are removed.</string>
     <string name="settings_about_clear_crashes">Clear %1$d recorded crash reports</string>
     <string name="settings_appearance_library_tabs">Library tabs</string>
+    <string name="settings_appearance_library_default_tab">Opens on</string>
     <string name="settings_appearance_library_tabs_hint">Drag to reorder. Switch off the tabs you don\'t use; at least one stays on.</string>
     <string name="settings_server_remote_url">Address for Cast &amp; DLNA receivers</string>
     <string name="settings_server_remote_url_summary">Optional. Receivers fetch audio themselves, so give them an address they can reach, usually your server\'s LAN address. Leave empty to use the main address.</string>

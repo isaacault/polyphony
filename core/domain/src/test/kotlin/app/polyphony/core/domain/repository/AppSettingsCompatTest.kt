@@ -49,4 +49,13 @@ class AppSettingsCompatTest {
         assertEquals(false, decoded.appearance.albumAscending)
         assertEquals(TrackSort.ALBUM, decoded.appearance.trackSort)
     }
+
+    @Test
+    fun `library opens on albums by default and remembers another choice`() {
+        val legacy = json.decodeFromString(AppSettings.serializer(), """{"appearance":{"themeMode":"DARK"}}""")
+        assertEquals(LibrarySection.ALBUMS, legacy.appearance.libraryDefaultTab)
+        val settings = AppSettings(appearance = AppearanceSettings(libraryDefaultTab = LibrarySection.SONGS))
+        val decoded = json.decodeFromString(AppSettings.serializer(), json.encodeToString(AppSettings.serializer(), settings))
+        assertEquals(LibrarySection.SONGS, decoded.appearance.libraryDefaultTab)
+    }
 }

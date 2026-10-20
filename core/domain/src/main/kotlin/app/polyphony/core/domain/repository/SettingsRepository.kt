@@ -68,6 +68,8 @@ data class AppearanceSettings(
     val navTransition: NavTransitionStyle = NavTransitionStyle.FADE,
     /** Enabled Library tabs in display order; an empty list means all, in default order. */
     val libraryTabs: List<LibrarySection> = LibrarySection.entries.toList(),
+    /** Tab the Library opens on when nothing asks for a specific one; falls back to the first enabled tab. */
+    val libraryDefaultTab: LibrarySection = LibrarySection.ALBUMS,
     /** Swipe gestures on song rows, by physical direction (not layout direction). */
     val swipeLeftToRight: TrackSwipeAction = TrackSwipeAction.ADD_TO_QUEUE,
     val swipeRightToLeft: TrackSwipeAction = TrackSwipeAction.NONE,
