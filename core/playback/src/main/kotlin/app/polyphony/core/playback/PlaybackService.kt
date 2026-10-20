@@ -122,6 +122,9 @@ class PlaybackService : MediaLibraryService() {
     private var retryTrackId: String? = null
     private var retryCount = 0
     private var retryJob: Job? = null
+    /** Set when loading gave up for lack of network; cleared when the network returns and we resume. */
+    private var awaitingNetwork = false
+    private var slowRetryJob: Job? = null
     private var saveJob: Job? = null
     private var audioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
 
@@ -280,6 +283,19 @@ class PlaybackService : MediaLibraryService() {
             settingsRepository.settings.map { it.playback }.distinctUntilChanged().collect(::onSettingsChanged)
         }
         scope.launch { engine.decision.collect(::onDecisionChanged) }
+        scope.launch {
+            networkMonitor.state.map { it.isOnline }.distinctUntilChanged().collect { online ->
+                if (online && awaitingNetwork) {
+                    awaitingNetwork = false
+                    retryCount = 0
+                    delay(1_200)
+                    if (player.playbackState == Player.STATE_IDLE && player.mediaItemCount > 0) {
+                        Log.i(TAG, "Network is back; resuming playback")
+                        reloadCurrentItem()
+                    }
+                }
+            }
+        }
         scope.launch { latencyMonitor.degraded.collect { publishExtras() } }
         scope.launch { sleepTimer.endsAtEpochMs.collect { publishExtras() } }
         scope.launch {
@@ -346,6 +362,21 @@ class PlaybackService : MediaLibraryService() {
             engine.policy.reloadCurrentTrackOnChange -> reloadCurrentItem()
             player.isRemotePlayback() -> refreshUpcomingItems()
             // Local playback resolves URLs lazily, so the next track picks the new profile by itself.
+        }
+    }
+
+    /** After fast retries are exhausted: try again every 15 s for a few minutes (server or network outage). */
+    private fun startSlowRetry() {
+        if (slowRetryJob?.isActive == true) return
+        slowRetryJob = scope.launch {
+            repeat(SLOW_RETRY_ATTEMPTS) { attempt ->
+                delay(SLOW_RETRY_INTERVAL_MS)
+                if (player.playbackState != Player.STATE_IDLE || player.mediaItemCount == 0) return@launch
+                Log.i(TAG, "Slow retry ${attempt + 1}/$SLOW_RETRY_ATTEMPTS")
+                retryCount = MAX_LOAD_RETRIES // a failure here comes straight back to the slow loop
+                reloadCurrentItem()
+            }
+            Log.w(TAG, "Giving up after $SLOW_RETRY_ATTEMPTS slow retries")
         }
     }
 
@@ -462,7 +493,20 @@ class PlaybackService : MediaLibraryService() {
                 Log.w(TAG, "Retrying ${player.currentMediaItem?.mediaMetadata?.title} at original quality")
                 retryCount = 0
                 reloadCurrentItem()
+                return
             }
+            if (!networkMonitor.state.value.isOnline || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+                error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
+                error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
+            ) {
+                awaitingNetwork = true
+                Log.w(TAG, "Server or network unavailable; will keep retrying \"${player.currentMediaItem?.mediaMetadata?.title}\"")
+                startSlowRetry()
+            }
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) { slowRetryJob?.cancel(); awaitingNetwork = false }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -680,6 +724,8 @@ class PlaybackService : MediaLibraryService() {
     companion object {
         private const val TAG = "PlaybackService"
         private const val MAX_LOAD_RETRIES = 2
+        private const val SLOW_RETRY_ATTEMPTS = 12
+        private const val SLOW_RETRY_INTERVAL_MS = 15_000L
         const val SESSION_ID = "polyphony"
         const val NOTIFICATION_CHANNEL_ID = "polyphony_playback"
         private const val PRELOAD_DURATION_US = 10_000_000L
