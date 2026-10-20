@@ -41,8 +41,8 @@ import app.polyphony.core.data.db.entity.TranscodeProfileEntity
         PlayHistoryEntity::class,
         PlayContextEntity::class,
     ],
-    version = 2,
-    exportSchema = false,
+    version = PolyphonyDatabase.VERSION,
+    exportSchema = true,
 )
 abstract class PolyphonyDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao
@@ -70,5 +70,11 @@ abstract class PolyphonyDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "polyphony-library.db"
+
+        /**
+         * Bump together with a new entry in [Migrations.ALL] and the exported JSON under
+         * `core/data/schemas`; `MigrationsChainTest` fails the build if the chain has a gap.
+         */
+        const val VERSION = 2
     }
 }

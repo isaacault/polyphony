@@ -19,6 +19,13 @@ android {
     buildFeatures { buildConfig = false }
 }
 
+androidComponents {
+    onVariants { variant ->
+        // Exported Room schemas double as fixtures for the instrumented migration test.
+        variant.androidTest?.sources?.assets?.addStaticSourceDirectory("$projectDir/schemas")
+    }
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
@@ -28,6 +35,8 @@ kotlin {
 
 ksp {
     arg("room.generateKotlin", "true")
+    // One JSON per schema version under core/data/schemas; commit them with every version bump.
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -56,4 +65,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+
+    androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }

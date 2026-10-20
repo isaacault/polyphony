@@ -44,7 +44,10 @@ object DatabaseModule {
     fun provideDatabase(@ApplicationContext context: Context): PolyphonyDatabase =
         Room.databaseBuilder(context, PolyphonyDatabase::class.java, PolyphonyDatabase.NAME)
             .addMigrations(*Migrations.ALL)
-            .fallbackToDestructiveMigration(dropAllTables = true)
+            // This database also holds the configured servers, so a forgotten upgrade migration must
+            // fail loudly (MigrationsChainTest catches it before release) rather than silently drop
+            // every account. Only a downgrade, i.e. installing an older build, rebuilds from scratch.
+            .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
             .build()
 
     @Provides fun provideServerDao(db: PolyphonyDatabase): ServerDao = db.serverDao()

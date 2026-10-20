@@ -89,7 +89,18 @@ timestamps; `adb shell dumpsys gfxinfo <package> reset` before a scroll and `dum
 Room database is `/data/data/app.polyphony.debug/databases/polyphony-library.db` (read it as root
 with `sqlite3`, and spell the name exactly, because `sqlite3` creates any path you mistype).
 
-## 5. Merging
+## 5. Database migrations
+
+Room schemas are exported to `core/data/schemas/<db>/<version>.json`; commit the new file with every
+version bump together with a `Migration` in `Migrations.ALL`. `MigrationsChainTest` (plain unit
+test, runs in CI) fails if the chain has a gap. `MigrationsTest` migrates a real database from the
+oldest schema and lets Room validate the result; it needs the emulator:
+
+```sh
+./gradlew :core:data:connectedDebugAndroidTest
+```
+
+## 6. Merging
 
 CI must be green on the PR's current head before it merges. `scripts/merge_when_green.sh <pr>`
 waits for every run on that commit and squash-merges only when all of them succeeded; it refuses to
