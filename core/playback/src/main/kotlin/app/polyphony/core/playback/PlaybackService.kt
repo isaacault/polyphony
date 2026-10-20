@@ -119,6 +119,9 @@ class PlaybackService : MediaLibraryService() {
     private var queueTitle: String? = null
     private var lastAppliedProfileId: String? = null
     private var lastAppliedTargetKey: String? = null
+    private var retryTrackId: String? = null
+    private var retryCount = 0
+    private var retryJob: Job? = null
     private var saveJob: Job? = null
     private var audioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
 
@@ -440,13 +443,30 @@ class PlaybackService : MediaLibraryService() {
                     return
                 }
             }
-            if (loadFailure && !player.isRemotePlayback() && streamResolver.markTranscodeFailure(trackId)) {
+            if (!loadFailure || player.isRemotePlayback()) return
+            // Transient failures (network hand-over, server hiccup): retry the same stream with a
+            // short back-off before concluding anything about the server.
+            if (retryTrackId != trackId) { retryTrackId = trackId; retryCount = 0 }
+            if (retryCount < MAX_LOAD_RETRIES) {
+                retryCount++
+                val delayMs = 1_500L * retryCount
+                Log.w(TAG, "Load failed (${error.errorCodeName}); retry $retryCount/$MAX_LOAD_RETRIES in $delayMs ms")
+                retryJob?.cancel()
+                retryJob = scope.launch {
+                    delay(delayMs)
+                    if (player.currentMediaItem?.mediaId == trackId && player.playbackState == Player.STATE_IDLE) reloadCurrentItem()
+                }
+                return
+            }
+            if (streamResolver.markTranscodeFailure(trackId)) {
                 Log.w(TAG, "Retrying ${player.currentMediaItem?.mediaMetadata?.title} at original quality")
+                retryCount = 0
                 reloadCurrentItem()
             }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            if (mediaItem?.mediaId != retryTrackId) { retryTrackId = null; retryCount = 0 }
             val track = mediaItem?.let { trackFor(it) }
             reporter.onTrackStarted(track)
             sleepTimer.onTrackChanged()
@@ -659,6 +679,7 @@ class PlaybackService : MediaLibraryService() {
 
     companion object {
         private const val TAG = "PlaybackService"
+        private const val MAX_LOAD_RETRIES = 2
         const val SESSION_ID = "polyphony"
         const val NOTIFICATION_CHANNEL_ID = "polyphony_playback"
         private const val PRELOAD_DURATION_US = 10_000_000L
