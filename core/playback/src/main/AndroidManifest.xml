@@ -19,6 +19,17 @@
             </intent-filter>
         </service>
 
+        <!-- Media3 only advertises playback resumption (System UI's resume card, headset play after
+             the process died) when this receiver is declared; it hands the button to the service,
+             which answers through onPlaybackResumption with the saved queue. -->
+        <receiver
+            android:name="androidx.media3.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+
         <!-- Google Cast SDK options. -->
         <meta-data
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
