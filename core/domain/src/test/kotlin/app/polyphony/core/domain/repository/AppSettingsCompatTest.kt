@@ -1,5 +1,8 @@
 package app.polyphony.core.domain.repository
 
+import app.polyphony.core.domain.model.AlbumSort
+import app.polyphony.core.domain.model.ArtistSort
+import app.polyphony.core.domain.model.TrackSort
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -27,5 +30,23 @@ class AppSettingsCompatTest {
         )
         val decoded = json.decodeFromString(AppSettings.serializer(), json.encodeToString(AppSettings.serializer(), settings))
         assertEquals(settings.appearance, decoded.appearance)
+    }
+
+    @Test
+    fun `library sorts default to name order for settings written before they existed`() {
+        val decoded = json.decodeFromString(AppSettings.serializer(), """{"appearance":{"themeMode":"DARK"}}""")
+        assertEquals(AlbumSort.NAME, decoded.appearance.albumSort)
+        assertEquals(true, decoded.appearance.albumAscending)
+        assertEquals(ArtistSort.NAME, decoded.appearance.artistSort)
+        assertEquals(TrackSort.TITLE, decoded.appearance.trackSort)
+    }
+
+    @Test
+    fun `library sorts round-trip`() {
+        val settings = AppSettings(appearance = AppearanceSettings(albumSort = AlbumSort.ARTIST, albumAscending = false, trackSort = TrackSort.ALBUM))
+        val decoded = json.decodeFromString(AppSettings.serializer(), json.encodeToString(AppSettings.serializer(), settings))
+        assertEquals(AlbumSort.ARTIST, decoded.appearance.albumSort)
+        assertEquals(false, decoded.appearance.albumAscending)
+        assertEquals(TrackSort.ALBUM, decoded.appearance.trackSort)
     }
 }

@@ -1,5 +1,8 @@
 package app.polyphony.core.domain.repository
 
+import app.polyphony.core.domain.model.AlbumSort
+import app.polyphony.core.domain.model.ArtistSort
+import app.polyphony.core.domain.model.TrackSort
 import app.polyphony.core.domain.transcode.TranscodePolicy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
@@ -68,6 +71,12 @@ data class AppearanceSettings(
     /** Swipe gestures on song rows, by physical direction (not layout direction). */
     val swipeLeftToRight: TrackSwipeAction = TrackSwipeAction.ADD_TO_QUEUE,
     val swipeRightToLeft: TrackSwipeAction = TrackSwipeAction.NONE,
+    /** Library list sorts. Persisted here so a cold start, a reboot or an update keeps them. */
+    val artistSort: ArtistSort = ArtistSort.NAME,
+    val albumSort: AlbumSort = AlbumSort.NAME,
+    val albumAscending: Boolean = true,
+    val trackSort: TrackSort = TrackSort.TITLE,
+    val trackAscending: Boolean = true,
 )
 
 @Serializable
