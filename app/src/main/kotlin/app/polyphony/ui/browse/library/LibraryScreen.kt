@@ -49,9 +49,12 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val navigator = LocalNavigator.current
-    val tabs by viewModel.libraryTabs.collectAsStateWithLifecycle()
-    val pagerState = key(tabs) {
-        rememberPagerState(initialPage = tabs.indexOf(LibraryTab.fromKey(initialTab)).coerceAtLeast(0)) { tabs.size }
+    val start by viewModel.libraryStart.collectAsStateWithLifecycle()
+    // Settings arrive within a frame; drawing nothing until then beats starting on the wrong tab.
+    val (tabs, defaultTab) = start ?: return
+    val pagerState = key(tabs, defaultTab) {
+        val first = LibraryTab.fromKey(initialTab)?.takeIf { it in tabs } ?: defaultTab
+        rememberPagerState(initialPage = tabs.indexOf(first).coerceAtLeast(0)) { tabs.size }
     }
     val scope = rememberCoroutineScope()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()

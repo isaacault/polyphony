@@ -36,11 +36,14 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** What the Library screen needs before it can lay out its pager. */
+data class LibraryStart(val tabs: ImmutableList<LibraryTab>, val defaultTab: LibraryTab)
+
 enum class LibraryTab(val key: String) {
     ARTISTS("artists"), ALBUMS("albums"), SONGS("songs"), PLAYLISTS("playlists"), GENRES("genres");
 
     companion object {
-        fun fromKey(key: String?): LibraryTab = entries.firstOrNull { it.key == key } ?: ARTISTS
+        fun fromKey(key: String?): LibraryTab? = entries.firstOrNull { it.key == key }
     }
 }
 
@@ -64,6 +67,16 @@ class LibraryViewModel @Inject constructor(
         .map { s -> s.appearance.libraryTabs.ifEmpty { LibrarySection.entries }.map { LibraryTab.valueOf(it.name) }.toImmutableList() }
         .distinctUntilChanged()
         .asState(LibraryTab.entries.toImmutableList())
+
+    /** Tabs plus the one to open first; `null` until settings are loaded so the pager never starts on a guess. */
+    val libraryStart: StateFlow<LibraryStart?> = settings.settings
+        .map { s ->
+            val tabs = s.appearance.libraryTabs.ifEmpty { LibrarySection.entries }.map { LibraryTab.valueOf(it.name) }
+            val preferred = LibraryTab.valueOf(s.appearance.libraryDefaultTab.name)
+            LibraryStart(tabs.toImmutableList(), if (preferred in tabs) preferred else tabs.first())
+        }
+        .distinctUntilChanged()
+        .asState(null)
 
     // Layouts are real settings (Appearance → Library layout) so they persist and can be set per type.
     val artistsGrid: StateFlow<Boolean> = settings.settings.map { it.appearance.artistsLayout == LibraryLayout.GRID }.asState(false)

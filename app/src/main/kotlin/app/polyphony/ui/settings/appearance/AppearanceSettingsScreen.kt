@@ -219,6 +219,13 @@ fun AppearanceSettingsScreen(viewModel: AppearanceViewModel = hiltViewModel()) {
                 summary = s.libraryTabs.ifEmpty { LibrarySection.entries }.joinToString(" · ") { tabLabels[it].orEmpty() },
                 onClick = { tabsSheetOpen = true },
             )
+            val enabledTabs = s.libraryTabs.ifEmpty { LibrarySection.entries }
+            ListPreference(
+                title = stringResource(R.string.settings_appearance_library_default_tab),
+                options = enabledTabs.map { ListOption(it, tabLabels[it].orEmpty()) },
+                selected = if (s.libraryDefaultTab in enabledTabs) s.libraryDefaultTab else enabledTabs.first(),
+                onSelected = { tab -> viewModel.update { it.copy(libraryDefaultTab = tab) } },
+            )
             val layoutOptions = listOf(
                 ListOption(LibraryLayout.LIST, stringResource(R.string.settings_layout_list)),
                 ListOption(LibraryLayout.GRID, stringResource(R.string.settings_layout_grid)),
