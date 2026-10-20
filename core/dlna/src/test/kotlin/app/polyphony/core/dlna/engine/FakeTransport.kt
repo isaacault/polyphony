@@ -15,6 +15,11 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
     var failAll = false
     var setNextAttempts = 0
     var volume = 30
+    /** Some renderers keep reporting the old TrackURI for a while after a SetNext hand-off. */
+    var staleTrackUri = false
+    /** The worst renderers freeze every field (URI, duration, position at the old end) after a
+     *  hand-off while still reporting PLAYING, so there is no signal that a track changed. */
+    var freezeAtHandoff = false
 
     var state = TransportState.NO_MEDIA_PRESENT
         private set
@@ -26,6 +31,11 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
     private var basePositionMs = 0L
     private var playingSince = 0L
     private var durationMs: Long? = null
+    /** The URI reported by positionInfo; lags one hand-off behind when [staleTrackUri] is set. */
+    private var reportedUri: String? = null
+    private var pendingReportedUri: String? = null
+    /** A frozen snapshot of the first track's end, reported forever once [freezeAtHandoff] fires. */
+    private var frozen: TransportPosition? = null
 
     /** Move the renderer into an externally-controlled state (someone pressed a button on it). */
     fun externalPause() { tick(); if (state == TransportState.PLAYING) { basePositionMs = position(); state = TransportState.PAUSED_PLAYBACK } }
@@ -41,6 +51,10 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
             val overshoot = pos - d
             val next = nextUri
             if (next != null) {
+                // The first hand-off of a frozen renderer pins its reported fields at the old end.
+                if (freezeAtHandoff && frozen == null) frozen = TransportPosition(currentUri, d, d)
+                // Stale renderers surface the new URI only on the *second* poll after the hand-off.
+                if (staleTrackUri) { reportedUri = currentUri; pendingReportedUri = next } else { reportedUri = next }
                 currentUri = next
                 nextUri = null
                 durationMs = durations[next]
@@ -56,7 +70,7 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
     private fun guard() { if (failAll) throw DlnaException(0, "Renderer unreachable") }
 
     override suspend fun setUri(url: String, metadata: String) {
-        guard(); calls += "setUri:$url"; currentUri = url; nextUri = null
+        guard(); calls += "setUri:$url"; currentUri = url; nextUri = null; reportedUri = url; pendingReportedUri = null
         durationMs = durations[url]; basePositionMs = 0; state = TransportState.STOPPED
     }
 
@@ -77,7 +91,14 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
 
     override suspend fun seek(positionMs: Long) { guard(); calls += "seek:$positionMs"; basePositionMs = positionMs; playingSince = clock() }
 
-    override suspend fun positionInfo(): TransportPosition { guard(); tick(); return TransportPosition(currentUri, position(), durationMs) }
+    override suspend fun positionInfo(): TransportPosition {
+        guard(); tick()
+        frozen?.let { return it }
+        val uri = reportedUri ?: currentUri
+        // A stale renderer catches up to the real URI on the following poll.
+        if (pendingReportedUri != null) { reportedUri = pendingReportedUri; pendingReportedUri = null }
+        return TransportPosition(uri, position(), durationMs)
+    }
 
     override suspend fun transportState(): TransportState { guard(); tick(); return state }
 
