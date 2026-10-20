@@ -3,7 +3,6 @@ package app.polyphony.ui.browse.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.polyphony.core.domain.model.Album
-import app.polyphony.core.domain.model.Genre
 import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.RecentContext
@@ -44,7 +43,6 @@ data class HomeUiState(
     val randomPicks: ImmutableList<Album> = persistentListOf(),
     val favorites: ImmutableList<Album> = persistentListOf(),
     val playlists: ImmutableList<Playlist> = persistentListOf(),
-    val genres: ImmutableList<Genre> = persistentListOf(),
     val sync: SyncState = SyncState(),
     val isRefreshing: Boolean = false,
     val downloadedCount: Int = 0,
@@ -64,7 +62,6 @@ private data class Shelves(
 
 private data class Meta(
     val playlists: List<Playlist>,
-    val genres: List<Genre>,
     val servers: List<Server>,
     val activeServer: Server?,
     val sync: SyncState,
@@ -100,11 +97,10 @@ class HomeViewModel @Inject constructor(
 
     private val meta = combine(
         library.playlists(),
-        library.genres(),
         servers.servers,
         servers.activeServer,
         syncManager.state,
-    ) { playlists, genres, serverList, active, sync -> Meta(playlists, genres, serverList, active, sync) }
+    ) { playlists, serverList, active, sync -> Meta(playlists, serverList, active, sync) }
 
     val state: StateFlow<HomeUiState> = combine(shelves, meta, refreshing, downloadSummary) { s, m, r, (dlCount, dlBytes) ->
         HomeUiState(
@@ -119,7 +115,6 @@ class HomeViewModel @Inject constructor(
             randomPicks = s.randomPicks.toImmutableList(),
             favorites = s.favorites.toImmutableList(),
             playlists = m.playlists.toImmutableList(),
-            genres = m.genres.toImmutableList(),
             sync = m.sync,
             isRefreshing = r,
         )

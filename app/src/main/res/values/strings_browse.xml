@@ -31,7 +31,6 @@
     <string name="browse_home_random_picks">Random picks</string>
     <string name="browse_home_favorites">Favourites</string>
     <string name="browse_home_playlists">Playlists</string>
-    <string name="browse_home_genres">Genres</string>
     <string name="browse_home_empty_title">Your library is empty here</string>
     <string name="browse_home_empty_body">Sync your server to browse artists, albums and playlists offline and instantly.</string>
     <string name="browse_home_empty_syncing">Syncing your library… this can take a few minutes the first time.</string>

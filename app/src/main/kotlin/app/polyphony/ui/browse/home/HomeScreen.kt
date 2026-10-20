@@ -52,7 +52,6 @@ import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.RecentContext
 import app.polyphony.core.ui.components.AlbumCard
 import app.polyphony.core.ui.components.EmptyState
-import app.polyphony.core.ui.components.GenreChip
 import app.polyphony.core.ui.components.HorizontalCarousel
 import app.polyphony.core.ui.components.LoadingPlaceholder
 import app.polyphony.core.ui.components.PlaceholderStyle
@@ -214,20 +213,6 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                         item(key = "playlists") {
                             HorizontalCarousel(items = state.playlists.take(15), key = { "p-" + it.id }) { playlist ->
                                 PlaylistCard(playlist, onClick = { navigator.openPlaylist(playlist.id) }, width = Dimens.carouselArtwork)
-                            }
-                        }
-                    }
-                    if (state.genres.isNotEmpty()) {
-                        item(key = "genres-header") {
-                            SectionHeader(
-                                title = stringResource(R.string.browse_home_genres),
-                                onSeeAll = { navigator.openLibrary("genres") },
-                                seeAllLabel = stringResource(R.string.browse_action_see_all),
-                            )
-                        }
-                        item(key = "genres") {
-                            HorizontalCarousel(items = state.genres.take(24), key = { "g-" + it.name }) { genre ->
-                                GenreChip(name = genre.name, onClick = { navigator.openGenre(genre.name) })
                             }
                         }
                     }
