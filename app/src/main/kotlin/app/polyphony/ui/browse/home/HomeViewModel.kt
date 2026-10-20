@@ -4,13 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Genre
+import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Playlist
+import app.polyphony.core.domain.model.RecentContext
 import app.polyphony.core.domain.model.Server
-import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.repository.DownloadRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.LibrarySyncManager
+import app.polyphony.core.domain.repository.ListeningHistoryRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.SyncState
@@ -35,7 +37,8 @@ data class HomeUiState(
     val isLoaded: Boolean = false,
     val servers: ImmutableList<Server> = persistentListOf(),
     val activeServer: Server? = null,
-    val continueListening: ImmutableList<Track> = persistentListOf(),
+    /** Recently played collections, most recent first; each resumes where it was left. */
+    val continueListening: ImmutableList<RecentContext> = persistentListOf(),
     val recentlyAdded: ImmutableList<Album> = persistentListOf(),
     val mostPlayed: ImmutableList<Album> = persistentListOf(),
     val randomPicks: ImmutableList<Album> = persistentListOf(),
@@ -52,7 +55,7 @@ data class HomeUiState(
 }
 
 private data class Shelves(
-    val continueListening: List<Track>,
+    val continueListening: List<RecentContext>,
     val recentlyAdded: List<Album>,
     val mostPlayed: List<Album>,
     val randomPicks: List<Album>,
@@ -74,6 +77,7 @@ class HomeViewModel @Inject constructor(
     private val servers: ServerRepository,
     private val settings: SettingsRepository,
     private val playback: PlaybackController,
+    private val history: ListeningHistoryRepository,
     downloads: DownloadRepository,
 ) : ViewModel() {
 
@@ -87,7 +91,7 @@ class HomeViewModel @Inject constructor(
         .flatMapLatest { seed -> library.randomAlbums(12, seed) }
 
     private val shelves = combine(
-        library.recentlyPlayedTracks(20),
+        history.recent(20),
         library.recentlyAddedAlbums(20),
         library.mostPlayedAlbums(20),
         randomPicks,
@@ -143,16 +147,19 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch { servers.setActive(serverId) }
     }
 
-    fun playContinueListening(index: Int) {
-        val tracks = state.value.continueListening
-        if (tracks.isEmpty()) return
-        playback.playTracks(tracks, index, queueTitle = "Continue listening")
+    fun resume(entry: RecentContext) = playback.resumeContext(entry.context)
+
+    fun playFromStart(entry: RecentContext) = playback.resumeContext(entry.context, fromStart = true)
+
+    fun removeFromHistory(entry: RecentContext) {
+        viewModelScope.launch { runCatching { history.remove(entry.context) } }
     }
 
     fun shuffleFavorites() {
         viewModelScope.launch {
             val tracks = library.starredTracks().first()
-            if (tracks.isNotEmpty()) playback.playTracks(tracks, 0, shuffle = true, queueTitle = "Favourites")
+            val context = tracks.firstOrNull()?.let { PlayContext.favorites(it.serverId, artworkUrl = tracks.firstNotNullOfOrNull { t -> t.artworkUrl }) }
+            if (tracks.isNotEmpty()) playback.playTracks(tracks, 0, shuffle = true, queueTitle = "Favourites", context = context)
         }
     }
 }

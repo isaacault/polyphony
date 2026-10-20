@@ -1,5 +1,6 @@
 package app.polyphony.core.domain.playback
 
+import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.transcode.OutputTarget
 import app.polyphony.core.domain.transcode.TranscodeDecision
@@ -26,6 +27,8 @@ data class PlaybackState(
     val latencyDegraded: Boolean = false,
     val sleepTimerEndsAtEpochMs: Long? = null,
     val queueTitle: String? = null,
+    /** The collection the queue was started from, when it was started from one. */
+    val playContext: PlayContext? = null,
     val audioSessionId: Int = 0,
     val error: String? = null,
 ) {
@@ -62,7 +65,19 @@ interface PlaybackController {
     fun previous()
     fun skipToQueueItem(index: Int)
 
-    fun playTracks(tracks: List<Track>, startIndex: Int = 0, shuffle: Boolean = false, queueTitle: String? = null)
+    /** Replaces the queue. Pass [context] when the tracks are a whole collection so it can be resumed later. */
+    fun playTracks(
+        tracks: List<Track>,
+        startIndex: Int = 0,
+        shuffle: Boolean = false,
+        queueTitle: String? = null,
+        context: PlayContext? = null,
+    )
+    /**
+     * Rebuilds the queue for [context] from the library and starts where the listener left off
+     * (or at the first track when [fromStart]). Resumes in place when the context is already loaded.
+     */
+    fun resumeContext(context: PlayContext, fromStart: Boolean = false)
     fun playNext(tracks: List<Track>)
     fun addToQueue(tracks: List<Track>)
     fun removeFromQueue(index: Int)

@@ -7,12 +7,16 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.DlnaController
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.playback.PlaybackPosition
 import app.polyphony.core.domain.playback.PlaybackState
 import app.polyphony.core.domain.playback.RepeatMode
+import app.polyphony.core.domain.playback.ResumePoint
+import app.polyphony.core.domain.repository.LibraryRepository
+import app.polyphony.core.domain.repository.ListeningHistoryRepository
 import app.polyphony.core.domain.transcode.OutputTarget
 import app.polyphony.core.domain.transcode.TranscodeDecision
 import app.polyphony.core.playback.PlaybackService
@@ -26,6 +30,7 @@ import app.polyphony.core.playback.queue.MediaItemFactory
 import app.polyphony.core.playback.queue.QueueMath
 import app.polyphony.core.playback.queue.QueueStore
 import app.polyphony.core.playback.session.CustomCommands
+import app.polyphony.core.playback.session.PlayContextCodec
 import app.polyphony.core.playback.session.SessionExtras
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.collections.immutable.toImmutableList
@@ -37,6 +42,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -61,6 +67,8 @@ class PlaybackControllerImpl @Inject constructor(
     private val castManager: CastManager,
     private val dlnaController: DlnaController,
     private val streamResolver: StreamResolver,
+    private val libraryRepository: LibraryRepository,
+    private val listeningHistory: ListeningHistoryRepository,
 ) : PlaybackController {
 
     private val _state = MutableStateFlow(PlaybackState())
@@ -225,6 +233,7 @@ class PlaybackControllerImpl @Inject constructor(
         _state.update {
             it.copy(
                 queueTitle = extras.getString(SessionExtras.QUEUE_TITLE),
+                playContext = PlayContextCodec.decode(extras.getString(SessionExtras.PLAY_CONTEXT)),
                 sleepTimerEndsAtEpochMs = extras.getLong(SessionExtras.SLEEP_TIMER_ENDS_AT, -1L).takeIf { v -> v > 0 },
                 audioSessionId = extras.getInt(SessionExtras.AUDIO_SESSION_ID, 0),
             )
@@ -287,14 +296,68 @@ class PlaybackControllerImpl @Inject constructor(
         c.play()
     }
 
-    override fun playTracks(tracks: List<Track>, startIndex: Int, shuffle: Boolean, queueTitle: String?) {
+    override fun playTracks(tracks: List<Track>, startIndex: Int, shuffle: Boolean, queueTitle: String?, context: PlayContext?) {
         if (tracks.isEmpty()) return
+        val start = if (shuffle) QueueMath.shuffledStartIndex(tracks.size) else startIndex.coerceIn(0, tracks.lastIndex)
+        startQueue(tracks, start, 0L, shuffle, queueTitle, context)
+    }
+
+    override fun resumeContext(context: PlayContext, fromStart: Boolean) {
+        val current = _state.value
+        if (!fromStart && current.playContext?.key == context.key && current.queue.isNotEmpty()) {
+            play()
+            return
+        }
+        scope.launch {
+            val entry = if (fromStart) null else runCatching { listeningHistory.get(context) }.getOrNull()
+            val tracks = tracksFor(context)
+            if (tracks.isEmpty()) {
+                runCatching { listeningHistory.remove(context) }
+                return@launch
+            }
+            val point = ResumePoint.of(tracks, entry)
+            startQueue(tracks, point.index, point.positionMs, shuffle = entry?.shuffle == true, queueTitle = context.title, context = context)
+        }
+    }
+
+    /** The context's tracks from the cache, refreshing from the server once when it is empty. */
+    private suspend fun tracksFor(context: PlayContext): List<Track> {
+        suspend fun read(): List<Track> = runCatching {
+            when (context.kind) {
+                PlayContext.Kind.ALBUM -> libraryRepository.tracksForAlbum(context.id).first()
+                PlayContext.Kind.ARTIST -> libraryRepository.tracksForArtist(context.id).first()
+                PlayContext.Kind.PLAYLIST -> libraryRepository.tracksForPlaylist(context.id).first()
+                PlayContext.Kind.GENRE -> libraryRepository.tracksByGenre(context.id).first()
+                PlayContext.Kind.FAVORITES -> libraryRepository.starredTracks().first()
+            }
+        }.getOrDefault(emptyList())
+        read().takeIf { it.isNotEmpty() }?.let { return it }
+        runCatching {
+            when (context.kind) {
+                PlayContext.Kind.ALBUM -> libraryRepository.refreshAlbum(context.id)
+                PlayContext.Kind.ARTIST -> libraryRepository.refreshArtist(context.id)
+                PlayContext.Kind.PLAYLIST -> libraryRepository.refreshPlaylist(context.id)
+                PlayContext.Kind.FAVORITES -> libraryRepository.refreshStarred()
+                PlayContext.Kind.GENRE -> Unit
+            }
+        }
+        return read()
+    }
+
+    /**
+     * Replaces the queue. The context goes first so the service can flush progress for the
+     * outgoing collection before the new items (and their first transition) arrive.
+     */
+    private fun startQueue(tracks: List<Track>, start: Int, positionMs: Long, shuffle: Boolean, queueTitle: String?, context: PlayContext?) {
         queueStore.putAll(tracks)
         val items = tracks.map(::itemFor)
         withController { c ->
+            c.sendCustomCommand(
+                CustomCommands.of(CustomCommands.SET_PLAY_CONTEXT),
+                Bundle().apply { putString(CustomCommands.ARG_CONTEXT, PlayContextCodec.encode(context)) },
+            )
             c.shuffleModeEnabled = shuffle
-            val start = if (shuffle) QueueMath.shuffledStartIndex(items.size) else startIndex.coerceIn(0, items.lastIndex)
-            c.setMediaItems(items, start, 0L)
+            c.setMediaItems(items, start.coerceIn(0, items.lastIndex), positionMs.coerceAtLeast(0L))
             c.prepare()
             c.play()
             c.sendCustomCommand(

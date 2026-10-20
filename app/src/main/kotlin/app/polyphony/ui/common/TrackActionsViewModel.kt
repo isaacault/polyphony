@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.ItemKind
+import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
@@ -36,8 +37,8 @@ class TrackActionsViewModel @Inject constructor(
 
     fun playNext(tracks: List<Track>) = playback.playNext(tracks)
     fun addToQueue(tracks: List<Track>) = playback.addToQueue(tracks)
-    fun play(tracks: List<Track>, startIndex: Int = 0, shuffle: Boolean = false, title: String? = null) =
-        playback.playTracks(tracks, startIndex, shuffle, title)
+    fun play(tracks: List<Track>, startIndex: Int = 0, shuffle: Boolean = false, title: String? = null, context: PlayContext? = null) =
+        playback.playTracks(tracks, startIndex, shuffle, title, context)
 
     fun toggleStarred(track: Track) {
         viewModelScope.launch { runCatching { library.setStarred(track.id, ItemKind.TRACK, !track.starred) } }

@@ -18,6 +18,13 @@
 
     <!-- home -->
     <string name="browse_home_continue_listening">Continue listening</string>
+    <string name="browse_continue_play_from_start">Play from start</string>
+    <string name="browse_continue_remove">Remove from history</string>
+    <string name="browse_kind_album">Album</string>
+    <string name="browse_kind_artist">Artist</string>
+    <string name="browse_kind_playlist">Playlist</string>
+    <string name="browse_kind_genre">Genre</string>
+    <string name="browse_kind_favorites">Favourites</string>
     <string name="browse_home_recently_added">Recently added</string>
     <string name="browse_home_recently_played">Recently played</string>
     <string name="browse_home_most_played">Most played</string>
@@ -88,6 +95,9 @@
     <string name="browse_action_remove_favorite">Remove from favourites</string>
     <string name="browse_action_go_to_album">Go to album</string>
     <string name="browse_action_go_to_artist">Go to artist</string>
+    <string name="browse_action_go_to_playlist">Go to playlist</string>
+    <string name="browse_action_go_to_genre">Go to genre</string>
+    <string name="browse_action_go_to_favorites">Go to favourites</string>
     <string name="browse_action_song_info">Song info</string>
     <string name="browse_action_new_playlist">New playlist</string>
     <string name="browse_action_create">Create</string>
