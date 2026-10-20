@@ -1,5 +1,6 @@
 package app.polyphony.core.dlna.ssdp
 
+import android.content.pm.PackageManager
 import java.net.Inet4Address
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
@@ -47,7 +48,7 @@ data class SsdpEntry(val udn: String, val location: String, val expiresAtMs: Lon
  * odd headers) are ignored rather than propagated.
  */
 class SsdpDiscovery(
-    context: Context,
+    private val context: Context,
     parentScope: CoroutineScope,
     private val io: CoroutineDispatcher = Dispatchers.IO,
     private val clock: () -> Long = System::currentTimeMillis,
@@ -95,9 +96,16 @@ class SsdpDiscovery(
     @Volatile private var lastDatagramAt: Long? = null
     @Volatile private var lastError: String? = null
 
+    /** `null` when this OS has no local network permission; otherwise whether the app holds it. */
+    private fun localNetworkPermission(): Boolean? {
+        runCatching { context.packageManager.getPermissionInfo(LOCAL_NETWORK_PERMISSION, 0) }.getOrNull() ?: return null
+        return context.checkSelfPermission(LOCAL_NETWORK_PERMISSION) == PackageManager.PERMISSION_GRANTED
+    }
+
     /** Snapshot for the diagnostics export. */
     fun stats(): SsdpStats = SsdpStats(
         running = running,
+        localNetworkPermission = localNetworkPermission(),
         interfaceName = ifaceName,
         wifiAddress = wifiAddress,
         multicastLockHeld = multicastLock?.isHeld == true,
@@ -125,6 +133,9 @@ class SsdpDiscovery(
     fun start() {
         if (running) return
         running = true
+        if (localNetworkPermission() == false) {
+            Log.w(TAG, "ACCESS_LOCAL_NETWORK is denied on this OS: SSDP packets will not reach the LAN until the user allows it")
+        }
         acquireLock()
         scope.launch(io) { searchLoop() }
         scope.launch(io) { notifyLoop() }
@@ -344,12 +355,15 @@ class SsdpDiscovery(
         const val SSDP_ADDRESS = "239.255.255.250"
         const val SSDP_PORT = 1900
         const val RECEIVE_TIMEOUT_MS = 1_500
+        const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
     }
 }
 
 /** What SSDP discovery has done since it started; see [SsdpDiscovery.stats]. */
 data class SsdpStats(
     val running: Boolean,
+    /** `null` where the OS has no such permission; `false` means the LAN is unreachable for this app. */
+    val localNetworkPermission: Boolean?,
     val interfaceName: String?,
     val wifiAddress: String?,
     val multicastLockHeld: Boolean,
@@ -364,7 +378,8 @@ data class SsdpStats(
     val lastError: String?,
 ) {
     fun summary(): String =
-        "running=$running iface=${interfaceName ?: "?"} wifi=${wifiAddress ?: "?"} multicastLock=$multicastLockHeld " +
+        "running=$running localNetworkPermission=${when (localNetworkPermission) { null -> "n/a"; true -> "granted"; false -> "DENIED" }} " +
+            "iface=${interfaceName ?: "?"} wifi=${wifiAddress ?: "?"} multicastLock=$multicastLockHeld " +
             "searches=$searchesSent received=$datagramsReceived responses=$responses notifies=$notifies renderers=$renderers " +
             "lastPacket=${lastDatagramAgoMs?.let { "${it / 1000}s ago" } ?: "never"} otherDevices=$otherDeviceTypes" +
             (lastError?.let { " lastError=\"$it\"" } ?: "")

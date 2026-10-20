@@ -15,6 +15,7 @@ import app.polyphony.core.domain.model.ServerOptions
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.repository.NetworkMonitor
 import app.polyphony.core.playback.cast.CastManager
+import app.polyphony.platform.LocalNetworkAccess
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.playback.stream.StreamResolver
@@ -112,6 +113,7 @@ class DiagnosticsExporter @Inject constructor(
 
         appendLine("== Discovery ==")
         val dlna = runCatching { dlnaManager.diagnostics() }.getOrNull()
+        appendLine("local network permission: ${LocalNetworkAccess.describe(context)}")
         appendLine("ssdp: ${dlna?.ssdp?.summary() ?: "unavailable"}")
         if (dlna != null) {
             if (dlna.renderers.isEmpty()) appendLine("dlna renderers: none")
