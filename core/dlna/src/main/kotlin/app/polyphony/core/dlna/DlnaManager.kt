@@ -220,6 +220,7 @@ class DlnaManager @Inject constructor(
                     transport = transport,
                     resolver = { item -> resolver?.resolve(item, entry.renderer) },
                     scope = newEngineScope,
+                    log = { Log.i(TAG, "${entry.renderer.friendlyName}: $it") },
                 )
                 val volume = runCatching { rc?.getVolume() }.getOrNull()
                 engine.setInitialVolume(volume)

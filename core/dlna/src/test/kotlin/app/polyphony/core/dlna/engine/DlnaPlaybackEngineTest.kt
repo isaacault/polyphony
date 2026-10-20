@@ -80,6 +80,35 @@ class DlnaPlaybackEngineTest {
     }
 
     @Test
+    fun `hand-off is detected when the renderer reports a stale TrackURI`() = runTest {
+        val (t, e) = fixture { staleTrackUri = true }
+        e.start("a", "b", "c")
+        advanceTimeBy(2_500)
+        assertTrue("next track should be armed", t.calls.contains("setNext:b"))
+        advanceTimeBy(9_000) // a (10 s) ends; renderer flips to b but keeps reporting a's URI for a poll
+        val s = e.state.value
+        assertEquals("the engine must follow the renderer onto b", 1, s.currentIndex)
+        assertEquals("b must not be re-cued", 1, t.calls.count { it.startsWith("setUri") })
+    }
+
+    @Test
+    fun `renderer that froze on the old track and silently played the armed one does not replay it`() = runTest {
+        // a hands off to b, but the renderer freezes its reports at a's end (the user's "0s left,
+        // next track already playing" symptom) and only reports STOPPED once b has also finished.
+        // We must land past b, never re-cue b with a fresh SetAVTransportURI.
+        val (t, e) = fixture(durations = mapOf("a" to 10_000, "b" to 4_000, "c" to 6_000)) {
+            freezeAtHandoff = true
+        }
+        e.start("a", "b", "c")
+        advanceTimeBy(2_500)
+        assertTrue("b should be armed as the next track", t.calls.contains("setNext:b"))
+        advanceTimeBy(13_000) // a (10 s) then b (4 s) both play while the renderer reports a's frozen end
+        val s = e.state.value
+        assertEquals("b must never be re-cued via SetAVTransportURI", 0, t.calls.count { it == "setUri:b" })
+        assertTrue("the queue must advance past the silently-played b", s.currentIndex >= 2)
+    }
+
+    @Test
     fun `queue ends after the last track when repeat is off`() = runTest {
         val (_, e) = fixture { supportsSetNext = false }
         e.start("c")
