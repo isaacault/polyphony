@@ -1,5 +1,6 @@
 package app.polyphony.core.dlna.upnp
 
+import app.polyphony.core.dlna.soap.DlnaException
 import app.polyphony.core.dlna.upnp.UpnpXml.child
 import app.polyphony.core.dlna.upnp.UpnpXml.childElements
 import app.polyphony.core.dlna.upnp.UpnpXml.childText
@@ -42,15 +43,25 @@ object DeviceDescriptionParser {
      *   the document carries no `URLBase`.
      * @return null when the document has no device exposing an AVTransport service.
      */
-    fun parse(xml: String, location: String): UpnpDevice? {
-        val doc = UpnpXml.parse(xml) ?: return null
-        val root = doc.documentElement ?: return null
+    fun parse(xml: String, location: String): UpnpDevice? = parseOrExplain(xml, location).getOrNull()
+
+    /** Like [parse], but a failure says what the document did contain, for logs and diagnostics. */
+    fun parseOrExplain(xml: String, location: String): Result<UpnpDevice> {
+        val doc = UpnpXml.parse(xml)
+            ?: return Result.failure(DlnaException(0, "XML did not parse: ${UpnpXml.lastError ?: "empty document"}"))
+        val root = doc.documentElement ?: return Result.failure(DlnaException(0, "document has no root element"))
         val base = root.childText("URLBase")?.let { normaliseBase(it) } ?: location
-        val rootDevice = root.child("device") ?: root.findFirst("device") ?: return null
+        val rootDevice = root.child("device") ?: root.findFirst("device")
+            ?: return Result.failure(DlnaException(0, "no <device> element under <${root.localName ?: root.nodeName}>"))
         val candidates = ArrayList<UpnpDevice>()
         collect(rootDevice, base, location, candidates)
-        return candidates.firstOrNull { it.avTransport != null && it.deviceType?.contains("MediaRenderer", true) == true }
+        val best = candidates.firstOrNull { it.avTransport != null && it.deviceType?.contains("MediaRenderer", true) == true }
             ?: candidates.firstOrNull { it.avTransport != null }
+        if (best != null) return Result.success(best)
+        val seen = candidates.joinToString { d ->
+            "${d.friendlyName} [${d.deviceType ?: "?"}] services=${d.services.map { it.serviceType.substringAfter(":service:", it.serviceType) }}"
+        }.ifEmpty { "no device with both UDN and friendlyName" }
+        return Result.failure(DlnaException(0, "no device with an AVTransport service; found: $seen"))
     }
 
     private fun collect(deviceEl: Element, base: String, location: String, out: MutableList<UpnpDevice>) {

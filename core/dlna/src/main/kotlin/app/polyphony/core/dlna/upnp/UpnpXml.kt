@@ -11,6 +11,9 @@ import org.xml.sax.InputSource
 /** Small, defensive DOM helpers that work identically on Android and the JVM (tests). */
 internal object UpnpXml {
 
+    /** Why the last [parse] returned null; surfaced in logs and the diagnostics export. */
+    @Volatile var lastError: String? = null
+
     fun parse(xml: String): Document? {
         val cleaned = xml.trimStart('\uFEFF', ' ', '\n', '\r', '\t')
         if (cleaned.isEmpty()) return null
@@ -25,7 +28,8 @@ internal object UpnpXml {
                 runCatching { setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
             }
             factory.newDocumentBuilder().parse(InputSource(StringReader(cleaned)))
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
+            lastError = "${t.javaClass.simpleName}: ${t.message}"
             null
         }
     }
