@@ -303,4 +303,10 @@
     <string name="settings_server_transcoding_none">This server could not transcode to any format (checked %1$s). Quality rules will use original files.</string>
     <string name="settings_server_transcoding_supported">Works: %1$s (checked %2$s)</string>
     <string name="settings_server_transcoding_note">Quality rules that ask for a format this server cannot produce are switched to one it can, or to original quality.</string>
+    <string name="settings_server_remote_test">Test receiver address</string>
+    <string name="settings_server_remote_test_summary">Fetches a second of audio through this address from your phone over Wi-Fi. Catches a wrong host, port or scheme; the receiver itself must be on the same network.</string>
+    <string name="settings_server_remote_test_running">Testing…</string>
+    <string name="settings_server_remote_test_ok_stream">Reachable: audio served (HTTP %1$d, %2$d ms).</string>
+    <string name="settings_server_remote_test_ok_host">Host answered (HTTP %1$d). Sync the library to test an actual stream.</string>
+    <string name="settings_server_remote_test_fail">Not reachable: %1$s</string>
 </resources>

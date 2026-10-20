@@ -52,6 +52,16 @@ class RemoteUrlResolver @Inject constructor(
         }
     }
 
+    /**
+     * What a receiver would be given for [url] if [overrideBaseUrl] were the server's receiver
+     * address (ignoring the stored option). Used by the settings screen to test an address before
+     * saving it.
+     */
+    fun previewForReceiver(url: String, server: Server, overrideBaseUrl: String?): String {
+        val host = Uri.parse(server.baseUrl).host
+        return rewriteForReceiver(url, server.baseUrl, overrideBaseUrl, host?.let { lanIps[it] })
+    }
+
     /** Rewrite [url] (built from [server]) into one the receiver can fetch. */
     fun forReceiver(url: String, server: Server): String {
         val override = server.options[ServerOptions.REMOTE_BASE_URL]?.trim()?.takeIf { it.isNotEmpty() }
