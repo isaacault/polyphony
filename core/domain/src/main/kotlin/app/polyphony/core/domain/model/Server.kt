@@ -52,6 +52,12 @@ object ServerOptions {
 
     /** "false" to stop substituting the phone-resolved LAN IP into receiver URLs. Default on. */
     const val REMOTE_AUTO_LAN = "remoteAutoLan"
+
+    /** Comma-separated [app.polyphony.core.domain.transcode.AudioCodec] names the server can transcode to (probed). */
+    const val TRANSCODE_CODECS = "transcodeCodecs"
+
+    /** Epoch millis of the last transcoding probe. */
+    const val TRANSCODE_PROBED_AT = "transcodeProbedAt"
 }
 
 data class ServerInfo(

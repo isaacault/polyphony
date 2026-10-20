@@ -8,6 +8,7 @@ import app.polyphony.core.dlna.service.RendererFormatSupport
 import app.polyphony.core.domain.playback.DlnaRenderer
 import app.polyphony.core.playback.engine.ServerLookup
 import app.polyphony.core.playback.remote.RemoteUrlResolver
+import app.polyphony.core.playback.transcode.CodecSupport
 import app.polyphony.core.playback.engine.TranscodeDecisionEngine
 import app.polyphony.core.playback.queue.MediaItemFactory
 import app.polyphony.core.playback.queue.QueueStore
@@ -34,7 +35,10 @@ class PolyphonyDlnaResolver @Inject constructor(
         val provider = serverLookup.providerFor(track.serverId)
             ?: serverLookup.awaitProvider(track.serverId)
             ?: return null
-        val decision = engine.decisionFor(renderer.target)
+        val decision = engine.decisionFor(renderer.target).let { d ->
+            val adjusted = CodecSupport.adjust(d.profile, CodecSupport.supported(provider.server))
+            if (adjusted !== d.profile) d.copy(profile = adjusted) else d
+        }
         val support = RendererFormatSupport.from(renderer.supportedMimeTypes)
         val choice = DlnaCodecFallback.choose(track, decision.profile, support) { profile ->
             provider.streamRequest(track, profile)

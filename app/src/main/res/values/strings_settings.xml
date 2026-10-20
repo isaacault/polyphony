@@ -296,4 +296,11 @@
     <string name="settings_server_remote_url_summary">Optional. Receivers fetch audio themselves, so give them an address they can reach, usually your server\'s LAN address. Leave empty to use the main address.</string>
     <string name="settings_server_remote_auto_lan">Use local IP for receivers automatically</string>
     <string name="settings_server_remote_auto_lan_summary">When this phone resolves the server name to a LAN address and the server uses plain http, send receivers that IP instead of the name.</string>
+    <string name="settings_server_transcoding">Transcoding</string>
+    <string name="settings_server_transcoding_check">Check transcoding support</string>
+    <string name="settings_server_transcoding_checking">Asking the server for a few seconds of Opus, MP3 and AAC…</string>
+    <string name="settings_server_transcoding_not_checked">Not checked yet. Runs automatically after the first sync; tap to run now.</string>
+    <string name="settings_server_transcoding_none">This server could not transcode to any format (checked %1$s). Quality rules will use original files.</string>
+    <string name="settings_server_transcoding_supported">Works: %1$s (checked %2$s)</string>
+    <string name="settings_server_transcoding_note">Quality rules that ask for a format this server cannot produce are switched to one it can, or to original quality.</string>
 </resources>

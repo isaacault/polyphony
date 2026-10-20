@@ -11,6 +11,7 @@ import app.polyphony.core.playback.engine.TranscodeDecisionEngine
 import app.polyphony.core.playback.queue.MediaItemFactory
 import app.polyphony.core.playback.queue.QueueStore
 import app.polyphony.core.playback.remote.RemoteUrlResolver
+import app.polyphony.core.playback.transcode.CodecSupport
 import app.polyphony.core.playback.util.PlaybackJson
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaMetadata
@@ -40,9 +41,12 @@ class PolyphonyMediaItemConverter @Inject constructor(
             ?: error("No track for media item ${mediaItem.mediaId}")
         queueStore.put(track)
         val target = castManager.currentTargetSync() ?: OutputTarget.Local
-        val decision = engine.decisionFor(target)
         val provider = serverLookup.providerFor(track.serverId)
         val server = serverLookup.serverFor(track.serverId)
+        val decision = engine.decisionFor(target).let { d ->
+            val adjusted = server?.let { CodecSupport.adjust(d.profile, CodecSupport.supported(it)) } ?: d.profile
+            if (adjusted !== d.profile) d.copy(profile = adjusted) else d
+        }
         val request = provider?.streamRequest(track, decision.profile)?.let { req ->
             if (server != null) req.copy(url = remoteUrls.forReceiver(req.url, server)) else req
         }

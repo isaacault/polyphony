@@ -59,6 +59,11 @@ import app.polyphony.ui.settings.components.InfoBanner
 import app.polyphony.ui.settings.components.PreferenceCategory
 import app.polyphony.ui.settings.components.PreferenceNote
 import app.polyphony.ui.settings.components.SettingsScaffold
+import app.polyphony.core.domain.transcode.AudioCodec
+import app.polyphony.core.playback.transcode.CodecSupport
+import app.polyphony.core.playback.transcode.TranscodeCapabilityProbe
+import app.polyphony.ui.settings.components.ActionPreference
+import app.polyphony.ui.settings.components.relativeTime
 import app.polyphony.ui.settings.components.SwitchPreference
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -93,6 +98,10 @@ data class ServerEditUiState(
     val trustSelfSigned: Boolean = false,
     val remoteBaseUrl: String = "",
     val remoteAutoLan: Boolean = true,
+    val transcodeCodecs: Set<AudioCodec>? = null,
+    val transcodeProbedAt: Long? = null,
+    val probing: Boolean = false,
+    val probeError: String? = null,
     val headers: List<HeaderEntry> = emptyList(),
     val test: ConnectionTest? = null,
     val saving: Boolean = false,
@@ -107,6 +116,7 @@ class ServerEditViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val serverRepository: ServerRepository,
     private val providerRegistry: ProviderRegistry,
+    private val transcodeProbe: TranscodeCapabilityProbe,
 ) : ViewModel() {
 
     private val route = savedStateHandle.toRoute<ServerEditRoute>()
@@ -134,6 +144,8 @@ class ServerEditViewModel @Inject constructor(
                         trustSelfSigned = server.options[ServerOptions.TRUST_SELF_SIGNED] == "true",
                         remoteBaseUrl = server.options[ServerOptions.REMOTE_BASE_URL].orEmpty(),
                         remoteAutoLan = server.options[ServerOptions.REMOTE_AUTO_LAN] != "false",
+                        transcodeCodecs = CodecSupport.supported(server),
+                        transcodeProbedAt = server.options[ServerOptions.TRANSCODE_PROBED_AT]?.toLongOrNull(),
                         headers = parseHeaders(server.options[ServerOptions.CUSTOM_HEADERS]),
                     )
                 }
@@ -147,6 +159,26 @@ class ServerEditViewModel @Inject constructor(
     fun onPassword(value: String) = _state.update { it.copy(password = value, test = null) }
     fun onLegacyAuth(value: Boolean) = _state.update { it.copy(legacyAuth = value, test = null) }
     fun onTrustSelfSigned(value: Boolean) = _state.update { it.copy(trustSelfSigned = value, test = null) }
+    fun probeTranscoding() {
+        val server = original ?: return
+        if (_state.value.probing) return
+        viewModelScope.launch {
+            _state.update { it.copy(probing = true, probeError = null) }
+            val result = runCatching { transcodeProbe.probeAndStore(server) }
+            // The probe rewrote the stored options; keep our copy current so a later Save keeps them.
+            original = serverRepository.get(server.id) ?: server
+            _state.update { st ->
+                result.fold(
+                    onSuccess = { r ->
+                        if (r == null) st.copy(probing = false, probeError = "No songs synced yet; sync the library first.")
+                        else st.copy(probing = false, transcodeCodecs = r.supported, transcodeProbedAt = r.probedAt)
+                    },
+                    onFailure = { e -> st.copy(probing = false, probeError = e.message ?: e.javaClass.simpleName) },
+                )
+            }
+        }
+    }
+
     fun onRemoteBaseUrl(value: String) = _state.update { it.copy(remoteBaseUrl = value) }
     fun onRemoteAutoLan(value: Boolean) = _state.update { it.copy(remoteAutoLan = value) }
 
@@ -319,6 +351,31 @@ fun ServerEditScreen(viewModel: ServerEditViewModel = hiltViewModel()) {
                         supporting = stringResource(R.string.settings_server_password_keep),
                     )
                 }
+            }
+        }
+
+        item(key = "transcoding") {
+            PreferenceCategory(title = stringResource(R.string.settings_server_transcoding)) {
+                val codecs = state.transcodeCodecs
+                val summary = when {
+                    state.probing -> stringResource(R.string.settings_server_transcoding_checking)
+                    state.probeError != null -> state.probeError!!
+                    codecs == null -> stringResource(R.string.settings_server_transcoding_not_checked)
+                    codecs.isEmpty() -> stringResource(R.string.settings_server_transcoding_none, relativeTime(state.transcodeProbedAt))
+                    else -> stringResource(
+                        R.string.settings_server_transcoding_supported,
+                        codecs.sortedBy { it.ordinal }.joinToString(", ") { it.label },
+                        relativeTime(state.transcodeProbedAt),
+                    )
+                }
+                ActionPreference(
+                    title = stringResource(R.string.settings_server_transcoding_check),
+                    summary = summary,
+                    enabled = !state.probing && state.loaded && !state.notFound,
+                    showChevron = false,
+                    onClick = viewModel::probeTranscoding,
+                )
+                PreferenceNote(text = stringResource(R.string.settings_server_transcoding_note))
             }
         }
 
