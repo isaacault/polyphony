@@ -100,6 +100,11 @@ oldest schema and lets Room validate the result; it needs the emulator:
 ./gradlew :core:data:connectedDebugAndroidTest
 ```
 
+Instrumented tests in any module run nightly in CI (`Connected tests` workflow) and on demand from the
+Actions tab; they also run on a push to `main` that touches an `androidTest` directory or the
+exported schemas. Anything that depends on Android's own platform classes (XML factories, DataStore,
+Room) needs a test there, because the JVM stand-ins behave differently.
+
 ## 6. Merging
 
 CI must be green on the PR's current head before it merges. `scripts/merge_when_green.sh <pr>`
