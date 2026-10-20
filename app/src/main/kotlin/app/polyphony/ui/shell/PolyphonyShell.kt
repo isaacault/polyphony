@@ -85,7 +85,11 @@ fun PolyphonyShell(
 
     val chromeTarget = (if (showBottomBar) Dimens.bottomBarHeight else 0.dp) +
         (if (showPlayer) Dimens.miniPlayerHeight else 0.dp)
-    val chrome by animateDpAsState(chromeTarget, animationSpec = Motion.sheetSpring(), label = "chrome")
+    val animatedChrome by animateDpAsState(chromeTarget, animationSpec = Motion.sheetSpring(), label = "chrome")
+    // The sheet spring is underdamped, so on the way down to 0 dp (leaving a browse route while the
+    // player stops, or entering onboarding/add-server) it briefly overshoots negative, and
+    // PaddingValues rejects a negative padding. Clamp before it reaches any layout.
+    val chrome = animatedChrome.coerceAtLeast(0.dp)
 
     LaunchedEffect(hasServers, onOnboarding) {
         if (hasServers == false && !onOnboarding) navigator.openOnboarding()
