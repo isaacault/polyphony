@@ -28,10 +28,13 @@ import app.polyphony.core.dlna.DlnaManager
 import app.polyphony.core.dlna.DlnaSessionListener
 import app.polyphony.core.dlna.player.DlnaPlayer
 import app.polyphony.core.domain.model.ItemKind
+import app.polyphony.core.domain.model.PlayContext
+import app.polyphony.core.domain.model.RecentContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.DlnaRenderer
 import app.polyphony.core.domain.repository.AppSettings
 import app.polyphony.core.domain.repository.LibraryRepository
+import app.polyphony.core.domain.repository.ListeningHistoryRepository
 import app.polyphony.core.domain.repository.NetworkMonitor
 import app.polyphony.core.domain.repository.PlaybackSettings
 import app.polyphony.core.domain.repository.SettingsRepository
@@ -53,6 +56,7 @@ import app.polyphony.core.playback.queue.QueuePersistence
 import app.polyphony.core.playback.queue.QueueStore
 import app.polyphony.core.playback.reporting.PlaybackReporter
 import app.polyphony.core.playback.session.CustomCommands
+import app.polyphony.core.playback.session.PlayContextCodec
 import app.polyphony.core.playback.session.PolyphonySessionCallback
 import app.polyphony.core.playback.session.SessionActions
 import app.polyphony.core.playback.session.SessionExtras
@@ -66,6 +70,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -89,6 +94,7 @@ class PlaybackService : MediaLibraryService() {
     @Inject lateinit var okHttpClient: OkHttpClient
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var libraryRepository: LibraryRepository
+    @Inject lateinit var listeningHistory: ListeningHistoryRepository
     @Inject lateinit var networkMonitor: NetworkMonitor
     @Inject lateinit var queueStore: QueueStore
     @Inject lateinit var queuePersistence: QueuePersistence
@@ -117,6 +123,11 @@ class PlaybackService : MediaLibraryService() {
 
     private var settings: PlaybackSettings = PlaybackSettings()
     private var queueTitle: String? = null
+    /** The collection the queue was started from; progress in it feeds Home's "Continue listening". */
+    private var playContext: PlayContext? = null
+    /** History writes go through one consumer so a flush of the old context never lands after the new one. */
+    private val historyWrites = Channel<RecentContext>(Channel.UNLIMITED)
+    private var historyJob: Job? = null
     private var lastAppliedProfileId: String? = null
     private var lastAppliedTargetKey: String? = null
     private var retryTrackId: String? = null
@@ -176,7 +187,14 @@ class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onDestroy() {
-        runCatching { runBlocking { withTimeoutOrNull(1_000) { saveQueue() } } }
+        runCatching {
+            runBlocking {
+                withTimeoutOrNull(1_000) { saveQueue() }
+                contextProgress()?.let(historyWrites::trySend)
+                historyWrites.close()
+                withTimeoutOrNull(1_000) { historyJob?.join() }
+            }
+        }
         dlnaManager.setSessionListener(null)
         dlnaManager.setMediaResolver(null)
         dlnaPlayer?.let { dlna ->
@@ -298,6 +316,9 @@ class PlaybackService : MediaLibraryService() {
         }
         scope.launch { latencyMonitor.degraded.collect { publishExtras() } }
         scope.launch { sleepTimer.endsAtEpochMs.collect { publishExtras() } }
+        historyJob = scope.launch(Dispatchers.IO) {
+            for (entry in historyWrites) runCatching { listeningHistory.record(entry) }.onFailure { Log.w(TAG, "History write failed: ${it.message}") }
+        }
         scope.launch {
             networkMonitor.state.map { it.kind to it.isMetered }.distinctUntilChanged().drop(1).collect { latencyMonitor.reset() }
         }
@@ -322,7 +343,10 @@ class PlaybackService : MediaLibraryService() {
                 delay(1_000)
                 if (player.isPlaying) {
                     reporter.onPlayingTick(1_000)
-                    if (++ticks % 10 == 0) saveQueue()
+                    if (++ticks % 10 == 0) {
+                        saveQueue()
+                        recordContextProgress()
+                    }
                 }
             }
         }
@@ -513,10 +537,15 @@ class PlaybackService : MediaLibraryService() {
             if (mediaItem?.mediaId != retryTrackId) { retryTrackId = null; retryCount = 0 }
             val track = mediaItem?.let { trackFor(it) }
             reporter.onTrackStarted(track)
+            recordContextProgress()
             sleepTimer.onTrackChanged()
             applyReplayGain()
             lastAppliedProfileId = engine.decision.value.profile.id
             lastAppliedTargetKey = engine.currentTarget.key
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_ENDED && player.repeatMode == Player.REPEAT_MODE_OFF) recordContextProgress(finished = true)
         }
 
         override fun onEvents(p: Player, events: Player.Events) {
@@ -530,9 +559,14 @@ class PlaybackService : MediaLibraryService() {
             }
             if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
                 queueStore.retain(currentItems().map { it.mediaId })
+                if (p.mediaItemCount == 0 && playContext != null) {
+                    playContext = null
+                    publishExtras()
+                }
             }
             if (events.contains(Player.EVENT_PLAY_WHEN_READY_CHANGED) && !p.playWhenReady) {
                 scheduleSave(immediate = true)
+                recordContextProgress()
             }
             if (events.containsAny(Player.EVENT_AUDIO_SESSION_ID, Player.EVENT_DEVICE_INFO_CHANGED)) {
                 publishExtras()
@@ -563,6 +597,27 @@ class PlaybackService : MediaLibraryService() {
         )
     }
 
+    // ---- listening history ----
+
+    /** The current place in [playContext], or `null` when there is nothing to record. */
+    private fun contextProgress(finished: Boolean = false): RecentContext? {
+        val context = playContext ?: return null
+        val track = if (finished) null else currentTrack() ?: return null
+        return RecentContext(
+            context = context,
+            trackId = track?.id,
+            trackTitle = track?.title,
+            trackIndex = if (finished) 0 else player.currentMediaItemIndex.coerceAtLeast(0),
+            positionMs = if (finished) 0L else player.currentPosition.coerceAtLeast(0L),
+            shuffle = player.shuffleModeEnabled,
+            updatedAt = System.currentTimeMillis(),
+        )
+    }
+
+    private fun recordContextProgress(finished: Boolean = false) {
+        contextProgress(finished)?.let(historyWrites::trySend)
+    }
+
     // ---- persistence ----
 
     private fun scheduleSave(immediate: Boolean = false) {
@@ -590,6 +645,7 @@ class PlaybackService : MediaLibraryService() {
                 repeatMode = player.repeatMode,
                 queueTitle = queueTitle,
                 savedAt = System.currentTimeMillis(),
+                context = playContext,
             ),
         )
     }
@@ -599,6 +655,7 @@ class PlaybackService : MediaLibraryService() {
         if (saved.tracks.isEmpty()) return null
         queueStore.putAll(saved.tracks)
         queueTitle = saved.queueTitle
+        playContext = saved.context
         player.shuffleModeEnabled = saved.shuffle
         player.repeatMode = saved.repeatMode
         val items = saved.tracks.map { MediaItemFactory.fromTrack(it) }
@@ -623,6 +680,7 @@ class PlaybackService : MediaLibraryService() {
         val decision = engine.decision.value
         val extras = Bundle().apply {
             putString(SessionExtras.QUEUE_TITLE, queueTitle)
+            putString(SessionExtras.PLAY_CONTEXT, PlayContextCodec.encode(playContext))
             putLong(SessionExtras.SLEEP_TIMER_ENDS_AT, sleepTimer.endsAtEpochMs.value ?: -1L)
             putInt(SessionExtras.AUDIO_SESSION_ID, audioSessionId)
             putBoolean(SessionExtras.LATENCY_DEGRADED, latencyMonitor.degraded.value)
@@ -669,6 +727,14 @@ class PlaybackService : MediaLibraryService() {
 
         override fun setQueueTitle(title: String?) {
             queueTitle = title
+            publishExtras()
+            scheduleSave()
+        }
+
+        override fun setPlayContext(context: PlayContext?) {
+            // Sent before the new queue arrives, so this still sees the outgoing one: flush its progress.
+            if (playContext?.key != context?.key) recordContextProgress()
+            playContext = context
             publishExtras()
             scheduleSave()
         }

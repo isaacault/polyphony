@@ -7,6 +7,7 @@ import androidx.navigation.toRoute
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.ItemKind
+import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.repository.LibraryRepository
@@ -102,7 +103,8 @@ class ArtistViewModel @Inject constructor(
     fun playAll(shuffle: Boolean) {
         viewModelScope.launch {
             val tracks = library.tracksForArtist(artistId).first()
-            if (tracks.isNotEmpty()) playback.playTracks(tracks, 0, shuffle, state.value.artist?.name)
+            val artist = state.value.artist
+            if (tracks.isNotEmpty()) playback.playTracks(tracks, 0, shuffle, artist?.name, artist?.let(PlayContext::artist))
         }
     }
 

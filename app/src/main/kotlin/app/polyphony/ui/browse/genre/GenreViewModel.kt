@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import app.polyphony.core.domain.model.Album
+import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.repository.LibraryRepository
@@ -54,7 +55,7 @@ class GenreViewModel @Inject constructor(
 
     fun playTrack(index: Int) {
         val list = tracks.value ?: return
-        playback.playTracks(list, index, queueTitle = genre)
+        playback.playTracks(list, index, queueTitle = genre, context = genreContext(list))
     }
 
     fun shuffle() {
@@ -63,5 +64,11 @@ class GenreViewModel @Inject constructor(
             val picks = if (remote.isNotEmpty()) remote else (tracks.value ?: library.tracksByGenre(genre).first()).shuffled().take(300)
             if (picks.isNotEmpty()) playback.playTracks(picks, 0, shuffle = false, queueTitle = genre)
         }
+    }
+
+    private fun genreContext(tracks: List<Track>): PlayContext? {
+        val first = tracks.firstOrNull() ?: return null
+        val artwork = albums.value?.firstOrNull { it.artworkUrl != null }?.artworkUrl ?: first.artworkUrl
+        return PlayContext.genre(genre, first.serverId, artwork)
     }
 }

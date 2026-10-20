@@ -48,7 +48,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.R
 import app.polyphony.core.domain.model.Album
-import app.polyphony.core.domain.model.Track
+import app.polyphony.core.domain.model.PlayContext
+import app.polyphony.core.domain.model.RecentContext
 import app.polyphony.core.ui.components.AlbumCard
 import app.polyphony.core.ui.components.EmptyState
 import app.polyphony.core.ui.components.GenreChip
@@ -58,7 +59,6 @@ import app.polyphony.core.ui.components.PlaceholderStyle
 import app.polyphony.core.ui.components.PlaylistCard
 import app.polyphony.core.ui.components.SectionHeader
 import app.polyphony.core.ui.components.SyncProgressBar
-import app.polyphony.core.ui.components.TrackCard
 import app.polyphony.core.ui.components.listContentPadding
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.core.ui.util.formatBytes
@@ -67,7 +67,6 @@ import app.polyphony.navigation.LocalNavigator
 import app.polyphony.ui.common.AlbumOptionsSheet
 import app.polyphony.ui.common.OfflineModeBanner
 import app.polyphony.ui.common.OfflineModeIconButton
-import app.polyphony.ui.common.TrackOptionsSheet
 import java.time.LocalTime
 
 @Composable
@@ -76,7 +75,7 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
     val navigator = LocalNavigator.current
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     var showServerSwitcher by remember { mutableStateOf(false) }
-    var trackForOptions by remember { mutableStateOf<Track?>(null) }
+    var contextForOptions by remember { mutableStateOf<RecentContext?>(null) }
     var albumForOptions by remember { mutableStateOf<Album?>(null) }
     val greeting = rememberGreeting()
     val titleRecentlyAdded = stringResource(R.string.browse_home_recently_added)
@@ -141,11 +140,12 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                     if (state.continueListening.isNotEmpty()) {
                         item(key = "continue-header") { SectionHeader(title = stringResource(R.string.browse_home_continue_listening)) }
                         item(key = "continue") {
-                            HorizontalCarousel(items = state.continueListening, key = { "t-" + it.id }) { track ->
-                                TrackCard(
-                                    track = track,
-                                    onClick = { viewModel.playContinueListening(state.continueListening.indexOf(track)) },
-                                    onLongClick = { trackForOptions = track },
+                            HorizontalCarousel(items = state.continueListening, key = { "c-" + it.context.key }) { entry ->
+                                ContinueListeningCard(
+                                    entry = entry,
+                                    onClick = { viewModel.resume(entry) },
+                                    onLongClick = { contextForOptions = entry },
+                                    width = Dimens.carouselArtwork,
                                 )
                             }
                         }
@@ -271,7 +271,24 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
             }
         }
     }
-    trackForOptions?.let { TrackOptionsSheet(track = it, onDismiss = { trackForOptions = null }) }
+    contextForOptions?.let { entry ->
+        ContinueListeningSheet(
+            entry = entry,
+            onDismiss = { contextForOptions = null },
+            onPlayFromStart = { viewModel.playFromStart(entry) },
+            onOpen = {
+                val c = entry.context
+                when (c.kind) {
+                    PlayContext.Kind.ALBUM -> navigator.openAlbum(c.id)
+                    PlayContext.Kind.ARTIST -> navigator.openArtist(c.id)
+                    PlayContext.Kind.PLAYLIST -> navigator.openPlaylist(c.id)
+                    PlayContext.Kind.GENRE -> navigator.openGenre(c.id)
+                    PlayContext.Kind.FAVORITES -> navigator.openFavorites()
+                }
+            },
+            onRemove = { viewModel.removeFromHistory(entry) },
+        )
+    }
     albumForOptions?.let { AlbumOptionsSheet(album = it, onDismiss = { albumForOptions = null }) }
 }
 

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.ItemKind
+import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.repository.LibraryRepository
@@ -83,7 +84,7 @@ class AlbumViewModel @Inject constructor(
     fun play(startIndex: Int = 0, shuffle: Boolean = false) {
         val s = state.value
         if (s.tracks.isEmpty()) return
-        playback.playTracks(s.tracks, startIndex, shuffle, s.album?.name)
+        playback.playTracks(s.tracks, startIndex, shuffle, s.album?.name, s.album?.let(PlayContext::album))
     }
 
     fun playNext() = state.value.tracks.takeIf { it.isNotEmpty() }?.let(playback::playNext)

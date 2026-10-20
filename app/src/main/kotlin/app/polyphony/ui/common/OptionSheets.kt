@@ -50,6 +50,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.R
 import app.polyphony.core.domain.model.Album
+import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.ui.components.ArtworkImage
 import app.polyphony.core.ui.components.albumSubtitle
@@ -143,10 +144,10 @@ fun AlbumOptionsSheet(
         header = { SheetHeader(artworkUrl = album.artworkUrl, title = album.name, subtitle = albumSubtitle(album)) },
     ) {
         SheetItem(Icons.Rounded.PlayArrow, stringResource(R.string.browse_action_play)) {
-            vm.withAlbumTracks(album.id) { vm.play(it, title = album.name) }; onDismiss()
+            vm.withAlbumTracks(album.id) { vm.play(it, title = album.name, context = PlayContext.album(album)) }; onDismiss()
         }
         SheetItem(Icons.Rounded.Shuffle, stringResource(R.string.browse_action_shuffle)) {
-            vm.withAlbumTracks(album.id) { vm.play(it, shuffle = true, title = album.name) }; onDismiss()
+            vm.withAlbumTracks(album.id) { vm.play(it, shuffle = true, title = album.name, context = PlayContext.album(album)) }; onDismiss()
         }
         SheetItem(Icons.AutoMirrored.Rounded.PlaylistPlay, stringResource(R.string.browse_action_play_next)) {
             vm.withAlbumTracks(album.id) { vm.playNext(it) }; onDismiss()

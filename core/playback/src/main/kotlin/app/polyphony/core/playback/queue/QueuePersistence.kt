@@ -1,6 +1,7 @@
 package app.polyphony.core.playback.queue
 
 import android.content.Context
+import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.playback.util.PlaybackJson
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -21,6 +22,7 @@ data class PersistedQueue(
     val repeatMode: Int = 0,
     val queueTitle: String? = null,
     val savedAt: Long = 0L,
+    val context: PlayContext? = null,
 )
 
 /** Atomic JSON persistence of the queue for playback resumption after process death. */

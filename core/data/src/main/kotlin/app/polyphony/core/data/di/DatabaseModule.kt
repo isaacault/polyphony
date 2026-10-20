@@ -10,10 +10,12 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
+import app.polyphony.core.data.db.Migrations
 import app.polyphony.core.data.db.PolyphonyDatabase
 import app.polyphony.core.data.db.dao.AlbumDao
 import app.polyphony.core.data.db.dao.ArtistDao
 import app.polyphony.core.data.db.dao.GenreDao
+import app.polyphony.core.data.db.dao.PlayContextDao
 import app.polyphony.core.data.db.dao.PlayHistoryDao
 import app.polyphony.core.data.db.dao.PlaylistDao
 import app.polyphony.core.data.db.dao.RemoteDeviceDao
@@ -41,6 +43,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): PolyphonyDatabase =
         Room.databaseBuilder(context, PolyphonyDatabase::class.java, PolyphonyDatabase.NAME)
+            .addMigrations(*Migrations.ALL)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 
@@ -53,6 +56,7 @@ object DatabaseModule {
     @Provides fun provideTranscodeProfileDao(db: PolyphonyDatabase): TranscodeProfileDao = db.transcodeProfileDao()
     @Provides fun provideRemoteDeviceDao(db: PolyphonyDatabase): RemoteDeviceDao = db.remoteDeviceDao()
     @Provides fun providePlayHistoryDao(db: PolyphonyDatabase): PlayHistoryDao = db.playHistoryDao()
+    @Provides fun providePlayContextDao(db: PolyphonyDatabase): PlayContextDao = db.playContextDao()
 
     @Provides
     @Singleton

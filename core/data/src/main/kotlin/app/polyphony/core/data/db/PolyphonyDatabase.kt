@@ -6,6 +6,7 @@ import androidx.room.withTransaction
 import app.polyphony.core.data.db.dao.AlbumDao
 import app.polyphony.core.data.db.dao.ArtistDao
 import app.polyphony.core.data.db.dao.GenreDao
+import app.polyphony.core.data.db.dao.PlayContextDao
 import app.polyphony.core.data.db.dao.PlayHistoryDao
 import app.polyphony.core.data.db.dao.PlaylistDao
 import app.polyphony.core.data.db.dao.RemoteDeviceDao
@@ -17,6 +18,7 @@ import app.polyphony.core.data.db.entity.AlbumFtsEntity
 import app.polyphony.core.data.db.entity.ArtistEntity
 import app.polyphony.core.data.db.entity.ArtistFtsEntity
 import app.polyphony.core.data.db.entity.GenreEntity
+import app.polyphony.core.data.db.entity.PlayContextEntity
 import app.polyphony.core.data.db.entity.PlayHistoryEntity
 import app.polyphony.core.data.db.entity.PlaylistEntity
 import app.polyphony.core.data.db.entity.PlaylistTrackEntity
@@ -37,8 +39,9 @@ import app.polyphony.core.data.db.entity.TranscodeProfileEntity
         TranscodeProfileEntity::class,
         RemoteDeviceEntity::class,
         PlayHistoryEntity::class,
+        PlayContextEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class PolyphonyDatabase : RoomDatabase() {
@@ -51,6 +54,7 @@ abstract class PolyphonyDatabase : RoomDatabase() {
     abstract fun transcodeProfileDao(): TranscodeProfileDao
     abstract fun remoteDeviceDao(): RemoteDeviceDao
     abstract fun playHistoryDao(): PlayHistoryDao
+    abstract fun playContextDao(): PlayContextDao
 
     /** Remove every cached row belonging to [serverId] (used when a server is removed). */
     suspend fun clearServerData(serverId: String) = withTransaction {
@@ -61,6 +65,7 @@ abstract class PolyphonyDatabase : RoomDatabase() {
         artistDao().deleteByServer(serverId)
         genreDao().deleteByServer(serverId)
         playHistoryDao().deleteByServer(serverId)
+        playContextDao().deleteByServer(serverId)
     }
 
     companion object {

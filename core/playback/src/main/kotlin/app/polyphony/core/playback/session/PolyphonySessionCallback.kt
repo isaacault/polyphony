@@ -12,6 +12,7 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import app.polyphony.core.domain.model.Album
+import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.repository.LibraryRepository
@@ -33,6 +34,7 @@ interface SessionActions {
     fun refreshDecision()
     fun setSleepTimer(endsAtEpochMs: Long?, finishTrack: Boolean)
     fun setQueueTitle(title: String?)
+    fun setPlayContext(context: PlayContext?)
     fun audioSessionId(): Int
     suspend fun restoreQueue(): MediaSession.MediaItemsWithStartPosition?
     fun buttons(): List<CommandButton>
@@ -72,6 +74,7 @@ class PolyphonySessionCallback(
                 args.getBoolean(CustomCommands.ARG_FINISH_TRACK, false),
             )
             CustomCommands.SET_QUEUE_TITLE -> actions.setQueueTitle(args.getString(CustomCommands.ARG_TITLE))
+            CustomCommands.SET_PLAY_CONTEXT -> actions.setPlayContext(PlayContextCodec.decode(args.getString(CustomCommands.ARG_CONTEXT)))
             CustomCommands.GET_AUDIO_SESSION_ID -> {
                 val extras = Bundle().apply { putInt(CustomCommands.ARG_AUDIO_SESSION_ID, actions.audioSessionId()) }
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, extras))

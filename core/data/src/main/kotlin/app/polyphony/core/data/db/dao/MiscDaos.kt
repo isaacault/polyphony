@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Upsert
 import app.polyphony.core.data.db.entity.GenreEntity
+import app.polyphony.core.data.db.entity.PlayContextEntity
 import app.polyphony.core.data.db.entity.PlayHistoryEntity
 import app.polyphony.core.data.db.entity.RemoteDeviceEntity
 import app.polyphony.core.data.db.entity.TranscodeProfileEntity
@@ -72,6 +73,33 @@ interface PlayHistoryDao {
     @Query(
         "DELETE FROM play_history WHERE serverId = :serverId AND id NOT IN " +
             "(SELECT id FROM play_history WHERE serverId = :serverId ORDER BY playedAt DESC LIMIT :keep)",
+    )
+    suspend fun prune(serverId: String, keep: Int)
+}
+
+@Dao
+interface PlayContextDao {
+    @Query("SELECT * FROM play_contexts WHERE serverId = :serverId ORDER BY updatedAt DESC LIMIT :limit")
+    fun observeRecent(serverId: String, limit: Int): Flow<List<PlayContextEntity>>
+
+    @Query("SELECT * FROM play_contexts WHERE `key` = :key")
+    suspend fun get(key: String): PlayContextEntity?
+
+    @Upsert
+    suspend fun upsert(item: PlayContextEntity)
+
+    @Query("DELETE FROM play_contexts WHERE `key` = :key")
+    suspend fun delete(key: String)
+
+    @Query("DELETE FROM play_contexts")
+    suspend fun deleteAll()
+
+    @Query("DELETE FROM play_contexts WHERE serverId = :serverId")
+    suspend fun deleteByServer(serverId: String)
+
+    @Query(
+        "DELETE FROM play_contexts WHERE serverId = :serverId AND `key` NOT IN " +
+            "(SELECT `key` FROM play_contexts WHERE serverId = :serverId ORDER BY updatedAt DESC LIMIT :keep)",
     )
     suspend fun prune(serverId: String, keep: Int)
 }

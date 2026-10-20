@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
+import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
@@ -74,7 +75,7 @@ class PlaylistViewModel @Inject constructor(
     fun play(startIndex: Int = 0, shuffle: Boolean = false) {
         val s = state.value
         if (s.tracks.isEmpty()) return
-        playback.playTracks(s.tracks, startIndex, shuffle, s.playlist?.name)
+        playback.playTracks(s.tracks, startIndex, shuffle, s.playlist?.name, s.playlist?.let(PlayContext::playlist))
     }
 
     fun playNext() = state.value.tracks.takeIf { it.isNotEmpty() }?.let(playback::playNext)

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Artist
+import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.repository.LibraryRepository
@@ -46,11 +47,14 @@ class FavoritesViewModel @Inject constructor(
 
     fun playTrack(index: Int) {
         val list = tracks.value ?: return
-        playback.playTracks(list, index, queueTitle = "Favourites")
+        playback.playTracks(list, index, queueTitle = "Favourites", context = favoritesContext(list))
     }
 
     fun playAll(shuffle: Boolean) {
         val list = tracks.value ?: return
-        if (list.isNotEmpty()) playback.playTracks(list, 0, shuffle, "Favourites")
+        if (list.isNotEmpty()) playback.playTracks(list, 0, shuffle, "Favourites", favoritesContext(list))
     }
+
+    private fun favoritesContext(tracks: List<Track>): PlayContext? =
+        tracks.firstOrNull()?.let { PlayContext.favorites(it.serverId, artworkUrl = tracks.firstNotNullOfOrNull { t -> t.artworkUrl }) }
 }
