@@ -44,6 +44,7 @@ import app.polyphony.core.ui.components.listContentPadding
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.ui.browse.AlbumGrid
 import app.polyphony.ui.browse.AlbumList
+import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.AlbumOptionsSheet
 import app.polyphony.ui.common.TrackOptionsSheet
 import kotlinx.coroutines.launch
@@ -121,14 +122,16 @@ fun GenreScreen(viewModel: GenreViewModel = hiltViewModel()) {
                     list.isEmpty() -> EmptyState(title = stringResource(R.string.browse_empty_songs), icon = Icons.Rounded.Category)
                     else -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = listContentPadding(top = 4.dp, extraBottom = 96.dp)) {
                         items(list, key = { it.id }, contentType = { "track" }) { track ->
-                            TrackRow(
-                                track = track,
-                                onClick = { viewModel.playTrack(list.indexOf(track)) },
-                                isCurrent = track.id == playback.currentTrack?.id,
-                                isPlaying = playback.isPlaying,
-                                onLongClick = { trackForOptions = track },
-                                onMoreClick = { trackForOptions = track },
-                            )
+                            TrackSwipeRow(track = track) {
+                                TrackRow(
+                                    track = track,
+                                    onClick = { viewModel.playTrack(list.indexOf(track)) },
+                                    isCurrent = track.id == playback.currentTrack?.id,
+                                    isPlaying = playback.isPlaying,
+                                    onLongClick = { trackForOptions = track },
+                                    onMoreClick = { trackForOptions = track },
+                                )
+                            }
                         }
                     }
                 }

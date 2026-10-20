@@ -60,6 +60,7 @@ import app.polyphony.ui.browse.ArtistList
 import app.polyphony.ui.browse.ListControlsRow
 import app.polyphony.ui.browse.ScrollerHost
 import app.polyphony.ui.browse.gridCells
+import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.AlbumOptionsSheet
 import app.polyphony.ui.common.RenameDialog
 import app.polyphony.ui.common.TrackOptionsSheet
@@ -251,15 +252,17 @@ internal fun SongsTab(vm: LibraryViewModel) {
                         }
                         items(list, key = { it.id }, contentType = { "track" }) { track ->
                             val index = list.indexOf(track)
-                            TrackRow(
-                                track = track,
-                                onClick = { vm.playTrack(index) },
-                                isCurrent = track.id == currentId,
-                                isPlaying = playback.isPlaying,
-                                isDownloaded = track.id in downloadedIds,
-                                onLongClick = { trackForOptions = track },
-                                onMoreClick = { trackForOptions = track },
-                            )
+                            TrackSwipeRow(track = track) {
+                                TrackRow(
+                                    track = track,
+                                    onClick = { vm.playTrack(index) },
+                                    isCurrent = track.id == currentId,
+                                    isPlaying = playback.isPlaying,
+                                    isDownloaded = track.id in downloadedIds,
+                                    onLongClick = { trackForOptions = track },
+                                    onMoreClick = { trackForOptions = track },
+                                )
+                            }
                         }
                     }
                 }

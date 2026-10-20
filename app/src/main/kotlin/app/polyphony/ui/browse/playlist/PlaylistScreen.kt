@@ -53,6 +53,7 @@ import app.polyphony.core.ui.theme.ArtworkShapes
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.core.ui.util.formatDurationLong
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.CollectionDownloadButton
 import app.polyphony.ui.common.ConfirmDialog
 import app.polyphony.ui.common.rememberDownloadedIds
@@ -171,16 +172,18 @@ fun PlaylistScreen(viewModel: PlaylistViewModel = hiltViewModel()) {
                         DismissibleTrackRow(
                             onDismiss = { viewModel.removeAt(index) },
                         ) {
-                            TrackRow(
-                                track = track,
-                                onClick = { viewModel.play(startIndex = index) },
-                                isCurrent = track.id == state.currentTrackId,
-                                isPlaying = state.isPlaying,
-                                isDownloaded = track.id in downloadedIds,
-                                onLongClick = { trackForOptions = index to track },
-                                onMoreClick = { trackForOptions = index to track },
-                                modifier = Modifier.background(MaterialTheme.colorScheme.surface),
-                            )
+                            TrackSwipeRow(track = track) {
+                                TrackRow(
+                                    track = track,
+                                    onClick = { viewModel.play(startIndex = index) },
+                                    isCurrent = track.id == state.currentTrackId,
+                                    isPlaying = state.isPlaying,
+                                    isDownloaded = track.id in downloadedIds,
+                                    onLongClick = { trackForOptions = index to track },
+                                    onMoreClick = { trackForOptions = index to track },
+                                    modifier = Modifier.background(MaterialTheme.colorScheme.surface),
+                                )
+                            }
                         }
                     }
                     item(key = "footer") { Spacer(Modifier.height(Dimens.sectionSpacing)) }

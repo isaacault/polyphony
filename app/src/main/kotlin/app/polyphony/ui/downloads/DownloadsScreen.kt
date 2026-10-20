@@ -81,6 +81,7 @@ import app.polyphony.core.ui.theme.ArtworkShapes
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.core.ui.util.formatBytes
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.TrackActionsViewModel
 import app.polyphony.ui.common.TrackOptionsSheet
 import app.polyphony.ui.settings.components.ConfirmDialog
@@ -409,16 +410,18 @@ private fun DownloadedTab(state: DownloadsUiState, vm: DownloadsViewModel, onTra
                     )
                 }
                 items(group.tracks, key = { "t-" + group.key + "-" + it.id }, contentType = { "track" }) { track ->
-                    TrackRow(
-                        track = track,
-                        onClick = { actions.play(group.tracks, group.tracks.indexOf(track), title = group.albumName) },
-                        showArtwork = false,
-                        subtitle = track.displayArtist,
-                        isDownloaded = true,
-                        onLongClick = { onTrackOptions(track) },
-                        onMoreClick = { onTrackOptions(track) },
-                        modifier = Modifier.padding(start = 56.dp),
-                    )
+                    TrackSwipeRow(track = track) {
+                        TrackRow(
+                            track = track,
+                            onClick = { actions.play(group.tracks, group.tracks.indexOf(track), title = group.albumName) },
+                            showArtwork = false,
+                            subtitle = track.displayArtist,
+                            isDownloaded = true,
+                            onLongClick = { onTrackOptions(track) },
+                            onMoreClick = { onTrackOptions(track) },
+                            modifier = Modifier.padding(start = 56.dp),
+                        )
+                    }
                 }
                 item(key = "d-" + group.key) { HorizontalDivider(Modifier.padding(horizontal = Dimens.screenPadding, vertical = 4.dp)) }
             }

@@ -31,8 +31,14 @@ feel physical. Everything below is a rule unless marked "prefer".
 
 - Lists are `LazyColumn`/`LazyVerticalGrid` with stable `key`s and `contentType`s.
 - Track rows: 56 dp artwork (or track number when inside an album), title (1 line), subtitle
-  "artist · album" (1 line), trailing duration and an overflow menu. Explicit/lossless badges are
-  small tonal chips. The playing track shows an animated equaliser glyph instead of its number.
+  "artist · album" (1 line), trailing duration. Long-press opens the options sheet; there is no
+  overflow button. Explicit/lossless badges are small tonal chips. The playing track shows an
+  animated equaliser glyph instead of its number.
+- Song rows outside the queue are wrapped in `TrackSwipeRow`: each physical direction runs the
+  action from Appearance → Gestures (default left-to-right adds to the queue). The row follows
+  the finger with a rubber band, commits at ~30 % of the width or on a fling, then springs home;
+  a short snackbar with Undo confirms. A direction set to Nothing leaves the drag unconsumed so
+  pagers underneath still page.
 - Grids auto-fit `Dimens.minGridTile`; cards have no elevation, just shape + tonal container.
 - Library tabs: Artists / Albums / Songs / Playlists / Genres with a sticky sort/filter row
   (grid-list toggle, sort menu, "shuffle all"). Alphabet fast-scroller on the right for A–Z sorts.
@@ -65,7 +71,8 @@ feel physical. Everything below is a rule unless marked "prefer".
   Slide crossfade because they have no direction.
 - Inside screens prefer `animateContentSize`, `AnimatedVisibility` and `Crossfade` over abrupt
   changes; springs for anything touch-driven. Durations 120 to 300 ms.
-- Haptics (`LocalHapticFeedback`) on: like/unlike, sheet snap, reorder pickup/drop, long-press.
+- Haptics (`LocalHapticFeedback`) on: like/unlike, sheet snap, reorder pickup/drop, long-press,
+  swipe-action threshold.
 - Every navigation destination must paint an opaque background; a transparent root ghosts the
   previous screen through any transition.
 

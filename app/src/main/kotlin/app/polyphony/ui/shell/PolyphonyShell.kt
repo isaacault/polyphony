@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -41,6 +44,7 @@ import app.polyphony.navigation.PolyphonyNavHost
 import app.polyphony.core.domain.repository.NavTransitionStyle
 import app.polyphony.navigation.PolyphonyNavigator
 import app.polyphony.navigation.Route
+import app.polyphony.ui.common.TrackSwipeScope
 import app.polyphony.ui.player.PlayerViewModel
 
 /**
@@ -51,6 +55,12 @@ import app.polyphony.ui.player.PlayerViewModel
  * bar insets. Do not add both.
  */
 val LocalContentPadding = compositionLocalOf { PaddingValues(0.dp) }
+
+/**
+ * The shell's snackbar host, shown above the bottom bar and mini player. Screens without their own
+ * Scaffold snackbar can post short confirmations here.
+ */
+val LocalSnackbarHostState = compositionLocalOf { SnackbarHostState() }
 
 /**
  * The app frame: navigation host, bottom bar, mini player and the draggable Now Playing sheet.
@@ -76,6 +86,7 @@ fun PolyphonyShell(
     val showPlayer = playback.isActive && !onOnboarding
 
     val sheetState = rememberPlayerSheetState()
+    val snackbarHostState = remember { SnackbarHostState() }
     val density = LocalDensity.current
     val navBarInset = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
 
@@ -112,6 +123,7 @@ fun PolyphonyShell(
         LocalPlayerSheet provides sheetState,
         LocalContentPadding provides PaddingValues(bottom = chrome),
         LocalContentBottomPadding provides chrome,
+        LocalSnackbarHostState provides snackbarHostState,
         // Screens that are not built on Scaffold/Surface would otherwise inherit Compose's default
         // black content colour, which is unreadable in dark theme.
         LocalContentColor provides MaterialTheme.colorScheme.onBackground,
@@ -121,12 +133,14 @@ fun PolyphonyShell(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
         ) {
-            PolyphonyNavHost(
-                navigator = navigator,
-                startDestination = startDestination,
-                modifier = Modifier.fillMaxSize(),
-                style = navTransition,
-            )
+            TrackSwipeScope(snackbarHostState = snackbarHostState) {
+                PolyphonyNavHost(
+                    navigator = navigator,
+                    startDestination = startDestination,
+                    modifier = Modifier.fillMaxSize(),
+                    style = navTransition,
+                )
+            }
 
             AnimatedVisibility(
                 visible = showBottomBar,
@@ -138,6 +152,14 @@ fun PolyphonyShell(
             ) {
                 PolyphonyBottomBar(navigator = navigator, destination = destination)
             }
+
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = chrome + navBarInset)
+                    .graphicsLayer { alpha = 1f - sheetState.fraction },
+            )
 
             if (scrimVisible) {
                 Box(

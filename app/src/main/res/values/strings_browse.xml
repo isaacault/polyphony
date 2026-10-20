@@ -159,4 +159,14 @@
     <string name="browse_search_searching_server">Searching the server…</string>
     <string name="browse_search_server_failed">The server search failed. Check your connection.</string>
     <string name="browse_search_includes_server">Includes results from the server.</string>
+    <string name="browse_action_undo">Undo</string>
+    <string name="browse_snack_added_to_queue">Added to queue</string>
+    <string name="browse_snack_playing_next">Playing next</string>
+    <string name="browse_snack_added_favorite">Added to favourites</string>
+    <string name="browse_snack_removed_favorite">Removed from favourites</string>
+    <string name="browse_snack_download_started">Downloading</string>
+    <string name="browse_snack_download_removed">Download removed</string>
+    <string name="browse_swipe_favorite">Favourite</string>
+    <string name="browse_swipe_unfavorite">Unfavourite</string>
+    <string name="browse_swipe_info">Info</string>
 </resources>

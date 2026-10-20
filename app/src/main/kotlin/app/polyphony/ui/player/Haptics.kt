@@ -15,6 +15,7 @@ class Haptics internal constructor(
 ) {
     fun longPress() = perform(HapticFeedbackType.LongPress)
     fun gestureEnd() = perform(HapticFeedbackType.GestureEnd)
+    fun thresholdActivate() = perform(HapticFeedbackType.GestureThresholdActivate)
     fun confirm() = perform(HapticFeedbackType.Confirm)
     fun segmentTick() = perform(HapticFeedbackType.SegmentTick)
     fun toggle(on: Boolean) = perform(if (on) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)

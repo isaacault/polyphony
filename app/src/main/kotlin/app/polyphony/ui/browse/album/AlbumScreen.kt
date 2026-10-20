@@ -52,6 +52,7 @@ import app.polyphony.core.ui.components.TrackRow
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.core.ui.util.formatDurationLong
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.AddToPlaylistSheet
 import app.polyphony.ui.common.CollectionDownloadButton
 import app.polyphony.ui.common.rememberDownloadedIds
@@ -188,17 +189,19 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
                             }
                         }
                         items(tracks, key = { it.id }, contentType = { "track" }) { track ->
-                            TrackRow(
-                                track = track,
-                                onClick = { viewModel.play(startIndex = state.tracks.indexOf(track)) },
-                                isCurrent = track.id == state.currentTrackId,
-                                isPlaying = state.isPlaying,
-                                showArtwork = !state.showTrackNumbers,
-                                subtitle = if (track.artistName != null && track.artistName != album.artistName) track.artistName else null,
-                                isDownloaded = track.id in downloadedIds,
-                                onLongClick = { trackForOptions = track },
-                                onMoreClick = { trackForOptions = track },
-                            )
+                            TrackSwipeRow(track = track) {
+                                TrackRow(
+                                    track = track,
+                                    onClick = { viewModel.play(startIndex = state.tracks.indexOf(track)) },
+                                    isCurrent = track.id == state.currentTrackId,
+                                    isPlaying = state.isPlaying,
+                                    showArtwork = !state.showTrackNumbers,
+                                    subtitle = if (track.artistName != null && track.artistName != album.artistName) track.artistName else null,
+                                    isDownloaded = track.id in downloadedIds,
+                                    onLongClick = { trackForOptions = track },
+                                    onMoreClick = { trackForOptions = track },
+                                )
+                            }
                         }
                     }
                     item(key = "footer") { Spacer(Modifier.height(Dimens.sectionSpacing)) }
