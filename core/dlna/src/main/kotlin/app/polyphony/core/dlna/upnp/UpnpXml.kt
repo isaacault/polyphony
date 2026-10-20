@@ -12,7 +12,7 @@ import org.xml.sax.InputSource
 internal object UpnpXml {
 
     fun parse(xml: String): Document? {
-        val cleaned = xml.trimStart('﻿', ' ', '\n', '\r', '\t')
+        val cleaned = xml.trimStart('\uFEFF', ' ', '\n', '\r', '\t')
         if (cleaned.isEmpty()) return null
         return try {
             val factory = DocumentBuilderFactory.newInstance().apply {

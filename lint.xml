@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Applies to every module (lint walks up to the repository root). -->
+<lint>
+    <!-- Media3's player, session and datasource internals are all @UnstableApi. The project opts in
+         deliberately and pins the Media3 version, so flagging each call site adds nothing. -->
+    <issue id="UnsafeOptInUsageError" severity="ignore" />
+</lint>

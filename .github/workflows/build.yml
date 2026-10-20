@@ -32,6 +32,9 @@ jobs:
       - name: Unit tests
         run: ./gradlew test --console=plain
 
+      - name: Lint
+        run: ./gradlew lintDebug --console=plain
+
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug --console=plain
 
