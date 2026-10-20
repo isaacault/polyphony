@@ -12,6 +12,7 @@ import app.polyphony.core.playback.engine.ServerLookup
 import app.polyphony.core.playback.engine.TranscodeDecisionEngine
 import app.polyphony.core.playback.queue.MediaItemFactory
 import app.polyphony.core.playback.queue.QueueStore
+import app.polyphony.core.playback.transcode.CodecSupport
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -76,6 +77,9 @@ class StreamResolver @Inject constructor(
             (fallbacks.forcesPassthrough(trackId) || fallbacks.isBroken(serverId, codec))
         ) {
             decision = TranscodeDecision(TranscodeProfile.ORIGINAL, TranscodeDecision.Reason.FALLBACK)
+        }
+        CodecSupport.adjust(decision.profile, CodecSupport.supported(provider.server)).let { adjusted ->
+            if (adjusted !== decision.profile) decision = decision.copy(profile = adjusted)
         }
         val request = provider.streamRequest(track, decision.profile)
         record(trackId, decision)
