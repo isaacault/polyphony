@@ -58,6 +58,8 @@ import app.polyphony.core.playback.reporting.PlaybackReporter
 import app.polyphony.core.playback.session.CustomCommands
 import app.polyphony.core.playback.session.PlayContextCodec
 import app.polyphony.core.playback.session.PolyphonySessionCallback
+import app.polyphony.core.playback.transcode.AppliedQuality
+import app.polyphony.core.playback.transcode.QualityChangeRule
 import app.polyphony.core.playback.session.SessionActions
 import app.polyphony.core.playback.session.SessionExtras
 import app.polyphony.core.playback.stream.StreamCache
@@ -128,8 +130,8 @@ class PlaybackService : MediaLibraryService() {
     /** History writes go through one consumer so a flush of the old context never lands after the new one. */
     private val historyWrites = Channel<RecentContext>(Channel.UNLIMITED)
     private var historyJob: Job? = null
-    private var lastAppliedProfileId: String? = null
-    private var lastAppliedTargetKey: String? = null
+    /** What the current item was loaded with; see [QualityChangeRule]. */
+    private var lastApplied: AppliedQuality? = null
     private var retryTrackId: String? = null
     private var retryCount = 0
     private var retryJob: Job? = null
@@ -371,22 +373,32 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun onDecisionChanged(decision: TranscodeDecision) {
         publishExtras()
-        val targetKey = engine.currentTarget.key
-        val profileId = decision.profile.id
-        Log.i(TAG, "Transcode decision for $targetKey: ${decision.profile.name} [${decision.profile.summary}] reason=${decision.reason} cappedByLatency=${decision.cappedByLatency}")
-        if (lastAppliedProfileId == null || lastAppliedTargetKey != targetKey) {
-            lastAppliedProfileId = profileId
-            lastAppliedTargetKey = targetKey
-            return
-        }
-        if (profileId == lastAppliedProfileId) return
-        lastAppliedProfileId = profileId
+        val next = appliedNow(decision)
+        Log.i(TAG, "Transcode decision for ${next.targetKey}: ${decision.profile.name} [${decision.profile.summary}] reason=${decision.reason} cappedByLatency=${decision.cappedByLatency}")
+        val action = QualityChangeRule.decide(lastApplied, next, engine.policy.reloadCurrentTrackOnChange)
+        lastApplied = next
         if (player.mediaItemCount == 0 || player.playbackState == Player.STATE_IDLE) return
-        when {
-            engine.policy.reloadCurrentTrackOnChange -> reloadCurrentItem()
-            player.isRemotePlayback() -> refreshUpcomingItems()
-            // Local playback resolves URLs lazily, so the next track picks the new profile by itself.
+        when (action) {
+            QualityChangeRule.Action.RELOAD_NOW -> {
+                Log.i(TAG, "Quality changed for the current output; reloading the playing track at its position")
+                reloadCurrentItem()
+            }
+            // Local playback resolves URLs lazily, so the next track picks the new profile by itself;
+            // remote outputs were handed concrete URLs and need the upcoming ones refreshed.
+            QualityChangeRule.Action.NEXT_TRACK -> if (player.isRemotePlayback()) refreshUpcomingItems()
+            QualityChangeRule.Action.NONE -> Unit
         }
+    }
+
+    private fun appliedNow(decision: TranscodeDecision): AppliedQuality {
+        val network = networkMonitor.state.value
+        return AppliedQuality(
+            targetKey = engine.currentTarget.key,
+            profile = decision.profile,
+            networkKind = network.kind,
+            metered = network.isMetered,
+            cappedByLatency = decision.cappedByLatency,
+        )
     }
 
     /** After fast retries are exhausted: try again every 15 s for a few minutes (server or network outage). */
@@ -470,8 +482,7 @@ class PlaybackService : MediaLibraryService() {
             to.prepare()
             to.playWhenReady = playWhenReady
         }
-        lastAppliedProfileId = null
-        lastAppliedTargetKey = null
+        lastApplied = null // the new output re-resolves every item; its first decision is a baseline, not a change
         applyReplayGain()
         publishExtras()
         updateButtons()
@@ -540,8 +551,7 @@ class PlaybackService : MediaLibraryService() {
             recordContextProgress()
             sleepTimer.onTrackChanged()
             applyReplayGain()
-            lastAppliedProfileId = engine.decision.value.profile.id
-            lastAppliedTargetKey = engine.currentTarget.key
+            lastApplied = appliedNow(engine.decision.value)
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {

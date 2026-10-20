@@ -31,6 +31,13 @@ data class TranscodeProfile(
         get() = codec == AudioCodec.ORIGINAL && maxBitrateKbps == 0 && maxSampleRateHz == 0 && maxBitDepth == 0
 
     /**
+     * Identifies the stream this profile produces: changes whenever any parameter that reaches the
+     * server does, so an edited profile is never served from a URL cached under its old settings.
+     */
+    val fingerprint: String
+        get() = "$id:${codec.name}:$maxBitrateKbps:$maxSampleRateHz:$maxBitDepth"
+
+    /**
      * A comparable notion of "how much quality" the profile allows, used to pick the more
      * conservative of two profiles. Lossless and unlimited profiles rank highest.
      */

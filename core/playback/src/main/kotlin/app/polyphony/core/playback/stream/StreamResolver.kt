@@ -86,7 +86,7 @@ class StreamResolver @Inject constructor(
         return dataSpec.buildUpon()
             .setUri(Uri.parse(request.url))
             .setHttpRequestHeaders(dataSpec.httpRequestHeaders + request.headers)
-            .setKey("$trackId|${decision.profile.id}")
+            .setKey("$trackId|${decision.profile.fingerprint}")
             .build()
     }
 

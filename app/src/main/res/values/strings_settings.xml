@@ -168,8 +168,8 @@
     <string name="settings_streaming_use_network_rules">Use network rules</string>
     <string name="settings_streaming_metered_wifi">Treat metered Wi-Fi as mobile data</string>
     <string name="settings_streaming_metered_wifi_summary">Hotspots and capped connections use the mobile data profile</string>
-    <string name="settings_streaming_reload_current">Apply changes to the current track</string>
-    <string name="settings_streaming_reload_current_summary">Restart the playing track at the same position when the quality changes, instead of waiting for the next one</string>
+    <string name="settings_streaming_reload_current">Apply automatic quality changes to the current track</string>
+    <string name="settings_streaming_reload_current_summary">Settings you change by hand always apply to the playing track at once. Turn this on to also restart it at the same position when a network change or a latency cap changes the quality, instead of waiting for the next track.</string>
     <string name="settings_streaming_casting">Casting</string>
     <string name="settings_streaming_cast_default">Default profile when casting</string>
     <string name="settings_streaming_per_device">Per-device settings</string>
