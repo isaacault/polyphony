@@ -63,3 +63,34 @@ adb shell 'run-as app.polyphony.debug ls -laR files/downloads'   # downloaded fi
 
 Cast and DLNA cannot be exercised on the emulator; use a physical device on the same Wi-Fi as
 the receiver for those.
+
+## 4. Large-library bed (50k tracks)
+
+Performance work needs more than the hand-made albums above. `scripts/testbed/gen_large_library.py`
+writes a tagged MP3 library of any size in seconds (one ffmpeg render, tags written directly), and a
+second Navidrome instance serves it on another port so the small bed stays intact:
+
+```sh
+python3 scripts/testbed/gen_large_library.py "$T/music-large" 1000 5 10   # 1,000 artists × 5 albums × 10 tracks
+mkdir -p "$T/navidrome-large"
+ND_MUSICFOLDER="$T/music-large" ND_DATAFOLDER="$T/navidrome-large" ND_ADDRESS=127.0.0.1 ND_PORT=4534 \
+  ND_SCANSCHEDULE=0 ND_ENABLEINSIGHTSCOLLECTOR=false navidrome &
+curl -s -X POST http://127.0.0.1:4534/auth/createAdmin -H 'Content-Type: application/json' \
+  -d '{"username":"polyphony","password":"polyphony"}'
+```
+
+Navidrome scans the 50k files in about a minute. Add the server in the app as `http://10.0.2.2:4534`;
+a full sync takes about 20 s on the emulator. Reference numbers from this bed are kept on issue #9.
+
+Measuring: `uiautomator dump` costs ~0.4 s per call, so do not time screens with dump loops. Add
+temporary `Log.i` lines (or `SideEffect { Log.i(...) }` in a composable) and read logcat
+timestamps; `adb shell dumpsys gfxinfo <package> reset` before a scroll and `dumpsys gfxinfo
+<package>` after gives frame percentiles. The debug build installs as `app.polyphony.debug`; its
+Room database is `/data/data/app.polyphony.debug/databases/polyphony-library.db` (read it as root
+with `sqlite3`, and spell the name exactly, because `sqlite3` creates any path you mistype).
+
+## 5. Merging
+
+CI must be green on the PR's current head before it merges. `scripts/merge_when_green.sh <pr>`
+waits for every run on that commit and squash-merges only when all of them succeeded; it refuses to
+merge on "no checks reported", which `gh pr checks --watch` can print before a run registers.

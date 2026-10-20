@@ -12,6 +12,8 @@
 
 - Never commit features or fixes directly to `main`. Each change goes on a branch
   (`feat/...`, `fix/...`, `chore/...`) and lands through a pull request; CI must be green.
+  Merge with `scripts/merge_when_green.sh <pr>`, which waits for the checks on the current head
+  and merges only when all of them passed; never merge on "no checks reported".
 - Do **not** tag a release per change. Releases are batched: several merged PRs, then one
   `scripts/bump_version.sh <version>` + tag push, when the user asks for a release or a
   milestone chunk is complete.
