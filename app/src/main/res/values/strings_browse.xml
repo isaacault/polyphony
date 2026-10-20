@@ -17,7 +17,8 @@
     <string name="browse_greeting_evening">Good evening</string>
 
     <!-- home -->
-    <string name="browse_home_continue_listening">Continue listening</string>
+    <string name="browse_continue_resume">Resume</string>
+    <string name="browse_continue_resume_track">Resume at %1$s</string>
     <string name="browse_continue_play_from_start">Play from start</string>
     <string name="browse_continue_remove">Remove from history</string>
     <string name="browse_kind_album">Album</string>

@@ -75,6 +75,16 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     var showServerSwitcher by remember { mutableStateOf(false) }
     var contextForOptions by remember { mutableStateOf<RecentContext?>(null) }
+    val openContext: (RecentContext) -> Unit = { entry ->
+        val c = entry.context
+        when (c.kind) {
+            PlayContext.Kind.ALBUM -> navigator.openAlbum(c.id)
+            PlayContext.Kind.ARTIST -> navigator.openArtist(c.id)
+            PlayContext.Kind.PLAYLIST -> navigator.openPlaylist(c.id)
+            PlayContext.Kind.GENRE -> navigator.openGenre(c.id)
+            PlayContext.Kind.FAVORITES -> navigator.openFavorites()
+        }
+    }
     var albumForOptions by remember { mutableStateOf<Album?>(null) }
     val greeting = rememberGreeting()
     val titleRecentlyAdded = stringResource(R.string.browse_home_recently_added)
@@ -137,16 +147,14 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                     item(key = "server") { ServerChipRow(state, onClick = { showServerSwitcher = true }) }
 
                     if (state.continueListening.isNotEmpty()) {
-                        item(key = "continue-header") { SectionHeader(title = stringResource(R.string.browse_home_continue_listening)) }
+                        // Quick picks sit right under the greeting, like Spotify: no header, wide tiles.
                         item(key = "continue") {
-                            HorizontalCarousel(items = state.continueListening, key = { "c-" + it.context.key }) { entry ->
-                                ContinueListeningCard(
-                                    entry = entry,
-                                    onClick = { viewModel.resume(entry) },
-                                    onLongClick = { contextForOptions = entry },
-                                    width = Dimens.carouselArtwork,
-                                )
-                            }
+                            ContinueListeningGrid(
+                                entries = state.continueListening,
+                                onClick = openContext,
+                                onLongClick = { contextForOptions = it },
+                                modifier = Modifier.padding(top = Dimens.tightSpacing, bottom = Dimens.sectionSpacing),
+                            )
                         }
                     }
 
@@ -260,17 +268,8 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
         ContinueListeningSheet(
             entry = entry,
             onDismiss = { contextForOptions = null },
+            onResume = { viewModel.resume(entry) },
             onPlayFromStart = { viewModel.playFromStart(entry) },
-            onOpen = {
-                val c = entry.context
-                when (c.kind) {
-                    PlayContext.Kind.ALBUM -> navigator.openAlbum(c.id)
-                    PlayContext.Kind.ARTIST -> navigator.openArtist(c.id)
-                    PlayContext.Kind.PLAYLIST -> navigator.openPlaylist(c.id)
-                    PlayContext.Kind.GENRE -> navigator.openGenre(c.id)
-                    PlayContext.Kind.FAVORITES -> navigator.openFavorites()
-                }
-            },
             onRemove = { viewModel.removeFromHistory(entry) },
         )
     }
