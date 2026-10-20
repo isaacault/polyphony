@@ -64,6 +64,7 @@ import app.polyphony.core.playback.transcode.CodecSupport
 import app.polyphony.core.playback.transcode.TranscodeCapabilityProbe
 import app.polyphony.ui.settings.components.ActionPreference
 import app.polyphony.ui.settings.components.relativeTime
+import app.polyphony.core.playback.remote.ReceiverAddressCheck
 import app.polyphony.ui.settings.components.SwitchPreference
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,6 +80,11 @@ import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
 
 data class HeaderEntry(val key: String = "", val value: String = "")
+
+sealed interface ReceiverCheckState {
+    data object Running : ReceiverCheckState
+    data class Done(val outcome: ReceiverAddressCheck.Outcome) : ReceiverCheckState
+}
 
 sealed interface ConnectionTest {
     data object Running : ConnectionTest
@@ -102,6 +108,7 @@ data class ServerEditUiState(
     val transcodeProbedAt: Long? = null,
     val probing: Boolean = false,
     val probeError: String? = null,
+    val receiverCheck: ReceiverCheckState? = null,
     val headers: List<HeaderEntry> = emptyList(),
     val test: ConnectionTest? = null,
     val saving: Boolean = false,
@@ -117,6 +124,7 @@ class ServerEditViewModel @Inject constructor(
     private val serverRepository: ServerRepository,
     private val providerRegistry: ProviderRegistry,
     private val transcodeProbe: TranscodeCapabilityProbe,
+    private val receiverAddressCheck: ReceiverAddressCheck,
 ) : ViewModel() {
 
     private val route = savedStateHandle.toRoute<ServerEditRoute>()
@@ -179,7 +187,20 @@ class ServerEditViewModel @Inject constructor(
         }
     }
 
-    fun onRemoteBaseUrl(value: String) = _state.update { it.copy(remoteBaseUrl = value) }
+    fun onRemoteBaseUrl(value: String) = _state.update { it.copy(remoteBaseUrl = value, receiverCheck = null) }
+
+    fun testReceiverAddress() {
+        val server = original ?: return
+        val address = _state.value.remoteBaseUrl.trim()
+        if (address.isEmpty() || _state.value.receiverCheck is ReceiverCheckState.Running) return
+        viewModelScope.launch {
+            _state.update { it.copy(receiverCheck = ReceiverCheckState.Running) }
+            val outcome = runCatching { receiverAddressCheck.check(server, address) }
+                .getOrElse { e -> ReceiverAddressCheck.Outcome.Unreachable(address, e.message ?: e.javaClass.simpleName) }
+            _state.update { it.copy(receiverCheck = ReceiverCheckState.Done(outcome)) }
+        }
+    }
+
     fun onRemoteAutoLan(value: Boolean) = _state.update { it.copy(remoteAutoLan = value) }
 
     fun addHeader() = _state.update { it.copy(headers = it.headers + HeaderEntry()) }
@@ -406,6 +427,23 @@ fun ServerEditScreen(viewModel: ServerEditViewModel = hiltViewModel()) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                val check = state.receiverCheck
+                ActionPreference(
+                    title = stringResource(R.string.settings_server_remote_test),
+                    summary = when (check) {
+                        null -> stringResource(R.string.settings_server_remote_test_summary)
+                        ReceiverCheckState.Running -> stringResource(R.string.settings_server_remote_test_running)
+                        is ReceiverCheckState.Done -> when (val o = check.outcome) {
+                            is ReceiverAddressCheck.Outcome.Reachable ->
+                                if (o.viaStream) stringResource(R.string.settings_server_remote_test_ok_stream, o.httpStatus, o.millis)
+                                else stringResource(R.string.settings_server_remote_test_ok_host, o.httpStatus)
+                            is ReceiverAddressCheck.Outcome.Unreachable -> stringResource(R.string.settings_server_remote_test_fail, o.reason)
+                        }
+                    },
+                    enabled = state.remoteBaseUrl.isNotBlank() && check !is ReceiverCheckState.Running && state.loaded && !state.notFound,
+                    showChevron = false,
+                    onClick = viewModel::testReceiverAddress,
                 )
                 SwitchPreference(
                     title = stringResource(R.string.settings_server_remote_auto_lan),
