@@ -36,7 +36,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -132,7 +136,23 @@ fun CastRouteSheet(
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
         val hint by vm.networkHint.collectAsStateWithLifecycle()
+        val localNetworkDenied by vm.localNetworkDenied.collectAsStateWithLifecycle()
+        val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.refreshLocalNetworkAccess() }
+        // Coming back from the permission dialog or app settings: pick up the new state.
+        LifecycleResumeEffect(Unit) {
+            vm.refreshLocalNetworkAccess()
+            onPauseOrDispose { }
+        }
         LazyColumn(Modifier.navigationBarsPadding().padding(bottom = 16.dp)) {
+            if (localNetworkDenied) {
+                item(key = "local-network-hint") {
+                    NetworkHintRow(
+                        text = stringResource(R.string.output_hint_local_network),
+                        actionLabel = stringResource(R.string.output_hint_local_network_action),
+                        onAction = { vm.allowLocalNetwork(context as? android.app.Activity, permissionLauncher::launch) },
+                    )
+                }
+            }
             hint?.let { h ->
                 item(key = "network-hint") {
                     NetworkHintRow(
@@ -352,13 +372,18 @@ private fun RemoteVolumeRow(initial: Float, onChange: (Float) -> Unit) {
 }
 
 @Composable
-private fun NetworkHintRow(text: String) {
+private fun NetworkHintRow(text: String, actionLabel: String? = null, onAction: (() -> Unit)? = null) {
     androidx.compose.material3.Surface(
         color = MaterialTheme.colorScheme.tertiaryContainer,
         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
         shape = MaterialTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(12.dp))
+        Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = if (onAction != null) 4.dp else 12.dp)) {
+            Text(text, style = MaterialTheme.typography.bodyMedium)
+            if (actionLabel != null && onAction != null) {
+                TextButton(onClick = onAction, modifier = Modifier.align(Alignment.End)) { Text(actionLabel) }
+            }
+        }
     }
 }

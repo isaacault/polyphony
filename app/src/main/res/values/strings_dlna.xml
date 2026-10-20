@@ -9,5 +9,7 @@
     <string name="dlna_hint">Renderers appear automatically; make sure the phone is on the same network.</string>
     <string name="cast_section_title">Google Cast</string>
     <string name="output_hint_not_on_wifi">Connect to the same Wi-Fi as your speakers and TVs to find them.</string>
+    <string name="output_hint_local_network">Polyphony isn\u2019t allowed to use the local network, so speakers and TVs can\u2019t be found. For Google Cast, Google Play services needs local network and Nearby devices access too.</string>
+    <string name="output_hint_local_network_action">Allow</string>
     <string name="output_hint_vpn">A VPN is active. Cast and DLNA devices are only reachable on the local Wi-Fi; in Tailscale turn on “Allow LAN access”, or disconnect the VPN while casting.</string>
 </resources>

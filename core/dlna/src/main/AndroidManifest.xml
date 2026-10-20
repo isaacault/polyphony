@@ -4,4 +4,7 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Android 17 gates all LAN traffic (SSDP, mDNS, unicast to private addresses) behind this
+         runtime permission; some OSes enforce it earlier. Requested from the output picker. -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 </manifest>

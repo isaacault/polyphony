@@ -1,6 +1,13 @@
 package app.polyphony.ui.player
 
+import android.app.Activity
+import android.content.Context
+import androidx.core.app.ActivityCompat
 import androidx.lifecycle.ViewModel
+import app.polyphony.platform.LocalNetworkAccess
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import androidx.lifecycle.viewModelScope
 import app.polyphony.core.domain.playback.CastController
 import app.polyphony.core.domain.transcode.NetworkKind
@@ -21,6 +28,7 @@ import javax.inject.Inject
 /** Backs the output picker: Cast session state plus UPnP/DLNA discovery and session control. */
 @HiltViewModel
 class RemoteOutputViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val castController: CastController,
     private val dlnaController: DlnaController,
     networkMonitor: NetworkMonitor,
@@ -38,6 +46,34 @@ class RemoteOutputViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     enum class NetworkHint { NOT_ON_WIFI, VPN_ACTIVE }
+
+    private val _localNetworkDenied = MutableStateFlow(!LocalNetworkAccess.isGranted(context))
+
+    /** True on an OS that gates LAN access (Android 17, GrapheneOS) while the user has not allowed it: discovery cannot work. */
+    val localNetworkDenied: StateFlow<Boolean> = _localNetworkDenied.asStateFlow()
+    private var askedForLocalNetwork = false
+
+    /** Re-check after the permission dialog or a trip to app settings; restarts discovery once access appears. */
+    fun refreshLocalNetworkAccess() {
+        val denied = !LocalNetworkAccess.isGranted(context)
+        if (_localNetworkDenied.value && !denied) {
+            stopDiscovery()
+            startDiscovery()
+        }
+        _localNetworkDenied.value = denied
+    }
+
+    /** Ask for local network access; after a permanent denial, send the user to app settings instead. */
+    fun allowLocalNetwork(activity: Activity?, launch: (String) -> Unit) {
+        val permanentlyDenied = askedForLocalNetwork && activity != null &&
+            !ActivityCompat.shouldShowRequestPermissionRationale(activity, LocalNetworkAccess.PERMISSION)
+        if (permanentlyDenied) {
+            LocalNetworkAccess.openAppSettings(context)
+        } else {
+            askedForLocalNetwork = true
+            launch(LocalNetworkAccess.PERMISSION)
+        }
+    }
 
     val cast: StateFlow<CastState> = castController.state
     val dlna: StateFlow<CastState> = dlnaController.state
