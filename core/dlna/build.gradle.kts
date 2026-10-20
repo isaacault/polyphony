@@ -8,7 +8,10 @@ plugins {
 android {
     namespace = "app.polyphony.core.dlna"
     compileSdk = 37
-    defaultConfig { minSdk = 26 }
+    defaultConfig {
+        minSdk = 26
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -25,6 +28,14 @@ kotlin {
             "kotlinx.coroutines.ExperimentalCoroutinesApi",
             "kotlinx.coroutines.FlowPreview",
         )
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        // Real device descriptions used by the JVM parser tests double as fixtures for the
+        // on-device test, which runs them through Android's own XML parser.
+        variant.androidTest?.sources?.assets?.addStaticSourceDirectory("$projectDir/src/test/resources")
     }
 }
 
@@ -45,4 +56,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }

@@ -20,8 +20,12 @@ internal object UpnpXml {
         return try {
             val factory = DocumentBuilderFactory.newInstance().apply {
                 isNamespaceAware = true
-                isExpandEntityReferences = false
-                isXIncludeAware = false
+                // Android's built-in factory throws UnsupportedOperationException for settings its
+                // parser does not implement (XInclude in particular); the JVM factory accepts them.
+                // Every hardening option is therefore best-effort: none of them is required to
+                // parse a device description, and a thrown setter must not take the parse down.
+                runCatching { isExpandEntityReferences = false }
+                runCatching { isXIncludeAware = false }
                 runCatching { setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true) }
                 runCatching { setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
                 runCatching { setFeature("http://xml.org/sax/features/external-general-entities", false) }

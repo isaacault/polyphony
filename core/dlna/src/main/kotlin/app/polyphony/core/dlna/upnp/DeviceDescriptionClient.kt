@@ -28,7 +28,8 @@ class DeviceDescriptionClient(baseClient: OkHttpClient) {
             val body = it.body.string()
             return DeviceDescriptionParser.parseOrExplain(body, location).getOrElse { reason ->
                 val preview = body.take(160).replace(Regex("\\s+"), " ")
-                throw DlnaException(0, "${reason.message}; ${body.length} bytes starting \"$preview\"", reason)
+                val why = reason.message.orEmpty().removePrefix("UPnP error 0: ")
+                throw DlnaException(0, "$why; ${body.length} bytes starting \"$preview\"", reason)
             }
         }
     }
