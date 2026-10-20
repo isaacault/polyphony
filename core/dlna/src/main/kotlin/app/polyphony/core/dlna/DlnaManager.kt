@@ -66,6 +66,7 @@ class DlnaManager @Inject constructor(
     private val known = MutableStateFlow<Map<String, Known>>(emptyMap())
     private val inFlight: MutableSet<String> = Collections.synchronizedSet(HashSet())
     private val rejected: MutableList<String> = Collections.synchronizedList(ArrayList())
+    private val failed = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     /** Discovery state for the diagnostics export. */
     fun diagnostics(): DlnaDiagnostics = DlnaDiagnostics(
@@ -106,11 +107,27 @@ class DlnaManager @Inject constructor(
     override fun startDiscovery() {
         discoveryRefs++
         if (discoveryRefs == 1) {
+            // Subscribe before searching: a renderer can answer within milliseconds of the first
+            // M-SEARCH and is only announced once per session. The entries StateFlow replays what
+            // is already known, so nothing depends on catching the one Alive event.
+            eventJob = scope.launch {
+                launch { discovery.events.collect { handle(it) } }
+                discovery.entries.collect { entries -> entries.values.forEach { ensureDescribed(it.udn, it.location) } }
+            }
             discovery.start()
-            eventJob = scope.launch { discovery.events.collect { handle(it) } }
         } else {
             discovery.searchNow()
+            discovery.entries.value.values.forEach { ensureDescribed(it.udn, it.location) }
         }
+    }
+
+    /** Fetch the description of an announced renderer we do not know (or know at another address); failures retry after a pause. */
+    private fun ensureDescribed(udn: String, location: String) {
+        val existing = known.value[udn]
+        if (existing != null && existing.device.location == location) return
+        val failedAt = failed[udn]
+        if (failedAt != null && System.currentTimeMillis() - failedAt < RETRY_FAILED_AFTER_MS) return
+        scope.launch { fetch(udn, location) }
     }
 
     @Synchronized
@@ -121,6 +138,7 @@ class DlnaManager @Inject constructor(
             eventJob?.cancel()
             eventJob = null
             discovery.stop()
+            failed.clear()
             val connected = activeRenderer()?.udn
             known.update { map -> map.filterKeys { it == connected } }
         }
@@ -153,8 +171,9 @@ class DlnaManager @Inject constructor(
 
     private suspend fun fetch(udn: String, location: String) {
         if (!inFlight.add(udn)) return
+        Log.i(TAG, "Fetching description for $udn at $location")
         try {
-            val device = descriptions.fetch(location) ?: return
+            val device = descriptions.fetch(location)
             val mimeTypes = device.connectionManager?.let { cm ->
                 runCatching { ConnectionManagerService(soap, cm).getProtocolInfo().sink }.getOrNull()
             }.orEmpty()
@@ -168,9 +187,11 @@ class DlnaManager @Inject constructor(
                 lastSeenAt = System.currentTimeMillis(),
             )
             known.update { it + (udn to Known(device, renderer)) }
+            failed.remove(udn)
             Log.i(TAG, "Renderer: ${device.friendlyName} (${device.manufacturer} ${device.modelName}) at $location, ${mimeTypes.size} sink formats")
             runCatching { transcodeProfileRepository.rememberRemoteDevice(renderer.target, connected = false) }
         } catch (t: Throwable) {
+            failed[udn] = System.currentTimeMillis()
             Log.w(TAG, "Ignoring renderer at $location: ${t.message}")
             synchronized(rejected) { if (rejected.size >= 8) rejected.removeAt(0); rejected += "$location: ${t.message}" }
         } finally {
@@ -251,6 +272,7 @@ class DlnaManager @Inject constructor(
 
     private companion object {
         const val TAG = "DlnaManager"
+        const val RETRY_FAILED_AFTER_MS = 30_000L
     }
 }
 

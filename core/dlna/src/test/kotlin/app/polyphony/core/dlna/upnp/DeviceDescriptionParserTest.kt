@@ -91,3 +91,44 @@ class DeviceDescriptionParserTest {
         assertNotNull(DeviceDescriptionParser.parse("﻿$nested", "http://192.168.1.20/d.xml"))
     }
 }
+
+class DeviceDescriptionExplainTest {
+    @Test
+    fun `explains a document without AVTransport by listing what it found`() {
+        val xml = """
+            <root xmlns="urn:schemas-upnp-org:device-1-0"><device>
+              <deviceType>urn:schemas-upnp-org:device:InternetGatewayDevice:1</deviceType>
+              <friendlyName>Router</friendlyName><UDN>uuid:r</UDN>
+              <serviceList><service><serviceType>urn:schemas-upnp-org:service:Layer3Forwarding:1</serviceType><controlURL>/l3f</controlURL></service></serviceList>
+            </device></root>
+        """.trimIndent()
+        val failure = DeviceDescriptionParser.parseOrExplain(xml, "http://10.0.0.1/desc.xml").exceptionOrNull()
+        org.junit.Assert.assertNotNull(failure)
+        val message = failure!!.message.orEmpty()
+        org.junit.Assert.assertTrue(message, message.contains("no device with an AVTransport service"))
+        org.junit.Assert.assertTrue(message, message.contains("Router [urn:schemas-upnp-org:device:InternetGatewayDevice:1] services=[Layer3Forwarding:1]"))
+    }
+
+    @Test
+    fun `explains unparseable xml`() {
+        val failure = DeviceDescriptionParser.parseOrExplain("<root><device>", "http://10.0.0.1/desc.xml").exceptionOrNull()
+        org.junit.Assert.assertTrue(failure?.message.orEmpty(), failure?.message.orEmpty().contains("XML did not parse:"))
+    }
+}
+
+class YamahaRxV483DescriptionTest {
+    private val xml = javaClass.classLoader!!.getResourceAsStream("yamaha-rx-v483-desc.xml")!!.bufferedReader().readText()
+
+    @Test
+    fun `parses the real RX-V483 description`() {
+        val result = DeviceDescriptionParser.parseOrExplain(xml, "http://192.168.0.100:49154/MediaRenderer/desc.xml")
+        val device = result.getOrElse { throw AssertionError(it.message, it) }
+        assertEquals("Lounge", device.friendlyName)
+        assertEquals("uuid:9ab0c000-f668-11de-9976-00a0deffd733", device.udn)
+        assertEquals("RX-V483", device.modelName)
+        assertEquals("http://192.168.0.100:49154/AVTransport/ctrl", device.avTransport?.controlUrl)
+        assertEquals("http://192.168.0.100:49154/RenderingControl/ctrl", device.renderingControl?.controlUrl)
+        assertEquals("http://192.168.0.100:49154/ConnectionManager/ctrl", device.connectionManager?.controlUrl)
+        assertEquals("http://192.168.0.100:49154/Icons/120x120.png", device.iconUrl)
+    }
+}

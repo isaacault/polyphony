@@ -14,7 +14,8 @@ class DeviceDescriptionClient(baseClient: OkHttpClient) {
         .followRedirects(true)
         .build()
 
-    suspend fun fetch(location: String): UpnpDevice? {
+    /** @throws DlnaException with a reason that names what the document contained when it cannot be used. */
+    suspend fun fetch(location: String): UpnpDevice {
         val request = Request.Builder()
             .url(location)
             .header("User-Agent", "Android UPnP/1.1 Polyphony/0.1")
@@ -25,7 +26,10 @@ class DeviceDescriptionClient(baseClient: OkHttpClient) {
         response.use {
             if (!it.isSuccessful) throw DlnaException(it.code, "Device description HTTP ${it.code}")
             val body = it.body.string()
-            return DeviceDescriptionParser.parse(body, location)
+            return DeviceDescriptionParser.parseOrExplain(body, location).getOrElse { reason ->
+                val preview = body.take(160).replace(Regex("\\s+"), " ")
+                throw DlnaException(0, "${reason.message}; ${body.length} bytes starting \"$preview\"", reason)
+            }
         }
     }
 }
