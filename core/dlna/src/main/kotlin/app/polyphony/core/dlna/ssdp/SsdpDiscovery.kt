@@ -1,5 +1,8 @@
 package app.polyphony.core.dlna.ssdp
 
+import java.net.Inet4Address
+import java.util.Collections
+import java.util.concurrent.atomic.AtomicInteger
 import android.content.Context
 import android.net.NetworkCapabilities
 import android.net.Network
@@ -72,11 +75,41 @@ class SsdpDiscovery(
     private fun pinToWifi(socket: MulticastSocket, what: String) {
         val network = wifiNetwork()
         val nif = wifiInterface(network)
+        ifaceName = nif?.name
+        wifiAddress = network?.let { n -> connectivity?.getLinkProperties(n)?.linkAddresses?.firstOrNull { it.address is Inet4Address }?.toString() }
         runCatching { network?.bindSocket(socket) }.onFailure { Log.w(TAG, "$what: bindSocket failed: ${it.message}") }
         runCatching { nif?.let { socket.networkInterface = it } }.onFailure { Log.w(TAG, "$what: setNetworkInterface failed: ${it.message}") }
         Log.i(TAG, "$what on ${nif?.name ?: "default route"}${if (network == null) " (no Wi-Fi network found)" else ""}")
     }
     private var multicastLock: WifiManager.MulticastLock? = null
+
+    // ---- diagnostics: enough to tell "no packets at all" from "packets we filtered out" ----
+    private val searchesSent = AtomicInteger()
+    private val datagramsReceived = AtomicInteger()
+    private val responsesSeen = AtomicInteger()
+    private val notifiesSeen = AtomicInteger()
+    private val otherTypes: MutableSet<String> = Collections.synchronizedSet(LinkedHashSet())
+    private val renderersLogged: MutableSet<String> = Collections.synchronizedSet(HashSet())
+    @Volatile private var ifaceName: String? = null
+    @Volatile private var wifiAddress: String? = null
+    @Volatile private var lastDatagramAt: Long? = null
+    @Volatile private var lastError: String? = null
+
+    /** Snapshot for the diagnostics export. */
+    fun stats(): SsdpStats = SsdpStats(
+        running = running,
+        interfaceName = ifaceName,
+        wifiAddress = wifiAddress,
+        multicastLockHeld = multicastLock?.isHeld == true,
+        searchesSent = searchesSent.get(),
+        datagramsReceived = datagramsReceived.get(),
+        responses = responsesSeen.get(),
+        notifies = notifiesSeen.get(),
+        renderers = _entries.value.size,
+        otherDeviceTypes = synchronized(otherTypes) { otherTypes.toList() },
+        lastDatagramAgoMs = lastDatagramAt?.let { clock() - it },
+        lastError = lastError,
+    )
 
     private val _entries = MutableStateFlow<Map<String, SsdpEntry>>(emptyMap())
     val entries: StateFlow<Map<String, SsdpEntry>> = _entries.asStateFlow()
@@ -120,7 +153,8 @@ class SsdpDiscovery(
     /** Fire an extra M-SEARCH now (e.g. when the user opens the device picker). */
     fun searchNow() {
         if (!running) return
-        scope.launch(io) { sendSearches(searchSocket ?: return@launch) }
+        // The user is looking at the picker: ask broadly, some renderers only answer ssdp:all.
+        scope.launch(io) { sendSearches(searchSocket ?: return@launch, includeAll = true) }
     }
 
     private fun acquireLock() {
@@ -149,6 +183,7 @@ class SsdpDiscovery(
                 }
             } catch (t: Throwable) {
                 Log.w(TAG, "Search socket failed: ${t.message}")
+                lastError = "search socket: ${t.message}"
                 delay(searchIntervalMs)
                 continue
             }
@@ -165,13 +200,13 @@ class SsdpDiscovery(
                     val packet = DatagramPacket(buffer, buffer.size)
                     try {
                         socket.receive(packet)
-                        handleDatagram(String(packet.data, 0, packet.length, Charsets.ISO_8859_1))
+                        onDatagram(packet)
                     } catch (_: SocketTimeoutException) {
                         // loop around to re-search
                     }
                 }
             } catch (t: Throwable) {
-                if (running) Log.w(TAG, "Search loop error: ${t.message}")
+                if (running) { Log.w(TAG, "Search loop error: ${t.message}"); lastError = "search loop: ${t.message}" }
             } finally {
                 runCatching { socket.close() }
                 if (searchSocket === socket) searchSocket = null
@@ -186,13 +221,24 @@ class SsdpDiscovery(
             add(SsdpMessage.MEDIA_RENDERER_ST)
             if (includeAll) add("ssdp:all")
         }
+        var failed: String? = null
         for (st in targets) {
             val bytes = SsdpMessage.buildSearch(st).toByteArray(Charsets.US_ASCII)
             repeat(2) {
                 runCatching { socket.send(DatagramPacket(bytes, bytes.size, group, SSDP_PORT)) }
-                    .onFailure { Log.w(TAG, "M-SEARCH send failed: ${it.message}") }
+                    .onFailure { failed = it.message; Log.w(TAG, "M-SEARCH send failed: ${it.message}") }
             }
         }
+        failed?.let { lastError = "send: $it" }
+        val n = searchesSent.incrementAndGet()
+        Log.i(TAG, "M-SEARCH #$n targets=$targets via ${ifaceName ?: "default route"} from ${wifiAddress ?: "?"} (received so far: ${datagramsReceived.get()})")
+    }
+
+    private fun onDatagram(packet: DatagramPacket) {
+        val count = datagramsReceived.incrementAndGet()
+        lastDatagramAt = clock()
+        if (count == 1) Log.i(TAG, "First SSDP packet received, from ${packet.address?.hostAddress}")
+        handleDatagram(String(packet.data, 0, packet.length, Charsets.ISO_8859_1), packet.address?.hostAddress)
     }
 
     private suspend fun notifyLoop() {
@@ -229,7 +275,7 @@ class SsdpDiscovery(
                 val packet = DatagramPacket(buffer, buffer.size)
                 try {
                     socket.receive(packet)
-                    handleDatagram(String(packet.data, 0, packet.length, Charsets.ISO_8859_1))
+                    onDatagram(packet)
                 } catch (_: SocketTimeoutException) {
                 }
             }
@@ -253,13 +299,19 @@ class SsdpDiscovery(
         }
     }
 
-    internal fun handleDatagram(raw: String) {
+    internal fun handleDatagram(raw: String, from: String? = null) {
         val message = SsdpMessage.parse(raw) ?: return
+        if (message.kind == SsdpMessage.Kind.RESPONSE) responsesSeen.incrementAndGet() else notifiesSeen.incrementAndGet()
         val udn = message.udn ?: return
         when (message.kind) {
             SsdpMessage.Kind.RESPONSE, SsdpMessage.Kind.NOTIFY_ALIVE, SsdpMessage.Kind.NOTIFY_UPDATE -> {
-                if (!message.isMediaRenderer) return
+                if (!message.isMediaRenderer) {
+                    val type = message.type ?: "?"
+                    if (otherTypes.size < 16 && otherTypes.add(type)) Log.d(TAG, "Non-renderer device on the LAN: $type from $from")
+                    return
+                }
                 val location = message.location ?: return
+                if (renderersLogged.add(udn)) Log.i(TAG, "SSDP renderer udn=$udn location=$location from=$from")
                 val maxAge = (message.maxAgeSeconds ?: defaultMaxAgeSeconds).coerceIn(15, 7_200)
                 val entry = SsdpEntry(udn, location, clock() + maxAge * 1_000L)
                 val previous = _entries.value[udn]
@@ -293,4 +345,27 @@ class SsdpDiscovery(
         const val SSDP_PORT = 1900
         const val RECEIVE_TIMEOUT_MS = 1_500
     }
+}
+
+/** What SSDP discovery has done since it started; see [SsdpDiscovery.stats]. */
+data class SsdpStats(
+    val running: Boolean,
+    val interfaceName: String?,
+    val wifiAddress: String?,
+    val multicastLockHeld: Boolean,
+    val searchesSent: Int,
+    val datagramsReceived: Int,
+    val responses: Int,
+    val notifies: Int,
+    val renderers: Int,
+    /** Search targets / notification types of non-renderer devices that did answer (routers, TVs, servers). */
+    val otherDeviceTypes: List<String>,
+    val lastDatagramAgoMs: Long?,
+    val lastError: String?,
+) {
+    fun summary(): String =
+        "running=$running iface=${interfaceName ?: "?"} wifi=${wifiAddress ?: "?"} multicastLock=$multicastLockHeld " +
+            "searches=$searchesSent received=$datagramsReceived responses=$responses notifies=$notifies renderers=$renderers " +
+            "lastPacket=${lastDatagramAgoMs?.let { "${it / 1000}s ago" } ?: "never"} otherDevices=$otherDeviceTypes" +
+            (lastError?.let { " lastError=\"$it\"" } ?: "")
 }
