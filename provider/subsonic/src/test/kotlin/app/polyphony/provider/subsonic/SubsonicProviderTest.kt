@@ -290,6 +290,8 @@ class SubsonicProviderTest {
         assertEquals("audio/flac", raw.mimeType)
 
         val opus = provider.streamRequest(track, TranscodeProfile.BALANCED)
+        // Transcoded streams must not request an estimated length: a short body would cut the track.
+        assertNull(opus.url.toHttpUrl().queryParameter("estimateContentLength"))
         url = opus.url.toHttpUrl()
         assertEquals("opus", url.queryParameter("format"))
         assertEquals("128", url.queryParameter("maxBitRate"))

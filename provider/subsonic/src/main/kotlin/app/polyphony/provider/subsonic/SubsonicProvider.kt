@@ -343,11 +343,15 @@ internal class SubsonicProvider(
      * decides), and an ORIGINAL profile with a bitrate cap keeps the server's default format.
      */
     override fun streamRequest(track: Track, profile: TranscodeProfile): StreamRequest {
-        val params = mutableMapOf<String, Any?>("id" to track.id, "estimateContentLength" to true)
+        // Never ask for an estimated Content-Length on transcoded streams: the real output is
+        // almost never the estimated size, and a shorter body ends the connection early, which the
+        // player reports as an error at the end of every track. Raw files have an exact length.
+        val params = mutableMapOf<String, Any?>("id" to track.id)
         val transcoded: Boolean
         when {
             profile.isPassthrough -> {
                 params["format"] = "raw"
+                params["estimateContentLength"] = true
                 transcoded = false
             }
             profile.codec == AudioCodec.ORIGINAL -> {

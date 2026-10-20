@@ -427,6 +427,19 @@ class PlaybackService : MediaLibraryService() {
             Log.e(TAG, "Player error ${error.errorCodeName} on ${engine.currentTarget.key}: ${error.message}", error.cause)
             val trackId = player.currentMediaItem?.mediaId ?: return
             val loadFailure = error.errorCode in 2000..3999 || error.errorCode == PlaybackException.ERROR_CODE_UNSPECIFIED
+            if (loadFailure && !player.isRemotePlayback()) {
+                // A stream that dies within the last few seconds is a premature end of stream
+                // (e.g. a transcoded body shorter than its declared length), not a broken codec.
+                val duration = player.duration
+                val remaining = if (duration > 0) duration - player.currentPosition else Long.MAX_VALUE
+                if (remaining <= 4_000 && player.hasNextMediaItem()) {
+                    Log.w(TAG, "Stream ended ${remaining} ms early; continuing with the next track")
+                    player.seekToNextMediaItem()
+                    player.prepare()
+                    player.play()
+                    return
+                }
+            }
             if (loadFailure && !player.isRemotePlayback() && streamResolver.markTranscodeFailure(trackId)) {
                 Log.w(TAG, "Retrying ${player.currentMediaItem?.mediaMetadata?.title} at original quality")
                 reloadCurrentItem()
