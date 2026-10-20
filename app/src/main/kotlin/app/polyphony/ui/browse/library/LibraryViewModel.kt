@@ -1,6 +1,5 @@
 package app.polyphony.ui.browse.library
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
@@ -51,15 +50,15 @@ class LibraryViewModel @Inject constructor(
     private val syncManager: LibrarySyncManager,
     private val settings: SettingsRepository,
     private val playback: PlaybackController,
-    private val savedState: SavedStateHandle,
 ) : ViewModel() {
 
-    // ---- persisted view options ----
-    val artistSort: StateFlow<ArtistSort> = savedState.getStateFlow(KEY_ARTIST_SORT, ArtistSort.NAME.name).map { ArtistSort.valueOf(it) }.asState(ArtistSort.NAME)
-    val albumSort: StateFlow<AlbumSort> = savedState.getStateFlow(KEY_ALBUM_SORT, AlbumSort.NAME.name).map { AlbumSort.valueOf(it) }.asState(AlbumSort.NAME)
-    val albumAscending: StateFlow<Boolean> = savedState.getStateFlow(KEY_ALBUM_ASC, true)
-    val trackSort: StateFlow<TrackSort> = savedState.getStateFlow(KEY_TRACK_SORT, TrackSort.TITLE.name).map { TrackSort.valueOf(it) }.asState(TrackSort.TITLE)
-    val trackAscending: StateFlow<Boolean> = savedState.getStateFlow(KEY_TRACK_ASC, true)
+    // ---- persisted view options (settings, not saved state: they must survive a cold start and an update) ----
+    private val appearance = settings.settings.map { it.appearance }
+    val artistSort: StateFlow<ArtistSort> = appearance.map { it.artistSort }.distinctUntilChanged().asState(ArtistSort.NAME)
+    val albumSort: StateFlow<AlbumSort> = appearance.map { it.albumSort }.distinctUntilChanged().asState(AlbumSort.NAME)
+    val albumAscending: StateFlow<Boolean> = appearance.map { it.albumAscending }.distinctUntilChanged().asState(true)
+    val trackSort: StateFlow<TrackSort> = appearance.map { it.trackSort }.distinctUntilChanged().asState(TrackSort.TITLE)
+    val trackAscending: StateFlow<Boolean> = appearance.map { it.trackAscending }.distinctUntilChanged().asState(true)
     /** Enabled Library tabs in the user's order (Appearance → Library tabs). */
     val libraryTabs: StateFlow<ImmutableList<LibraryTab>> = settings.settings
         .map { s -> s.appearance.libraryTabs.ifEmpty { LibrarySection.entries }.map { LibraryTab.valueOf(it.name) }.toImmutableList() }
@@ -71,9 +70,9 @@ class LibraryViewModel @Inject constructor(
     val albumsGrid: StateFlow<Boolean> = settings.settings.map { it.appearance.albumsLayout == LibraryLayout.GRID }.asState(false)
     val playlistsGrid: StateFlow<Boolean> = settings.settings.map { it.appearance.playlistsLayout == LibraryLayout.GRID }.asState(false)
 
-    fun setArtistSort(sort: ArtistSort) { savedState[KEY_ARTIST_SORT] = sort.name }
-    fun setAlbumSort(sort: AlbumSort, ascending: Boolean) { savedState[KEY_ALBUM_SORT] = sort.name; savedState[KEY_ALBUM_ASC] = ascending }
-    fun setTrackSort(sort: TrackSort, ascending: Boolean) { savedState[KEY_TRACK_SORT] = sort.name; savedState[KEY_TRACK_ASC] = ascending }
+    fun setArtistSort(sort: ArtistSort) = updateAppearance { it.copy(artistSort = sort) }
+    fun setAlbumSort(sort: AlbumSort, ascending: Boolean) = updateAppearance { it.copy(albumSort = sort, albumAscending = ascending) }
+    fun setTrackSort(sort: TrackSort, ascending: Boolean) = updateAppearance { it.copy(trackSort = sort, trackAscending = ascending) }
     fun setArtistsGrid(grid: Boolean) = updateAppearance { it.copy(artistsLayout = grid.toLayout()) }
     fun setAlbumsGrid(grid: Boolean) = updateAppearance { it.copy(albumsLayout = grid.toLayout()) }
     fun setPlaylistsGrid(grid: Boolean) = updateAppearance { it.copy(playlistsLayout = grid.toLayout()) }
@@ -170,11 +169,6 @@ class LibraryViewModel @Inject constructor(
         stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)
 
     private companion object {
-        const val KEY_ARTIST_SORT = "artistSort"
-        const val KEY_ALBUM_SORT = "albumSort"
-        const val KEY_ALBUM_ASC = "albumAsc"
-        const val KEY_TRACK_SORT = "trackSort"
-        const val KEY_TRACK_ASC = "trackAsc"
         const val SHUFFLE_CAP = 300
 
         /** Longest queue the Songs tab builds from a tap or "Play all". */
