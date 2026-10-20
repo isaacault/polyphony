@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -163,4 +164,33 @@ fun LoadingPlaceholder(
 @Composable
 fun FullScreenPlaceholder(style: PlaceholderStyle = PlaceholderStyle.LIST) {
     Box(Modifier.fillMaxSize()) { LoadingPlaceholder(style = style, modifier = Modifier.padding(top = 8.dp)) }
+}
+
+/**
+ * Stand-in for a [TrackRow] whose data has not been paged in yet. Same height and layout, so a
+ * paged list keeps its length and scroll position while rows fill in.
+ */
+@Composable
+fun TrackRowPlaceholder(modifier: Modifier = Modifier) {
+    val tone = MaterialTheme.colorScheme.surfaceContainerHigh
+    val toneSoft = MaterialTheme.colorScheme.surfaceContainer
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(start = Dimens.screenPadding, end = 4.dp, top = 6.dp, bottom = 6.dp)
+            .heightIn(min = 56.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(Dimens.listArtwork)
+                .clip(ArtworkShapes.listThumb)
+                .background(tone),
+        )
+        Spacer(Modifier.width(Dimens.itemSpacing))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.fillMaxWidth(0.55f).height(14.dp).clip(RoundedCornerShape(7.dp)).background(tone))
+            Box(Modifier.fillMaxWidth(0.35f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(toneSoft))
+        }
+    }
 }

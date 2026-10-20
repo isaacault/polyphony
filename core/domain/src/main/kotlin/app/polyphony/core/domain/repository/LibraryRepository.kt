@@ -6,11 +6,13 @@ import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.ArtistSort
 import app.polyphony.core.domain.model.Genre
 import app.polyphony.core.domain.model.ItemKind
+import app.polyphony.core.domain.model.LetterIndex
 import app.polyphony.core.domain.model.Lyrics
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.SearchResults
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.model.TrackSort
+import androidx.paging.PagingData
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -38,6 +40,25 @@ interface LibraryRepository {
 
     // ---- Tracks ----
     fun tracks(sort: TrackSort = TrackSort.TITLE, ascending: Boolean = true): Flow<List<Track>>
+
+    /**
+     * Every track on the active server, paged straight out of the cache. Use this for the Songs tab
+     * and anything else that can show tens of thousands of rows: it never materialises the whole
+     * list, and a write to the tracks table only reloads the pages on screen.
+     */
+    fun pagedTracks(sort: TrackSort = TrackSort.TITLE, ascending: Boolean = true): Flow<PagingData<Track>>
+
+    /** Number of tracks [pagedTracks] will show (after offline filtering). */
+    fun trackCount(): Flow<Int>
+
+    /** Alphabet-rail positions for [pagedTracks] with the same sort, built from sort keys only. */
+    fun trackLetterIndex(sort: TrackSort = TrackSort.TITLE, ascending: Boolean = true): Flow<LetterIndex>
+
+    /** [limit] tracks from [offset] in the same order as [pagedTracks]: builds a queue without loading the whole list. */
+    suspend fun tracksSlice(sort: TrackSort, ascending: Boolean, offset: Int, limit: Int): List<Track>
+
+    /** A random sample of the active server's cached tracks, for shuffling without the server. */
+    suspend fun randomCachedTracks(limit: Int): List<Track>
     fun track(id: String): Flow<Track?>
     fun tracksForAlbum(albumId: String): Flow<List<Track>>
     fun tracksForArtist(artistId: String): Flow<List<Track>>
