@@ -26,8 +26,10 @@ data class TranscodePolicy(
     /**
      * When the active profile changes mid-track (network switch, latency cap), restart the current
      * track at the same position with the new quality instead of waiting for the next track.
+     * Off by default: re-opening the stream during a network hand-over is exactly when it is most
+     * likely to fail, and the buffered audio usually carries the track to its end.
      */
-    val reloadCurrentTrackOnChange: Boolean = true,
+    val reloadCurrentTrackOnChange: Boolean = false,
 )
 
 @Serializable
