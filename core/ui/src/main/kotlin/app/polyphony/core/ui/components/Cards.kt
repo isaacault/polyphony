@@ -71,10 +71,8 @@ fun AlbumCard(
     }
 }
 
-fun albumSubtitle(album: Album): String {
-    val artist = album.artistName ?: "Unknown artist"
-    return album.year?.let { "$artist · $it" } ?: artist
-}
+/** The artist alone; the year is intentionally omitted to keep album lists uncluttered. */
+fun albumSubtitle(album: Album): String = album.artistName ?: "Unknown artist"
 
 /** Circular artist artwork with the name underneath. */
 @Composable
