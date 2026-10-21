@@ -22,6 +22,8 @@ sealed interface Route
 @Serializable data object DownloadsRoute : Route
 /** continuo requests (#117); [focusId] scrolls to one, e.g. from a "needs a look" notification. */
 @Serializable data class RequestsRoute(val focusId: Long? = null) : Route
+/** continuo's notification inbox (#118) for the active server. */
+@Serializable data object InboxRoute : Route
 
 enum class AlbumListKind { RECENTLY_ADDED, RECENTLY_PLAYED, MOST_PLAYED, RANDOM, STARRED }
 

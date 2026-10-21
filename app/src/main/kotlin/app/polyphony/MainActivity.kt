@@ -9,10 +9,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.core.domain.repository.AppSettings
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.ui.theme.PolyphonyTheme
+import app.polyphony.inbox.InboxScheduler
 import app.polyphony.ui.PolyphonyApp
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +24,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var inboxScheduler: InboxScheduler
 
     /**
      * `polyphony://` deep links, also fired by the launcher app shortcuts and by continuo's "Ready
@@ -36,7 +39,11 @@ class MainActivity : ComponentActivity() {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) deepLink.value = intent?.data
+        if (savedInstanceState == null) {
+            deepLink.value = intent?.data
+            // Catch up on continuo notifications (#118) without waiting for the periodic poll.
+            inboxScheduler.pollOnOpen(lifecycleScope)
+        }
 
         setContent {
             val settings: AppSettings? by settingsRepository.settings.collectAsStateWithLifecycle(initialValue = null)

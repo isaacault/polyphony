@@ -7,10 +7,13 @@ import app.polyphony.core.domain.playback.CastState
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.playback.PlaybackState
 import app.polyphony.core.domain.repository.LibraryRepository
+import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
+import app.polyphony.inbox.InboxBadges
 import app.polyphony.navigation.DeepLink
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -27,6 +30,8 @@ class ShellViewModel @Inject constructor(
     private val serverRepository: ServerRepository,
     settingsRepository: SettingsRepository,
     private val libraryRepository: LibraryRepository,
+    private val requestRepository: RequestRepository,
+    private val inboxBadges: InboxBadges,
 ) : ViewModel() {
 
     val playback: StateFlow<PlaybackState> = playbackController.state
@@ -42,6 +47,12 @@ class ShellViewModel @Inject constructor(
         .map { it.onboardingComplete }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    /** Any continuo-linked server: request notifications (#118) are worth asking permission for. */
+    val continuoLinked: StateFlow<Boolean> = serverRepository.servers
+        .map { list -> list.any { requestRepository.supports(it) } }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     val hapticsEnabled: StateFlow<Boolean> = settingsRepository.settings
         .map { it.playback.hapticFeedback }
@@ -71,6 +82,29 @@ class ShellViewModel @Inject constructor(
         val server = DeepLink.serverFor(link, serverRepository.servers.first()) ?: return false
         if (serverRepository.getActive()?.id != server.id) serverRepository.setActive(server.id)
         return true
+    }
+
+    /**
+     * Makes the server a notification came from active, when it's still configured, so a request
+     * or inbox link opens on the right server.
+     */
+    suspend fun activateServer(serverId: String) {
+        if (serverRepository.get(serverId) == null) return
+        if (serverRepository.getActive()?.id != serverId) serverRepository.setActive(serverId)
+    }
+
+    /** A Polyphony-posted notification was opened: mark it read on continuo (best effort). */
+    fun markNotificationRead(receipt: DeepLink.Receipt) {
+        viewModelScope.launch {
+            val server = serverRepository.get(receipt.serverId)?.takeIf { requestRepository.supports(it) } ?: return@launch
+            try {
+                inboxBadges.set(server.id, requestRepository.markRead(server, listOf(receipt.notificationId)))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Offline or signed out: it stays unread in the inbox.
+            }
+        }
     }
 
     private companion object {

@@ -35,6 +35,40 @@ class DeepLinkTest {
     }
 
     @Test
+    fun `inbox link`() {
+        assertEquals(DeepLink.Inbox, DeepLink.parse("polyphony://inbox"))
+        assertEquals(DeepLink.Inbox, DeepLink.parse("polyphony://inbox/"))
+        assertNull(DeepLink.parse("polyphony://inbox/3"))
+    }
+
+    @Test
+    fun `a receipt rides along without changing the link`() {
+        val album = DeepLink.withReceipt("polyphony://album/music-api.ault.me/nd-1", "server 1/ü", 42)
+        assertEquals(DeepLink.Album("music-api.ault.me", "nd-1"), DeepLink.parse(album))
+        assertEquals(DeepLink.Receipt("server 1/ü", 42), DeepLink.receiptOf(album))
+
+        val request = DeepLink.withReceipt("polyphony://requests/17", "s1", 7)
+        assertEquals(DeepLink.Requests(17), DeepLink.parse(request))
+        assertEquals(DeepLink.Receipt("s1", 7), DeepLink.receiptOf(request))
+
+        val inbox = DeepLink.withReceipt("polyphony://inbox", "s1", 8)
+        assertEquals(DeepLink.Inbox, DeepLink.parse(inbox))
+        assertEquals(DeepLink.Receipt("s1", 8), DeepLink.receiptOf(inbox))
+
+        val extra = DeepLink.withReceipt("polyphony://requests/17?x=1", "s1", 9)
+        assertEquals(DeepLink.Receipt("s1", 9), DeepLink.receiptOf(extra))
+    }
+
+    @Test
+    fun `links without a complete receipt have none`() {
+        assertNull(DeepLink.receiptOf("polyphony://requests/17"))
+        assertNull(DeepLink.receiptOf("polyphony://requests/17?fromServer=s1"))
+        assertNull(DeepLink.receiptOf("polyphony://requests/17?fromServer=s1&notification=x"))
+        assertNull(DeepLink.receiptOf("polyphony://requests/17?fromServer=&notification=3"))
+        assertNull(DeepLink.receiptOf("not a uri at all ::"))
+    }
+
+    @Test
     fun `launcher shortcut links still work`() {
         assertEquals(DeepLink.Player, DeepLink.parse("polyphony://player"))
         assertEquals(DeepLink.Search, DeepLink.parse("polyphony://search"))

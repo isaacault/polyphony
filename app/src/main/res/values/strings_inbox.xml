@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings owned by the continuo notification inbox and its background poll (#118). -->
+<resources>
+    <string name="inbox_title">Inbox</string>
+    <string name="inbox_open">Inbox</string>
+    <string name="inbox_open_unread">Inbox, %1$d unread</string>
+    <string name="inbox_unread">Unread</string>
+    <string name="inbox_mark_all_read">Mark all read</string>
+    <string name="inbox_empty_title">No notifications</string>
+    <string name="inbox_empty_body">You\'ll find a note here when a request is ready to play, needs a look or couldn\'t be added.</string>
+    <string name="inbox_failed">Couldn\'t load notifications. Check your connection.</string>
+    <string name="inbox_mark_failed">Couldn\'t mark as read: %1$s</string>
+    <!-- system notification channel -->
+    <string name="inbox_channel_name">Music requests</string>
+    <string name="inbox_channel_description">When a requested album is ready to play, needs a look or couldn\'t be added</string>
+</resources>
