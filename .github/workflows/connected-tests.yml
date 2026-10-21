@@ -1,17 +1,10 @@
 name: Connected tests
 
 # The instrumented tests (Room migrations, DLNA parsing through Android's own XML factory) need a
-# device. They run nightly and on demand, not per PR, because an emulator run costs ~10 minutes.
+# device. They run on demand only (an emulator run costs ~10 minutes; the nightly and on-push
+# triggers were dropped to save Actions minutes).
 on:
-  schedule:
-    - cron: "0 4 * * *"
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "**/src/androidTest/**"
-      - "core/data/schemas/**"
-      - ".github/workflows/connected-tests.yml"
 
 concurrency:
   group: connected-tests

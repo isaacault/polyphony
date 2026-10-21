@@ -1,9 +1,10 @@
 name: Build
 
+# Day-to-day CI is local (scripts/ci.sh, gated by the `local-ci` commit status). This workflow is
+# kept for outside contributors: it runs on pull requests from forks, and on demand.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: build-${{ github.ref }}
@@ -11,6 +12,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.fork
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -45,8 +47,8 @@ jobs:
           if-no-files-found: error
 
   docker:
-    # Proves the Dockerfile still builds; runs only on main to save minutes.
-    if: github.ref == 'refs/heads/main'
+    # Proves the Dockerfile still builds on x86_64; on demand only (scripts/ci.sh exercises it on every run).
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

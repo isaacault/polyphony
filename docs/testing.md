@@ -100,13 +100,25 @@ oldest schema and lets Room validate the result; it needs the emulator:
 ./gradlew :core:data:connectedDebugAndroidTest
 ```
 
-Instrumented tests in any module run nightly in CI (`Connected tests` workflow) and on demand from the
-Actions tab; they also run on a push to `main` that touches an `androidTest` directory or the
-exported schemas. Anything that depends on Android's own platform classes (XML factories, DataStore,
+Instrumented tests in any module run on demand from the Actions tab (`Connected tests` workflow),
+or locally against an emulator with the command above. Anything that depends on Android's own platform classes (XML factories, DataStore,
 Room) needs a test there, because the JVM stand-ins behave differently.
 
 ## 6. Merging
 
-CI must be green on the PR's current head before it merges. `scripts/merge_when_green.sh <pr>`
-waits for every run on that commit and squash-merges only when all of them succeeded; it refuses to
-merge on "no checks reported", which `gh pr checks --watch` can print before a run registers.
+CI runs locally. `scripts/ci.sh` runs what the old `Build` workflow ran (`./gradlew test lintDebug
+:app:assembleDebug`) inside the `polyphony-build` Docker image and exits 0 when green; the log is
+`build/local-ci/<sha>.log`. It works from any checkout or git worktree, on x86_64 and on arm64 (the
+image runs Google's x86_64-only aapt2 under qemu there; see the Dockerfile). Runs are serialised
+machine-wide with an exclusive `flock` on `/ssd/Personal/repositories/.locks/docker-ci.lock`
+(`CI_LOCK`), shared with any other Docker CI on the host, and wait for 1.5 GB of free memory
+(`CI_MIN_MEM_MB`).
+
+`scripts/ci.sh --status` does the same on a clean, pushed HEAD and posts the result as the
+`local-ci` commit status, which is what a PR shows as its check. A PR must be green on its current
+head before it merges: `scripts/merge_when_green.sh <pr>` squash-merges only when `local-ci` is
+`success` on that exact commit (the merge is pinned to it), runs `ci.sh --status` itself in a
+throwaway worktree when the head has no status yet, and refuses on a failed or missing one.
+
+GitHub Actions now runs `Build` only for pull requests from forks and on manual dispatch, so outside
+contributors still get CI without spending minutes on everyday work.
