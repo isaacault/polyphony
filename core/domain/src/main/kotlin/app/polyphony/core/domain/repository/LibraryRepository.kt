@@ -77,8 +77,11 @@ interface LibraryRepository {
     fun genres(): Flow<List<Genre>>
 
     // ---- Search ----
-    /** Local, instant search over the cached library. */
-    fun searchLocal(query: String, limit: Int = 30): Flow<SearchResults>
+    /**
+     * Local, instant search over the cached library. [downloadedOnly] keeps only what is on the
+     * phone (the Downloaded search scope), whether or not offline mode is on.
+     */
+    fun searchLocal(query: String, limit: Int = 30, downloadedOnly: Boolean = false): Flow<SearchResults>
     /** Remote search for things not yet synced. */
     suspend fun searchRemote(query: String): SearchResults
 

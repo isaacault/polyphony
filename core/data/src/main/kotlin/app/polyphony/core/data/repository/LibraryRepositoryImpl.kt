@@ -122,6 +122,22 @@ class LibraryRepositoryImpl @Inject constructor(
         .distinctUntilChanged()
         .shareIn(appScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
+    /** The same index whether or not offline mode is on: the Downloaded search scope. */
+    private val downloadedIndex: Flow<OfflineIndex> = activeServerId
+        .flatMapLatest { sid ->
+            if (sid == null) {
+                flowOf(OfflineIndex.EMPTY)
+            } else {
+                combine(
+                    downloadRepository.get().downloadedTrackIds(),
+                    playlistDao.observeMembershipCount(sid),
+                ) { ids, _ -> ids }
+                    .mapLatest { ids -> buildOfflineIndex(sid, ids) }
+            }
+        }
+        .distinctUntilChanged()
+        .shareIn(appScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
+
     private suspend fun buildOfflineIndex(serverId: String, trackIds: Set<String>): OfflineIndex {
         if (trackIds.isEmpty()) return OfflineIndex.EMPTY
         val refs = ArrayList<app.polyphony.core.data.offline.OfflineTrackRef>(trackIds.size)
@@ -349,9 +365,13 @@ class LibraryRepositoryImpl @Inject constructor(
 
     // ---------------------------------------------------------------- search
 
-    override fun searchLocal(query: String, limit: Int): Flow<SearchResults> {
+    override fun searchLocal(query: String, limit: Int, downloadedOnly: Boolean): Flow<SearchResults> {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return flowOf(SearchResults())
+        // Downloaded-only filters after the query, so look further to keep enough matches.
+        @Suppress("NAME_SHADOWING")
+        val limit = if (downloadedOnly) limit * 4 else limit
+        val filterIndex: Flow<OfflineIndex?> = if (downloadedOnly) downloadedIndex else offlineIndex
         val match = FtsQuery.match(trimmed)
         val like = FtsQuery.likePattern(trimmed)
         return activeServerId.flatMapLatest { sid ->
@@ -370,7 +390,7 @@ class LibraryRepositoryImpl @Inject constructor(
                     fts = match?.let { trackDao.searchFts(sid, it, limit) },
                     like = trackDao.searchLike(sid, like, limit),
                 ).mapEach(TrackEntity::toDomain)
-                combine(artists, albums, tracks, offlineIndex) { a, b, c, index ->
+                combine(artists, albums, tracks, filterIndex) { a, b, c, index ->
                     SearchResults(
                         artists = OfflineFilter.apply(a, index, OfflineIndex::artistIds, Artist::id),
                         albums = OfflineFilter.apply(b, index, OfflineIndex::albumIds, Album::id),

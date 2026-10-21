@@ -162,6 +162,29 @@
     <string name="browse_search_searching_server">Searching the server…</string>
     <string name="browse_search_server_failed">The server search failed. Check your connection.</string>
     <string name="browse_search_includes_server">Includes results from the server.</string>
+    <!-- unified sources (#50): search scopes and the Everything tier, continuo-linked servers only -->
+    <string name="browse_search_scope_all">All</string>
+    <string name="browse_search_scope_library">Library</string>
+    <string name="browse_search_scope_downloaded">Downloaded</string>
+    <string name="browse_search_everything">Everything</string>
+    <string name="browse_search_everything_subtitle">Not in your library yet</string>
+    <string name="browse_search_everything_searching">Searching everything…</string>
+    <string name="browse_search_everything_failed">Couldn\'t reach the catalogue. Library results are still shown.</string>
+    <string name="browse_search_everything_offline">The catalogue is unavailable right now.</string>
+    <string name="browse_action_request">Request</string>
+    <string name="browse_action_request_album">Request album</string>
+    <string name="browse_request_sent">Requested. You\'ll be notified when it\'s ready to play.</string>
+    <string name="browse_request_already">Already requested.</string>
+    <string name="browse_request_in_library">That\'s already in your library.</string>
+    <string name="browse_request_failed">Couldn\'t request it: %1$s</string>
+    <string name="browse_request_sign_in">Sign in to continuo again (Settings → Servers) to request music.</string>
+    <!-- availability chips on Everything results -->
+    <string name="browse_availability_requested">Requested</string>
+    <string name="browse_availability_searching">Searching</string>
+    <string name="browse_availability_still_looking">Still looking</string>
+    <string name="browse_availability_downloading">Downloading</string>
+    <string name="browse_availability_importing">Importing</string>
+    <string name="browse_availability_needs_attention">Needs a look</string>
     <string name="browse_action_undo">Undo</string>
     <string name="browse_snack_added_to_queue">Added to queue</string>
     <string name="browse_snack_playing_next">Playing next</string>

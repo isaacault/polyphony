@@ -1,19 +1,35 @@
 package app.polyphony.ui.browse.search
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.polyphony.R
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Artist
+import app.polyphony.core.domain.model.Availability
+import app.polyphony.core.domain.model.CatalogAlbum
+import app.polyphony.core.domain.model.CatalogResults
+import app.polyphony.core.domain.model.CatalogTrack
 import app.polyphony.core.domain.model.Playlist
+import app.polyphony.core.domain.model.RequestOutcome
 import app.polyphony.core.domain.model.SearchResults
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
+import app.polyphony.core.domain.provider.ProviderException
 import app.polyphony.core.domain.repository.LibraryRepository
+import app.polyphony.core.domain.repository.RequestRepository
+import app.polyphony.core.domain.repository.ServerRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableSet
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,9 +39,26 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/** The Everything tier of a search (continuo-linked servers, ALL scope). */
+data class EverythingUi(
+    val albums: ImmutableList<CatalogAlbum> = persistentListOf(),
+    val tracks: ImmutableList<CatalogTrack> = persistentListOf(),
+    val searching: Boolean = false,
+    val searched: Boolean = false,
+    val failed: Boolean = false,
+    /** The server answered but its catalogue (Lidarr / MusicBrainz) was down. */
+    val catalogDown: Boolean = false,
+    /** Release groups with a request in flight from this screen. */
+    val requesting: ImmutableSet<String> = persistentSetOf(),
+) {
+    val isEmpty: Boolean get() = albums.isEmpty() && tracks.isEmpty()
+}
 
 data class SearchUiState(
     val query: String = "",
@@ -39,10 +72,19 @@ data class SearchUiState(
     val remoteFailed: Boolean = false,
     val currentTrackId: String? = null,
     val isPlaying: Boolean = false,
+    /** True when the active server is continuo-linked: the scope chips and Everything show. */
+    val scopesAvailable: Boolean = false,
+    val scope: SearchScope = SearchScope.LIBRARY,
+    val everything: EverythingUi = EverythingUi(),
 ) {
     val hasQuery: Boolean get() = query.isNotBlank()
-    val isEmpty: Boolean get() = artists.isEmpty() && albums.isEmpty() && tracks.isEmpty() && playlists.isEmpty()
+    val isLibraryEmpty: Boolean get() = artists.isEmpty() && albums.isEmpty() && tracks.isEmpty() && playlists.isEmpty()
+    val isEmpty: Boolean get() = isLibraryEmpty && everything.isEmpty
+    val showsEverything: Boolean get() = scopesAvailable && scope == SearchScope.ALL
 }
+
+/** One-off messages for the shell's snackbar. */
+data class SearchMessage(@StringRes val text: Int, val arg: String? = null)
 
 private data class RemoteState(
     val forQuery: String = "",
@@ -51,28 +93,56 @@ private data class RemoteState(
     val failed: Boolean = false,
 )
 
+private data class CatalogState(
+    val forQuery: String = "",
+    val results: CatalogResults? = null,
+    val loading: Boolean = false,
+    val failed: Boolean = false,
+)
+
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val library: LibraryRepository,
     private val playback: PlaybackController,
+    private val servers: ServerRepository,
+    private val requests: RequestRepository,
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
     private val recent = MutableStateFlow<List<String>>(emptyList())
     private val remote = MutableStateFlow(RemoteState())
+    private val catalog = MutableStateFlow(CatalogState())
+    private val chosenScope = MutableStateFlow(SearchScope.ALL)
+    private val requested = MutableStateFlow<Map<String, Availability>>(emptyMap())
+    private val requesting = MutableStateFlow<Set<String>>(emptySet())
     private var remoteJob: Job? = null
+    private var catalogJob: Job? = null
 
-    private val localResults = query
-        .map { it.trim() }
-        .debounce(150)
+    /** The last submitted term: switching scope re-runs the searches that scope needs. */
+    private var submitted: String? = null
+
+    private val messages = Channel<SearchMessage>(Channel.BUFFERED)
+    val events: Flow<SearchMessage> = messages.receiveAsFlow()
+
+    private val linked: StateFlow<Boolean> = servers.activeServer
+        .map { requests.supports(it) }
         .distinctUntilChanged()
-        .flatMapLatest { q -> if (q.isBlank()) flowOf(SearchResults()) else library.searchLocal(q, 30) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** Without a continuo server there are no scopes: search behaves exactly as before (LIBRARY). */
+    private val scope: Flow<SearchScope> = combine(chosenScope, linked) { s, l -> if (l) s else SearchScope.LIBRARY }
+        .distinctUntilChanged()
+
+    private val localResults = combine(query.map { it.trim() }.debounce(150).distinctUntilChanged(), scope) { q, s -> q to s }
+        .flatMapLatest { (q, s) ->
+            if (q.isBlank()) flowOf(SearchResults()) else library.searchLocal(q, 30, downloadedOnly = s == SearchScope.DOWNLOADED)
+        }
 
     private val matchingPlaylists = combine(query.map { it.trim() }.debounce(150), library.playlists()) { q, playlists ->
         if (q.isBlank()) emptyList() else playlists.filter { it.name.contains(q, ignoreCase = true) }.take(10)
     }
 
-    val state: StateFlow<SearchUiState> = combine(
+    private val libraryState: Flow<SearchUiState> = combine(
         query, localResults, matchingPlaylists, remote, recent,
     ) { q, local, playlists, remoteState, recentList ->
         val remoteResults = remoteState.results?.takeIf { remoteState.forQuery == q.trim() }
@@ -87,27 +157,82 @@ class SearchViewModel @Inject constructor(
             remoteSearched = remoteResults != null,
             remoteFailed = remoteState.failed && remoteState.forQuery == q.trim(),
         )
-    }.combine(playback.state) { s, pb -> s.copy(currentTrackId = pb.currentTrack?.id, isPlaying = pb.isPlaying) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchUiState())
+    }
+
+    private val everythingState: Flow<Triple<Boolean, SearchScope, EverythingUi>> = combine(
+        linked, scope, query, catalog, combine(requested, requesting) { r, busy -> r to busy },
+    ) { isLinked, s, q, cat, (req, busy) ->
+        val current = cat.forQuery == q.trim()
+        val results = cat.results?.takeIf { current }
+        Triple(
+            isLinked,
+            s,
+            EverythingUi(
+                albums = EverythingSection.albums(results, req).toImmutableList(),
+                tracks = EverythingSection.tracks(results, req).toImmutableList(),
+                searching = cat.loading && current,
+                searched = results != null,
+                failed = cat.failed && current,
+                catalogDown = results?.catalogAvailable == false,
+                requesting = busy.toImmutableSet(),
+            ),
+        )
+    }
+
+    val state: StateFlow<SearchUiState> = combine(libraryState, everythingState, playback.state) { s, (isLinked, sc, every), pb ->
+        s.copy(
+            scopesAvailable = isLinked,
+            scope = sc,
+            everything = if (isLinked && sc == SearchScope.ALL) every else EverythingUi(),
+            currentTrackId = pb.currentTrack?.id,
+            isPlaying = pb.isPlaying,
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchUiState())
 
     fun onQueryChange(value: String) {
         query.value = value
-        if (value.isBlank()) remote.value = RemoteState()
+        if (value.isBlank()) {
+            remote.value = RemoteState()
+            catalog.value = CatalogState()
+            submitted = null
+        }
     }
 
     fun clear() = onQueryChange("")
 
-    /** Called on IME search / explicit submit: remember the term and also hit the server. */
+    /** Called on IME search / explicit submit: remember the term and also hit the server(s). */
     fun submit() {
         val q = query.value.trim()
         if (q.isBlank()) return
         rememberSearch(q)
-        searchRemote()
+        submitted = q
+        runScopeSearches(force = true)
+    }
+
+    fun setScope(value: SearchScope) {
+        if (chosenScope.value == value) return
+        chosenScope.value = value
+        if (value == SearchScope.DOWNLOADED) {
+            remoteJob?.cancel()
+            remote.value = RemoteState()
+            catalogJob?.cancel()
+            catalog.value = CatalogState()
+        }
+        runScopeSearches(force = false)
+    }
+
+    private fun effectiveScope(): SearchScope = if (linked.value) chosenScope.value else SearchScope.LIBRARY
+
+    private fun runScopeSearches(force: Boolean) {
+        val q = submitted?.takeIf { it == query.value.trim() } ?: return
+        val s = effectiveScope()
+        if (s != SearchScope.DOWNLOADED && (force || remote.value.forQuery != q)) searchRemote()
+        if (s == SearchScope.ALL && linked.value && (force || catalog.value.forQuery != q)) searchEverything()
     }
 
     fun searchRemote() {
         val q = query.value.trim()
-        if (q.isBlank()) return
+        if (q.isBlank() || effectiveScope() == SearchScope.DOWNLOADED) return
         remoteJob?.cancel()
         remote.value = RemoteState(forQuery = q, loading = true)
         remoteJob = viewModelScope.launch {
@@ -118,6 +243,62 @@ class SearchViewModel @Inject constructor(
                 loading = false,
                 failed = result.isFailure,
             )
+        }
+    }
+
+    private fun searchEverything() {
+        val q = query.value.trim()
+        if (q.isBlank()) return
+        catalogJob?.cancel()
+        catalog.value = CatalogState(forQuery = q, loading = true)
+        catalogJob = viewModelScope.launch {
+            val server = servers.getActive()?.takeIf { requests.supports(it) }
+            val result = if (server == null) {
+                Result.failure(IllegalStateException("not a continuo server"))
+            } else {
+                try {
+                    Result.success(requests.search(server, q))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if (e is ProviderException.Unauthorized) messages.send(SearchMessage(R.string.browse_request_sign_in))
+                    Result.failure(e)
+                }
+            }
+            catalog.value = CatalogState(forQuery = q, results = result.getOrNull(), loading = false, failed = result.isFailure)
+        }
+    }
+
+    /** Request the album with this MusicBrainz release group (an album row, or a track's album). */
+    fun request(releaseGroupId: String) {
+        if (releaseGroupId in requesting.value) return
+        requesting.update { it + releaseGroupId }
+        viewModelScope.launch {
+            try {
+                val server = servers.getActive()?.takeIf { requests.supports(it) } ?: return@launch
+                when (val outcome = requests.requestAlbum(server, releaseGroupId)) {
+                    is RequestOutcome.Requested -> {
+                        requested.update { it + (releaseGroupId to Availability.Requested(outcome.requestId, "requested")) }
+                        messages.send(SearchMessage(R.string.browse_request_sent))
+                    }
+                    is RequestOutcome.AlreadyRequested -> {
+                        requested.update { it + (releaseGroupId to Availability.Requested(outcome.requestId, "requested")) }
+                        messages.send(SearchMessage(R.string.browse_request_already))
+                    }
+                    is RequestOutcome.InLibrary -> {
+                        requested.update { it + (releaseGroupId to Availability.InLibrary(outcome.libraryAlbumId)) }
+                        messages.send(SearchMessage(R.string.browse_request_in_library))
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ProviderException.Unauthorized) {
+                messages.send(SearchMessage(R.string.browse_request_sign_in))
+            } catch (e: Exception) {
+                messages.send(SearchMessage(R.string.browse_request_failed, e.message ?: e.javaClass.simpleName))
+            } finally {
+                requesting.update { it - releaseGroupId }
+            }
         }
     }
 
