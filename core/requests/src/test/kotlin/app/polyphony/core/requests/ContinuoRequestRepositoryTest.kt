@@ -280,10 +280,11 @@ class ContinuoRequestRepositoryTest {
     private val notificationsBody = """{"items":[
       {"id":4,"type":"request_available","title":"Ready to play","body":"Honeycomb — Jitwam",
        "createdAt":"2026-10-21T08:30:00+00:00","readAt":null,"requestId":1,
-       "action":{"type":"open_album","navidromeAlbumId":"nd-h","requestId":1,"deepLink":"polyphony://album/music-api.example.com/nd-h"}},
+       "action":{"type":"open_album","navidromeAlbumId":"nd-h","requestId":1,"deepLink":"polyphony://album/music-api.example.com/nd-h"},
+       "deliveredVia":["sse","homeassistant"]},
       {"id":5,"type":"request_needs_attention","title":"A request needs a look","body":"Third: ambiguous",
        "createdAt":"2026-10-21T09:00:00+00:00","readAt":"2026-10-21T09:05:00+00:00","requestId":3,
-       "action":{"type":"open_request","requestId":3,"deepLink":"polyphony://requests/3"}},
+       "action":{"type":"open_request","requestId":3,"deepLink":"polyphony://requests/3"},"deliveredVia":["sse"]},
       {"id":6,"type":"something_new","title":"Hello","body":"","createdAt":"garbage","readAt":null,"action":null,"requestId":null}
     ],"cursor":6,"unreadCount":2}"""
 
@@ -303,18 +304,57 @@ class ContinuoRequestRepositoryTest {
         assertEquals(1L, available.requestId)
         assertEquals(java.time.Instant.parse("2026-10-21T08:30:00Z").toEpochMilli(), available.createdAtMillis)
         assertTrue(!available.read)
+        assertEquals(setOf("homeassistant", "sse"), available.deliveredVia)
+        assertTrue(available.deliveredByHomeAssistant)
         assertTrue(page.items[1].read)
         assertEquals("polyphony://requests/3", page.items[1].deepLink)
+        assertTrue(!page.items[1].deliveredByHomeAssistant)
         val unknown = page.items[2]
         assertNull(unknown.deepLink)
         assertNull(unknown.body)
         assertNull(unknown.createdAtMillis)
         assertNull(unknown.requestId)
+        // A server from before deliveredVia: not delivered, so the app still posts it.
+        assertTrue(unknown.deliveredVia.isEmpty())
+        assertTrue(!unknown.deliveredByHomeAssistant)
 
         val sent = fake.seen.last { it.first.url.encodedPath == "/v1/notifications" }.first.url
         assertEquals("3", sent.queryParameter("since"))
         assertEquals("true", sent.queryParameter("unread"))
         assertEquals("50", sent.queryParameter("limit"))
+        // Oldest first is continuo's default; order is only sent when asking for newest first.
+        assertNull(sent.queryParameter("order"))
+    }
+
+    @Test
+    fun `newest first asks for order=desc and the cursor is the highest id`() = runTest {
+        val fake = FakeContinuo().apply {
+            routes["GET /v1/notifications"] = { _, _ ->
+                200 to """{"items":[{"id":9,"type":"t","deliveredVia":["homeassistant"]},{"id":7,"type":"t"}],"unreadCount":2}"""
+            }
+        }
+        val page = repo(fake, FakeServers(server)).notifications(server, limit = 2, newestFirst = true)
+        assertEquals(listOf(9L, 7L), page.items.map { it.id })
+        // No cursor from the server: still the highest id, not the last one listed.
+        assertEquals(9L, page.cursor)
+        assertTrue(page.items[0].deliveredByHomeAssistant)
+        val sent = fake.seen.last { it.first.url.encodedPath == "/v1/notifications" }.first.url
+        assertEquals("desc", sent.queryParameter("order"))
+        assertEquals("0", sent.queryParameter("since"))
+    }
+
+    @Test
+    fun `deliveredVia is read leniently`() {
+        fun parse(value: String) = deliveryChannels(json.parseToJsonElement(value))
+        assertEquals(setOf("homeassistant", "sse"), parse("""["sse","HomeAssistant","sse"]"""))
+        assertEquals(setOf("homeassistant"), parse("\"homeassistant\""))
+        assertEquals(emptySet<String>(), parse("null"))
+        assertEquals(emptySet<String>(), parse("""{"homeassistant":true}"""))
+        assertEquals(setOf("sse"), parse("""[1,null,"","sse"]"""))
+        assertEquals(emptySet<String>(), deliveryChannels(null))
+        // A shape the app doesn't expect never fails the page.
+        val dto = json.decodeFromString(NotificationListDto.serializer(), """{"items":[{"id":1,"deliveredVia":42}]}""")
+        assertTrue(dto.toDomain(0).items.single().deliveredVia.isEmpty())
     }
 
     @Test

@@ -18,12 +18,25 @@ data class InboxNotification(
     /** The library album to open (an available request). */
     val libraryAlbumId: String?,
     val requestId: Long?,
-)
+    /**
+     * Where continuo already delivered it (its `deliveredVia`, lower-cased): [HOME_ASSISTANT] when
+     * Home Assistant accepted the push, so the phone already shows it, and "sse" (informational).
+     * Empty on servers that don't report it.
+     */
+    val deliveredVia: Set<String> = emptySet(),
+) {
+    /** Home Assistant already put it on the phone: posting it locally would show it twice. */
+    val deliveredByHomeAssistant: Boolean get() = HOME_ASSISTANT in deliveredVia
+
+    companion object {
+        const val HOME_ASSISTANT = "homeassistant"
+    }
+}
 
 /**
- * A page of the inbox, oldest first (continuo orders by id). [cursor] is the `since` for the next
- * page (the last id returned, or the `since` asked for when nothing was newer); [unreadCount]
- * covers the whole inbox, not just this page.
+ * A page of the inbox, in the order asked for (continuo orders by id, oldest first by default).
+ * [cursor] is the `since` for the next "anything new?" request (the highest id returned, or the
+ * `since` asked for when nothing was newer); [unreadCount] covers the whole inbox, not just this page.
  */
 data class InboxPage(
     val items: List<InboxNotification>,

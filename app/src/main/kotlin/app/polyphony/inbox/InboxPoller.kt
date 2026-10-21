@@ -80,3 +80,20 @@ internal suspend fun RequestRepository.notificationsSince(
     }
     return InboxPage(items, cursor, unread)
 }
+
+/**
+ * What the Inbox screen lists: the newest [limit] notifications (`order=desc`), so a large inbox
+ * shows what just happened rather than its oldest pages. A server that ignores `order` answers
+ * oldest first; when such a page is full there may be more, so the rest is read oldest first as
+ * before ([notificationsSince]). Items come back in no promised order; the cursor is the highest id.
+ */
+internal suspend fun RequestRepository.newestNotifications(
+    server: Server,
+    limit: Int = 500,
+    maxPages: Int = 10,
+): InboxPage {
+    val page = notifications(server, since = 0L, limit = limit, newestFirst = true)
+    if (page.items.size < limit || InboxLogic.isNewestFirst(page.items)) return page
+    val rest = notificationsSince(server, since = page.cursor, pageSize = limit, maxPages = maxPages - 1)
+    return InboxPage(page.items + rest.items, maxOf(page.cursor, rest.cursor), rest.unreadCount)
+}

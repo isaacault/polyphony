@@ -12,7 +12,7 @@ import app.polyphony.inbox.InboxBadges
 import app.polyphony.inbox.InboxCursors
 import app.polyphony.inbox.InboxLogic
 import app.polyphony.inbox.InboxTarget
-import app.polyphony.inbox.notificationsSince
+import app.polyphony.inbox.newestNotifications
 import app.polyphony.ui.common.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
@@ -73,7 +73,7 @@ class InboxViewModel @Inject constructor(
             }
             _state.update { it.copy(loading = true, linked = true, failed = false) }
             try {
-                val page = requests.notificationsSince(server, since = 0L)
+                val page = requests.newestNotifications(server)
                 val all = page.items
                 badges.set(server.id, page.unreadCount)
                 // What's on screen has been seen: the background poll mustn't post it again.

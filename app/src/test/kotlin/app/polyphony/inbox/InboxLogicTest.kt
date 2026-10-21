@@ -14,7 +14,8 @@ class InboxLogicTest {
         deepLink: String? = null,
         albumId: String? = null,
         requestId: Long? = id + 100,
-    ) = InboxNotification(id, type, "Title $id", "Body", null, read, deepLink, albumId, requestId)
+        deliveredVia: Set<String> = emptySet(),
+    ) = InboxNotification(id, type, "Title $id", "Body", null, read, deepLink, albumId, requestId, deliveredVia)
 
     @Test
     fun `the first poll only sets the baseline`() {
@@ -35,6 +36,33 @@ class InboxLogicTest {
         assertEquals(listOf(7L, 6L), InboxLogic.toPost(fresh, lastSeen = 5).map { it.id })
         val many = (10L..30L).map { item(it) }
         assertEquals((30L downTo 26L).toList(), InboxLogic.toPost(many, lastSeen = 9).map { it.id })
+    }
+
+    @Test
+    fun `what Home Assistant already delivered is not posted again`() {
+        val fresh = listOf(
+            item(3, deliveredVia = setOf("homeassistant", "sse")),
+            item(4, deliveredVia = setOf("sse")),
+            item(5),
+            item(6, deliveredVia = setOf("homeassistant")),
+        )
+        // "sse" alone is informational, and a server without the field leaves it empty: post those.
+        assertEquals(listOf(5L, 4L), InboxLogic.toPost(fresh, lastSeen = 2).map { it.id })
+        // An older item of a request whose newest one Home Assistant showed is out of date: not posted.
+        val sameRequest = listOf(item(7, requestId = 1), item(8, requestId = 1, deliveredVia = setOf("homeassistant")))
+        assertTrue(InboxLogic.toPost(sameRequest, lastSeen = 6).isEmpty())
+        // Delivered items don't use up the per-poll cap.
+        val mixed = (10L..20L).map { item(it, deliveredVia = if (it % 2 == 0L) setOf("homeassistant") else emptySet()) }
+        assertEquals(listOf(19L, 17L, 15L, 13L, 11L), InboxLogic.toPost(mixed, lastSeen = 9).map { it.id })
+    }
+
+    @Test
+    fun `a newest-first page is recognised`() {
+        assertTrue(InboxLogic.isNewestFirst(listOf(item(9), item(5), item(2))))
+        assertTrue(InboxLogic.isNewestFirst(listOf(item(9))))
+        assertTrue(InboxLogic.isNewestFirst(emptyList()))
+        // A server that ignores order=desc answers oldest first.
+        assertTrue(!InboxLogic.isNewestFirst(listOf(item(2), item(5), item(9))))
     }
 
     @Test
