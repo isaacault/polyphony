@@ -2,6 +2,7 @@ package app.polyphony.core.domain.repository
 
 import app.polyphony.core.domain.model.AlbumSort
 import app.polyphony.core.domain.model.ArtistSort
+import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.model.TrackSort
 import app.polyphony.core.domain.transcode.TranscodePolicy
 import kotlinx.coroutines.flow.Flow
@@ -76,6 +77,11 @@ data class AppearanceSettings(
     val albumAscending: Boolean = true,
     val trackSort: TrackSort = TrackSort.TITLE,
     val trackAscending: Boolean = true,
+    /** Library list filters, one per tab, kept like the sorts. Search starts unfiltered every time. */
+    val artistFilter: LibraryFilter = LibraryFilter.NONE,
+    val albumFilter: LibraryFilter = LibraryFilter.NONE,
+    val trackFilter: LibraryFilter = LibraryFilter.NONE,
+    val playlistFilter: LibraryFilter = LibraryFilter.NONE,
 )
 
 @Serializable

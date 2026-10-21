@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.polyphony.core.data.mappers.toEntity
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.AlbumSort
+import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.model.TrackSort
 import kotlinx.coroutines.flow.first
@@ -89,7 +90,7 @@ class TrackAlbumDaoTest {
     fun fullTextSearchMatchesTitlePrefix() = runBlocking {
         val dao = db.trackDao()
         dao.upsertAll(listOf(track("t1", "Timberline"), track("t2", "Paper Moon"), track("t3", "Tidal")))
-        val hits = dao.searchFts(sid, "ti*", limit = 10).first().map { it.id }
+        val hits = dao.observeSorted(SearchQueries.tracksFts(sid, "ti*", LibraryFilter.NONE, limit = 10)).first().map { it.id }
         assertTrue("Timberline matches", hits.contains("t1"))
         assertTrue("Tidal matches", hits.contains("t3"))
         assertTrue("Paper Moon does not match 'ti*'", !hits.contains("t2"))

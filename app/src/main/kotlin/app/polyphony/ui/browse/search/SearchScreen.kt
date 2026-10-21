@@ -74,6 +74,7 @@ import app.polyphony.core.ui.components.TrackRow
 import app.polyphony.core.ui.components.listContentPadding
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.browse.LibraryFilterRow
 import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.AlbumOptionsSheet
 import app.polyphony.ui.common.OfflineModeBanner
@@ -84,6 +85,8 @@ import app.polyphony.ui.shell.LocalSnackbarHostState
 @Composable
 fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val genres by viewModel.genreNames.collectAsStateWithLifecycle()
+    val years by viewModel.yearRange.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
     val keyboard = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
@@ -144,6 +147,13 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                 if (state.scopesAvailable) {
                     ScopeChips(selected = state.scope, onSelect = viewModel::setScope)
                 }
+                LibraryFilterRow(
+                    filter = state.filter,
+                    fields = state.filterFields,
+                    onChange = viewModel::setFilter,
+                    genres = genres,
+                    years = years,
+                )
                 OfflineModeBanner()
                 if (state.isSearchingRemote || state.everything.searching) {
                     LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))

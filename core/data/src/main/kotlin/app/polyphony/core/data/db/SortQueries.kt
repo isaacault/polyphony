@@ -3,7 +3,9 @@ package app.polyphony.core.data.db
 import androidx.sqlite.db.SimpleSQLiteQuery
 import app.polyphony.core.domain.model.AlbumSort
 import app.polyphony.core.domain.model.ArtistSort
+import app.polyphony.core.domain.model.ItemKind
 import app.polyphony.core.domain.model.LEADING_ARTICLES
+import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.model.TrackSort
 
 /**
@@ -31,7 +33,37 @@ internal object SortQueries {
         return "(CASE $cases ELSE $c END)"
     }
 
-    fun artists(serverId: String, sort: ArtistSort): SimpleSQLiteQuery {
+    /**
+     * `AND …` conditions for [filter] on a table with `starred`/`rating`/`genre`/`year` columns,
+     * with their arguments. Callers pass a filter already [LibraryFilter.restrictedTo] their kind.
+     * Downloaded is not here: it needs the downloads index and is applied after the query.
+     * [column] qualifies a column name when the query joins another table.
+     */
+    fun filterClause(filter: LibraryFilter, column: (String) -> String = { it }): FilterClause {
+        val parts = ArrayList<String>()
+        val args = ArrayList<Any>()
+        if (filter.favouritesOnly) parts += "${column("starred")} = 1"
+        if (filter.minRating > 0) {
+            parts += "${column("rating")} >= ?"
+            args += filter.minRating
+        }
+        filter.genre?.let {
+            parts += "${column("genre")} = ? COLLATE NOCASE"
+            args += it
+        }
+        if (filter.yearFrom != null || filter.yearTo != null) parts += "${column("year")} > 0"
+        filter.yearFrom?.let {
+            parts += "${column("year")} >= ?"
+            args += it
+        }
+        filter.yearTo?.let {
+            parts += "${column("year")} <= ?"
+            args += it
+        }
+        return FilterClause(parts.joinToString("") { " AND $it" }, args)
+    }
+
+    fun artists(serverId: String, sort: ArtistSort, filter: LibraryFilter = LibraryFilter.NONE): SimpleSQLiteQuery {
         val order = when (sort) {
             ArtistSort.NAME -> "nameSortKey ASC"
             ArtistSort.ALBUM_COUNT -> "albumCount DESC, nameSortKey ASC"
@@ -40,10 +72,11 @@ internal object SortQueries {
                     "nameSortKey ASC"
             ArtistSort.STARRED -> "starred DESC, nameSortKey ASC"
         }
-        return SimpleSQLiteQuery("SELECT * FROM artists WHERE serverId = ? ORDER BY $order", arrayOf(serverId))
+        val where = filterClause(filter.restrictedTo(ItemKind.ARTIST))
+        return SimpleSQLiteQuery("SELECT * FROM artists WHERE serverId = ?${where.sql} ORDER BY $order", where.args(serverId))
     }
 
-    fun albums(serverId: String, sort: AlbumSort, ascending: Boolean): SimpleSQLiteQuery {
+    fun albums(serverId: String, sort: AlbumSort, ascending: Boolean, filter: LibraryFilter = LibraryFilter.NONE): SimpleSQLiteQuery {
         val name = "nameSortKey"
         val (primary, naturalAsc) = when (sort) {
             AlbumSort.NAME -> name to true
@@ -61,35 +94,68 @@ internal object SortQueries {
             AlbumSort.NAME -> ", artistSortKey ASC"
             else -> ", $name ASC"
         }
+        val where = filterClause(filter.restrictedTo(ItemKind.ALBUM))
         return SimpleSQLiteQuery(
-            "SELECT * FROM albums WHERE serverId = ? ORDER BY $primary $dir$tieBreak",
-            arrayOf(serverId),
+            "SELECT * FROM albums WHERE serverId = ?${where.sql} ORDER BY $primary $dir$tieBreak",
+            where.args(serverId),
         )
     }
 
-    fun tracks(serverId: String, sort: TrackSort, ascending: Boolean): SimpleSQLiteQuery =
-        SimpleSQLiteQuery("SELECT * FROM tracks WHERE serverId = ? ORDER BY ${trackOrder(sort, ascending)}", arrayOf(serverId))
+    fun tracks(serverId: String, sort: TrackSort, ascending: Boolean, filter: LibraryFilter = LibraryFilter.NONE): SimpleSQLiteQuery {
+        val where = trackWhere(filter)
+        return SimpleSQLiteQuery("SELECT * FROM tracks WHERE serverId = ?${where.sql} ORDER BY ${trackOrder(sort, ascending)}", where.args(serverId))
+    }
 
     /** One window of [tracks], in the same order. */
-    fun tracksSlice(serverId: String, sort: TrackSort, ascending: Boolean, limit: Int, offset: Int): SimpleSQLiteQuery =
-        SimpleSQLiteQuery(
-            "SELECT * FROM tracks WHERE serverId = ? ORDER BY ${trackOrder(sort, ascending)} LIMIT ? OFFSET ?",
-            arrayOf<Any>(serverId, limit, offset),
+    fun tracksSlice(
+        serverId: String,
+        sort: TrackSort,
+        ascending: Boolean,
+        limit: Int,
+        offset: Int,
+        filter: LibraryFilter = LibraryFilter.NONE,
+    ): SimpleSQLiteQuery {
+        val where = trackWhere(filter)
+        return SimpleSQLiteQuery(
+            "SELECT * FROM tracks WHERE serverId = ?${where.sql} ORDER BY ${trackOrder(sort, ascending)} LIMIT ? OFFSET ?",
+            where.args(serverId, trailing = listOf(limit, offset)),
         )
+    }
+
+    /** How many rows [tracks] returns for [filter]. */
+    fun trackCount(serverId: String, filter: LibraryFilter): SimpleSQLiteQuery {
+        val where = trackWhere(filter)
+        return SimpleSQLiteQuery("SELECT COUNT(*) FROM tracks WHERE serverId = ?${where.sql}", where.args(serverId))
+    }
+
+    /** Ids of the rows [tracks] returns for [filter], for counting against the downloads index. */
+    fun trackIds(serverId: String, filter: LibraryFilter): SimpleSQLiteQuery {
+        val where = trackWhere(filter)
+        return SimpleSQLiteQuery("SELECT id FROM tracks WHERE serverId = ?${where.sql}", where.args(serverId))
+    }
+
+    /** A random sample of the rows [tracks] returns for [filter]: Shuffle on a filtered Songs list. */
+    fun randomTracks(serverId: String, filter: LibraryFilter, limit: Int): SimpleSQLiteQuery {
+        val where = trackWhere(filter)
+        return SimpleSQLiteQuery("SELECT * FROM tracks WHERE serverId = ?${where.sql} ORDER BY RANDOM() LIMIT ?", where.args(serverId, trailing = listOf(limit)))
+    }
+
+    private fun trackWhere(filter: LibraryFilter) = filterClause(filter.restrictedTo(ItemKind.TRACK))
 
     /**
      * Only the first character of the column [tracks] sorts by, in list order: enough to build an
      * alphabet-rail index without reading a row per track.
      */
-    fun trackSortKeys(serverId: String, sort: TrackSort, ascending: Boolean): SimpleSQLiteQuery {
+    fun trackSortKeys(serverId: String, sort: TrackSort, ascending: Boolean, filter: LibraryFilter = LibraryFilter.NONE): SimpleSQLiteQuery {
         val column = when (sort) {
             TrackSort.ARTIST -> "artistSortKey"
             TrackSort.ALBUM -> "albumSortKey"
             else -> "titleSortKey"
         }
+        val where = trackWhere(filter)
         return SimpleSQLiteQuery(
-            "SELECT substr($column, 1, 1) AS k FROM tracks WHERE serverId = ? ORDER BY ${trackOrder(sort, ascending)}",
-            arrayOf(serverId),
+            "SELECT substr($column, 1, 1) AS k FROM tracks WHERE serverId = ?${where.sql} ORDER BY ${trackOrder(sort, ascending)}",
+            where.args(serverId),
         )
     }
 
@@ -115,4 +181,11 @@ internal object SortQueries {
 
     private fun direction(naturalAsc: Boolean, ascending: Boolean): String =
         if (naturalAsc == ascending) "ASC" else "DESC"
+}
+
+/** SQL conditions (each prefixed with ` AND `) and the arguments they bind, in order. */
+internal data class FilterClause(val sql: String, val bound: List<Any>) {
+    /** [leading] (the server id, …), then these conditions' arguments, then [trailing] (LIMIT/OFFSET). */
+    fun args(vararg leading: Any, trailing: List<Any> = emptyList()): Array<Any> =
+        (leading.toList() + bound + trailing).toTypedArray()
 }

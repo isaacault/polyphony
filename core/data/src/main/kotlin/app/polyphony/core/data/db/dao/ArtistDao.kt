@@ -18,6 +18,7 @@ interface ArtistDao {
     suspend fun upsert(item: ArtistEntity)
 
     @RawQuery(observedEntities = [ArtistEntity::class, AlbumEntity::class])
+    /** [query] from `SortQueries` or `SearchQueries`. */
     fun observeSorted(query: SupportSQLiteQuery): Flow<List<ArtistEntity>>
 
     @Query("SELECT * FROM artists WHERE serverId = :serverId AND id = :id")
@@ -28,19 +29,6 @@ interface ArtistDao {
 
     @Query("SELECT * FROM artists WHERE serverId = :serverId AND starred = 1 ORDER BY nameSortKey")
     fun observeStarred(serverId: String): Flow<List<ArtistEntity>>
-
-    @Query(
-        "SELECT artists.* FROM artists JOIN artists_fts ON artists.rowid = artists_fts.rowid " +
-            "WHERE artists_fts MATCH :match AND artists.serverId = :serverId " +
-            "ORDER BY artists.name COLLATE NOCASE LIMIT :limit",
-    )
-    fun searchFts(serverId: String, match: String, limit: Int): Flow<List<ArtistEntity>>
-
-    @Query(
-        "SELECT * FROM artists WHERE serverId = :serverId AND name LIKE :pattern ESCAPE '\\' " +
-            "ORDER BY name COLLATE NOCASE LIMIT :limit",
-    )
-    fun searchLike(serverId: String, pattern: String, limit: Int): Flow<List<ArtistEntity>>
 
     @Query("UPDATE artists SET starred = :starred WHERE serverId = :serverId AND id = :id")
     suspend fun setStarred(serverId: String, id: String, starred: Boolean)

@@ -7,6 +7,7 @@ import androidx.paging.PagingData
 import androidx.paging.filter
 import androidx.paging.map
 import app.polyphony.core.data.db.PolyphonyDatabase
+import app.polyphony.core.data.db.SearchQueries
 import app.polyphony.core.data.db.SortQueries
 import app.polyphony.core.data.db.entity.AlbumEntity
 import app.polyphony.core.data.db.entity.ArtistEntity
@@ -36,6 +37,7 @@ import app.polyphony.core.domain.model.SearchResults
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.model.TrackSort
 import app.polyphony.core.domain.model.LetterIndex
+import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.provider.MediaProvider
 import app.polyphony.core.domain.provider.ProviderException
 import app.polyphony.core.domain.repository.DownloadRepository
@@ -149,9 +151,20 @@ class LibraryRepositoryImpl @Inject constructor(
         return OfflineIndex.build(trackIds, refs, playlistIds)
     }
 
-    private fun <T> Flow<List<T>>.offline(allowed: (OfflineIndex) -> Set<String>, key: (T) -> String): Flow<List<T>> =
-        combine(this, offlineIndex) { list, index -> OfflineFilter.apply(list, index, allowed, key) }
+    private fun <T> Flow<List<T>>.offline(
+        allowed: (OfflineIndex) -> Set<String>,
+        key: (T) -> String,
+        index: Flow<OfflineIndex?> = offlineIndex,
+    ): Flow<List<T>> =
+        combine(this, index) { list, i -> OfflineFilter.apply(list, i, allowed, key) }
             .distinctUntilChanged()
+
+    /**
+     * The downloads index a list must be narrowed by: every download for a Downloaded filter
+     * (offline mode or not), else offline mode's index, which is `null` (no narrowing) while off.
+     */
+    private fun indexFor(filter: LibraryFilter): Flow<OfflineIndex?> =
+        if (filter.downloadedOnly) downloadedIndex else offlineIndex
 
     private suspend fun offlineMode(): Boolean =
         runCatching { settingsRepository.current().downloads.offlineMode }.getOrDefault(false)
@@ -188,8 +201,11 @@ class LibraryRepositoryImpl @Inject constructor(
 
     // ---------------------------------------------------------------- artists
 
-    override fun artists(sort: ArtistSort): Flow<List<Artist>> =
-        scopedList { sid -> artistDao.observeSorted(SortQueries.artists(sid, sort)).mapEach(ArtistEntity::toDomain) }.offline(OfflineIndex::artistIds, Artist::id)
+    override fun artists(sort: ArtistSort, filter: LibraryFilter): Flow<List<Artist>> {
+        val f = filter.restrictedTo(ItemKind.ARTIST)
+        return scopedList { sid -> artistDao.observeSorted(SortQueries.artists(sid, sort, f)).mapEach(ArtistEntity::toDomain) }
+            .offline(OfflineIndex::artistIds, Artist::id, indexFor(f))
+    }
 
     override fun artist(id: String): Flow<Artist?> =
         scopedItem { sid -> artistDao.observe(sid, id).map { it?.toDomain() } }
@@ -199,8 +215,11 @@ class LibraryRepositoryImpl @Inject constructor(
 
     // ---------------------------------------------------------------- albums
 
-    override fun albums(sort: AlbumSort, ascending: Boolean): Flow<List<Album>> =
-        scopedList { sid -> albumDao.observeSorted(SortQueries.albums(sid, sort, ascending)).mapEach(AlbumEntity::toDomain) }.offline(OfflineIndex::albumIds, Album::id)
+    override fun albums(sort: AlbumSort, ascending: Boolean, filter: LibraryFilter): Flow<List<Album>> {
+        val f = filter.restrictedTo(ItemKind.ALBUM)
+        return scopedList { sid -> albumDao.observeSorted(SortQueries.albums(sid, sort, ascending, f)).mapEach(AlbumEntity::toDomain) }
+            .offline(OfflineIndex::albumIds, Album::id, indexFor(f))
+    }
 
     override fun album(id: String): Flow<Album?> =
         scopedItem { sid -> albumDao.observe(sid, id).map { it?.toDomain() } }
@@ -231,16 +250,18 @@ class LibraryRepositoryImpl @Inject constructor(
     override fun tracks(sort: TrackSort, ascending: Boolean): Flow<List<Track>> =
         scopedList { sid -> trackDao.observeSorted(SortQueries.tracks(sid, sort, ascending)).mapEach(TrackEntity::toDomain) }.offline(OfflineIndex::trackIds, Track::id)
 
-    override fun pagedTracks(sort: TrackSort, ascending: Boolean): Flow<PagingData<Track>> =
-        combine(activeServerId, offlineIndex) { sid, index -> sid to index }
+    override fun pagedTracks(sort: TrackSort, ascending: Boolean, filter: LibraryFilter): Flow<PagingData<Track>> {
+        val f = filter.restrictedTo(ItemKind.TRACK)
+        return combine(activeServerId, indexFor(f)) { sid, index -> sid to index }
             .distinctUntilChanged()
             .flatMapLatest { (sid, index) ->
                 if (sid == null) {
                     flowOf(PagingData.empty())
                 } else {
                     // Placeholders give the list its full length up front, so the alphabet rail can
-                    // jump anywhere and Room reloads around the target. In offline mode rows are
-                    // filtered after loading, which would leave blank placeholders, so they are off.
+                    // jump anywhere and Room reloads around the target. Narrowed by downloads (offline
+                    // mode or a Downloaded filter), rows are filtered after loading, which would leave
+                    // blank placeholders, so they are off.
                     val config = PagingConfig(
                         pageSize = TRACK_PAGE,
                         prefetchDistance = TRACK_PAGE,
@@ -248,49 +269,79 @@ class LibraryRepositoryImpl @Inject constructor(
                         enablePlaceholders = index == null,
                         jumpThreshold = TRACK_PAGE * 3,
                     )
-                    Pager(config) { trackDao.pagingSorted(SortQueries.tracks(sid, sort, ascending)) }.flow
+                    Pager(config) { trackDao.pagingSorted(SortQueries.tracks(sid, sort, ascending, f)) }.flow
                         .map { data ->
                             val mapped = data.map { it.toDomain() }
                             if (index == null) mapped else mapped.filter { it.id in index.trackIds }
                         }
                 }
             }
+    }
 
-    override fun trackCount(): Flow<Int> =
-        combine(
-            activeServerId.flatMapLatest { sid -> if (sid == null) flowOf(0) else trackDao.observeCount(sid) },
-            offlineIndex,
-        ) { total, index -> index?.trackIds?.size ?: total }
-            .distinctUntilChanged()
-
-    override fun trackLetterIndex(sort: TrackSort, ascending: Boolean): Flow<LetterIndex> =
-        combine(activeServerId, offlineIndex) { sid, index -> sid to index }
+    override fun trackCount(filter: LibraryFilter): Flow<Int> {
+        val f = filter.restrictedTo(ItemKind.TRACK)
+        val columns = f.copy(downloadedOnly = false)
+        return combine(activeServerId, indexFor(f)) { sid, index -> sid to index }
             .distinctUntilChanged()
             .flatMapLatest { (sid, index) ->
-                // Offline mode shows a filtered subset whose positions the sort keys cannot predict.
+                when {
+                    sid == null -> flowOf(0)
+                    index == null -> trackDao.observeCountOf(SortQueries.trackCount(sid, columns))
+                    !columns.isActive -> flowOf(index.trackIds.size)
+                    // Downloads and column filters together: count the matching rows that are downloaded.
+                    else -> trackDao.observeIds(SortQueries.trackIds(sid, columns))
+                        .map { ids -> ids.count { it in index.trackIds } }
+                        .flowOn(io)
+                }
+            }
+            .distinctUntilChanged()
+    }
+
+    override fun trackLetterIndex(sort: TrackSort, ascending: Boolean, filter: LibraryFilter): Flow<LetterIndex> {
+        val f = filter.restrictedTo(ItemKind.TRACK)
+        return combine(activeServerId, indexFor(f)) { sid, index -> sid to index }
+            .distinctUntilChanged()
+            .flatMapLatest { (sid, index) ->
+                // Narrowed by downloads, the list is a filtered subset whose positions the sort keys cannot predict.
                 if (sid == null || index != null) {
                     flowOf(LetterIndex.EMPTY)
                 } else {
-                    trackDao.observeSortKeys(SortQueries.trackSortKeys(sid, sort, ascending))
+                    trackDao.observeSortKeys(SortQueries.trackSortKeys(sid, sort, ascending, f))
                         .map { keys -> LetterIndex.of(keys.map { it.k }) }
                         .flowOn(io)
                 }
             }
             .distinctUntilChanged()
-
-    override suspend fun tracksSlice(sort: TrackSort, ascending: Boolean, offset: Int, limit: Int): List<Track> {
-        val sid = serverRepository.getActive()?.id ?: return emptyList()
-        val rows = trackDao.listSorted(SortQueries.tracksSlice(sid, sort, ascending, limit, offset.coerceAtLeast(0)))
-        return filterOffline(rows.map(TrackEntity::toDomain))
     }
 
-    override suspend fun randomCachedTracks(limit: Int): List<Track> {
+    override suspend fun tracksSlice(sort: TrackSort, ascending: Boolean, offset: Int, limit: Int, filter: LibraryFilter): List<Track> {
         val sid = serverRepository.getActive()?.id ?: return emptyList()
-        return filterOffline(trackDao.random(sid, limit).map(TrackEntity::toDomain))
+        val f = filter.restrictedTo(ItemKind.TRACK)
+        val rows = trackDao.listSorted(SortQueries.tracksSlice(sid, sort, ascending, limit, offset.coerceAtLeast(0), f))
+        return filterDownloads(rows.map(TrackEntity::toDomain), f)
+    }
+
+    override suspend fun randomCachedTracks(limit: Int, filter: LibraryFilter): List<Track> {
+        val sid = serverRepository.getActive()?.id ?: return emptyList()
+        val f = filter.restrictedTo(ItemKind.TRACK)
+        if (f.downloadedOnly) {
+            // Sampling the whole table and keeping the downloaded rows would come up short; sample the downloads.
+            val index = downloadedIndex.first()
+            val picks = index.trackIds.shuffled().take(limit * 4)
+            val rows = picks.chunked(IN_CHUNK).flatMap { trackDao.getByIds(sid, it) }.map(TrackEntity::toDomain)
+            return filterOffline(rows.filter(f::matches)).take(limit)
+        }
+        val rows = if (f.isActive) trackDao.listSorted(SortQueries.randomTracks(sid, f, limit)) else trackDao.random(sid, limit)
+        return filterOffline(rows.map(TrackEntity::toDomain))
     }
 
     private suspend fun filterOffline(tracks: List<Track>): List<Track> {
         val index = offlineIndex.first() ?: return tracks
+        return tracks.filter { it.id in index.trackIds }
+    }
+
+    private suspend fun filterDownloads(tracks: List<Track>, filter: LibraryFilter): List<Track> {
+        val index = indexFor(filter).first() ?: return tracks
         return tracks.filter { it.id in index.trackIds }
     }
 
@@ -349,8 +400,9 @@ class LibraryRepositoryImpl @Inject constructor(
 
     // ---------------------------------------------------------------- playlists
 
-    override fun playlists(): Flow<List<Playlist>> =
-        scopedList { sid -> playlistDao.observeAll(sid).mapEach(PlaylistEntity::toDomain) }.offline(OfflineIndex::playlistIds, Playlist::id)
+    override fun playlists(filter: LibraryFilter): Flow<List<Playlist>> =
+        scopedList { sid -> playlistDao.observeAll(sid).mapEach(PlaylistEntity::toDomain) }
+            .offline(OfflineIndex::playlistIds, Playlist::id, indexFor(filter.restrictedTo(ItemKind.PLAYLIST)))
 
     override fun playlist(id: String): Flow<Playlist?> =
         scopedItem { sid -> playlistDao.observe(sid, id).map { it?.toDomain() } }
@@ -363,33 +415,53 @@ class LibraryRepositoryImpl @Inject constructor(
     override fun genres(): Flow<List<Genre>> =
         scopedList { sid -> genreDao.observeAll(sid).mapEach(GenreEntity::toDomain) }.offline(OfflineIndex::genres, Genre::name)
 
+    override fun yearRange(): Flow<IntRange?> =
+        activeServerId
+            .flatMapLatest { sid ->
+                if (sid == null) {
+                    flowOf(null)
+                } else {
+                    albumDao.observeYearRange(sid).map { r -> if (r.earliest != null && r.latest != null) r.earliest..r.latest else null }
+                }
+            }
+            .distinctUntilChanged()
+
     // ---------------------------------------------------------------- search
 
-    override fun searchLocal(query: String, limit: Int, downloadedOnly: Boolean): Flow<SearchResults> {
+    override fun searchLocal(query: String, limit: Int, filter: LibraryFilter): Flow<SearchResults> {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return flowOf(SearchResults())
         // Downloaded-only filters after the query, so look further to keep enough matches.
         @Suppress("NAME_SHADOWING")
-        val limit = if (downloadedOnly) limit * 4 else limit
-        val filterIndex: Flow<OfflineIndex?> = if (downloadedOnly) downloadedIndex else offlineIndex
+        val limit = if (filter.downloadedOnly) limit * 4 else limit
+        val filterIndex: Flow<OfflineIndex?> = indexFor(filter)
         val match = FtsQuery.match(trimmed)
         val like = FtsQuery.likePattern(trimmed)
+        // A section the filter cannot hold for (a rating filter and playlists, a genre and artists) stays empty.
+        fun <T> unless(kind: ItemKind, block: () -> Flow<List<T>>): Flow<List<T>> =
+            if (filter.excludesAll(kind)) flowOf(emptyList()) else block()
         return activeServerId.flatMapLatest { sid ->
             if (sid == null) {
                 flowOf(SearchResults())
             } else {
-                val artists = withLikeFallback(
-                    fts = match?.let { artistDao.searchFts(sid, it, limit) },
-                    like = artistDao.searchLike(sid, like, limit),
-                ).mapEach(ArtistEntity::toDomain)
-                val albums = withLikeFallback(
-                    fts = match?.let { albumDao.searchFts(sid, it, limit) },
-                    like = albumDao.searchLike(sid, like, limit),
-                ).mapEach(AlbumEntity::toDomain)
-                val tracks = withLikeFallback(
-                    fts = match?.let { trackDao.searchFts(sid, it, limit) },
-                    like = trackDao.searchLike(sid, like, limit),
-                ).mapEach(TrackEntity::toDomain)
+                val artists = unless(ItemKind.ARTIST) {
+                    withLikeFallback(
+                        fts = match?.let { artistDao.observeSorted(SearchQueries.artistsFts(sid, it, filter, limit)) },
+                        like = artistDao.observeSorted(SearchQueries.artistsLike(sid, like, filter, limit)),
+                    ).mapEach(ArtistEntity::toDomain)
+                }
+                val albums = unless(ItemKind.ALBUM) {
+                    withLikeFallback(
+                        fts = match?.let { albumDao.observeSorted(SearchQueries.albumsFts(sid, it, filter, limit)) },
+                        like = albumDao.observeSorted(SearchQueries.albumsLike(sid, like, filter, limit)),
+                    ).mapEach(AlbumEntity::toDomain)
+                }
+                val tracks = unless(ItemKind.TRACK) {
+                    withLikeFallback(
+                        fts = match?.let { trackDao.observeSorted(SearchQueries.tracksFts(sid, it, filter, limit)) },
+                        like = trackDao.observeSorted(SearchQueries.tracksLike(sid, like, filter, limit)),
+                    ).mapEach(TrackEntity::toDomain)
+                }
                 combine(artists, albums, tracks, filterIndex) { a, b, c, index ->
                     SearchResults(
                         artists = OfflineFilter.apply(a, index, OfflineIndex::artistIds, Artist::id),

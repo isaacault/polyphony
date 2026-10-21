@@ -40,6 +40,8 @@ import app.polyphony.R
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.AlbumSort
 import app.polyphony.core.domain.model.ArtistSort
+import app.polyphony.core.domain.model.ItemKind
+import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.model.TrackSort
 import app.polyphony.core.domain.model.sortKey
@@ -64,6 +66,7 @@ import app.polyphony.ui.browse.AlbumGrid
 import app.polyphony.ui.browse.AlbumList
 import app.polyphony.ui.browse.ArtistGrid
 import app.polyphony.ui.browse.ArtistList
+import app.polyphony.ui.browse.LibraryFilterRow
 import app.polyphony.ui.browse.ListControlsRow
 import app.polyphony.ui.browse.ScrollToTopOnReorder
 import app.polyphony.ui.browse.ScrollerHost
@@ -85,6 +88,7 @@ internal fun ArtistsTab(vm: LibraryViewModel) {
     val navigator = LocalNavigator.current
     val artists by vm.artists.collectAsStateWithLifecycle()
     val sort by vm.artistSort.collectAsStateWithLifecycle()
+    val filter by vm.artistFilter.collectAsStateWithLifecycle()
     val grid by vm.artistsGrid.collectAsStateWithLifecycle()
     val columns by vm.gridColumns.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -104,10 +108,12 @@ internal fun ArtistsTab(vm: LibraryViewModel) {
             start = { SortMenu(sortOptions, sort, ascending = true, onChange = { s, _ -> vm.setArtistSort(s) }, showDirection = false) },
             end = { GridListToggle(isGrid = grid, onToggle = vm::setArtistsGrid) },
         )
-        ScrollToTopOnReorder(order = sort, content = artists) { if (grid) gridState.scrollToItem(0) else listState.scrollToItem(0) }
+        LibraryFilterRow(filter, LibraryFilter.fieldsFor(ItemKind.ARTIST), vm::setArtistFilter)
+        ScrollToTopOnReorder(order = sort to filter, content = artists) { if (grid) gridState.scrollToItem(0) else listState.scrollToItem(0) }
         val list = artists
         when {
             list == null -> LoadingPlaceholder(if (grid) PlaceholderStyle.GRID else PlaceholderStyle.LIST)
+            list.isEmpty() && filter.isActive -> NoFilterMatches { vm.setArtistFilter(LibraryFilter.NONE) }
             list.isEmpty() -> EmptyState(title = stringResource(R.string.browse_empty_artists), body = stringResource(R.string.browse_empty_library_hint))
             else -> ScrollerHost(
                 scroller = if (sort == ArtistSort.NAME) {
@@ -137,6 +143,9 @@ internal fun AlbumsTab(vm: LibraryViewModel) {
     val albums by vm.albums.collectAsStateWithLifecycle()
     val sort by vm.albumSort.collectAsStateWithLifecycle()
     val ascending by vm.albumAscending.collectAsStateWithLifecycle()
+    val filter by vm.albumFilter.collectAsStateWithLifecycle()
+    val genres by vm.genreNames.collectAsStateWithLifecycle()
+    val years by vm.yearRange.collectAsStateWithLifecycle()
     val grid by vm.albumsGrid.collectAsStateWithLifecycle()
     val columns by vm.gridColumns.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -161,10 +170,12 @@ internal fun AlbumsTab(vm: LibraryViewModel) {
             start = { SortMenu(sortOptions, sort, ascending, onChange = vm::setAlbumSort) },
             end = { GridListToggle(isGrid = grid, onToggle = vm::setAlbumsGrid) },
         )
-        ScrollToTopOnReorder(order = sort to ascending, content = albums) { if (grid) gridState.scrollToItem(0) else listState.scrollToItem(0) }
+        LibraryFilterRow(filter, LibraryFilter.fieldsFor(ItemKind.ALBUM), vm::setAlbumFilter, genres = genres, years = years)
+        ScrollToTopOnReorder(order = Triple(sort, ascending, filter), content = albums) { if (grid) gridState.scrollToItem(0) else listState.scrollToItem(0) }
         val list = albums
         when {
             list == null -> LoadingPlaceholder(if (grid) PlaceholderStyle.GRID else PlaceholderStyle.LIST)
+            list.isEmpty() && filter.isActive -> NoFilterMatches { vm.setAlbumFilter(LibraryFilter.NONE) }
             list.isEmpty() -> EmptyState(title = stringResource(R.string.browse_empty_albums), body = stringResource(R.string.browse_empty_library_hint))
             else -> {
                 val nameOf: (Album) -> String? = when (sort) {
@@ -202,6 +213,9 @@ internal fun SongsTab(vm: LibraryViewModel) {
     val letters by vm.trackLetters.collectAsStateWithLifecycle()
     val sort by vm.trackSort.collectAsStateWithLifecycle()
     val ascending by vm.trackAscending.collectAsStateWithLifecycle()
+    val filter by vm.trackFilter.collectAsStateWithLifecycle()
+    val genres by vm.genreNames.collectAsStateWithLifecycle()
+    val years by vm.yearRange.collectAsStateWithLifecycle()
     val playback by vm.playbackState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -229,11 +243,13 @@ internal fun SongsTab(vm: LibraryViewModel) {
                 }
             },
         )
+        LibraryFilterRow(filter, LibraryFilter.fieldsFor(ItemKind.TRACK), vm::setTrackFilter, genres = genres, years = years)
         // The Play/Shuffle header is item 0 with a fixed key, so the top stays put as the new order loads.
-        ScrollToTopOnReorder(order = sort to ascending, content = null) { listState.scrollToItem(0) }
+        ScrollToTopOnReorder(order = Triple(sort, ascending, filter), content = null) { listState.scrollToItem(0) }
         val loading = items.loadState.refresh is LoadState.Loading
         when {
             items.itemCount == 0 && (loading || count == null) -> LoadingPlaceholder(PlaceholderStyle.LIST)
+            items.itemCount == 0 && filter.isActive -> NoFilterMatches { vm.setTrackFilter(LibraryFilter.NONE) }
             items.itemCount == 0 -> EmptyState(title = stringResource(R.string.browse_empty_songs), body = stringResource(R.string.browse_empty_library_hint))
             else -> {
                 val alphabetical = (sort == TrackSort.TITLE || sort == TrackSort.ARTIST || sort == TrackSort.ALBUM) && ascending
@@ -298,6 +314,7 @@ internal fun PlaylistsTab(vm: LibraryViewModel) {
     val navigator = LocalNavigator.current
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val grid by vm.playlistsGrid.collectAsStateWithLifecycle()
+    val filter by vm.playlistFilter.collectAsStateWithLifecycle()
     val columns by vm.gridColumns.collectAsStateWithLifecycle()
     var showCreate by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
@@ -306,9 +323,11 @@ internal fun PlaylistsTab(vm: LibraryViewModel) {
                 countLabel = playlists?.let { pluralStringResource(R.plurals.browse_count_playlists, it.size, it.size) },
                 end = { GridListToggle(isGrid = grid, onToggle = vm::setPlaylistsGrid) },
             )
+            LibraryFilterRow(filter, LibraryFilter.fieldsFor(ItemKind.PLAYLIST), vm::setPlaylistFilter)
             val list = playlists
             when {
                 list == null -> LoadingPlaceholder(PlaceholderStyle.LIST)
+                list.isEmpty() && filter.isActive -> NoFilterMatches { vm.setPlaylistFilter(LibraryFilter.NONE) }
                 list.isEmpty() -> EmptyState(
                     title = stringResource(R.string.browse_empty_playlists),
                     body = stringResource(R.string.browse_empty_playlists_hint),
@@ -352,6 +371,17 @@ internal fun PlaylistsTab(vm: LibraryViewModel) {
             onDismiss = { showCreate = false },
         )
     }
+}
+
+/** Empty state for a list whose filters hide everything: says so, and offers to clear them. */
+@Composable
+private fun NoFilterMatches(onClear: () -> Unit) {
+    EmptyState(
+        title = stringResource(R.string.browse_filter_no_matches),
+        body = stringResource(R.string.browse_filter_no_matches_hint),
+        actionLabel = stringResource(R.string.browse_filter_clear_all),
+        onAction = onClear,
+    )
 }
 
 // ---------------------------------------------------------------- Genres

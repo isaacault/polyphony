@@ -10,6 +10,7 @@ import app.polyphony.core.domain.model.AlbumSort
 import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.ArtistSort
 import app.polyphony.core.domain.model.Genre
+import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.model.TrackSort
@@ -25,6 +26,7 @@ import app.polyphony.core.domain.repository.LibraryLayout
 import app.polyphony.core.domain.repository.SyncState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -62,6 +64,10 @@ class LibraryViewModel @Inject constructor(
     val albumAscending: StateFlow<Boolean> = appearance.map { it.albumAscending }.distinctUntilChanged().asState(true)
     val trackSort: StateFlow<TrackSort> = appearance.map { it.trackSort }.distinctUntilChanged().asState(TrackSort.TITLE)
     val trackAscending: StateFlow<Boolean> = appearance.map { it.trackAscending }.distinctUntilChanged().asState(true)
+    val artistFilter: StateFlow<LibraryFilter> = appearance.map { it.artistFilter }.distinctUntilChanged().asState(LibraryFilter.NONE)
+    val albumFilter: StateFlow<LibraryFilter> = appearance.map { it.albumFilter }.distinctUntilChanged().asState(LibraryFilter.NONE)
+    val trackFilter: StateFlow<LibraryFilter> = appearance.map { it.trackFilter }.distinctUntilChanged().asState(LibraryFilter.NONE)
+    val playlistFilter: StateFlow<LibraryFilter> = appearance.map { it.playlistFilter }.distinctUntilChanged().asState(LibraryFilter.NONE)
     /** Enabled Library tabs in the user's order (Appearance → Library tabs). */
     val libraryTabs: StateFlow<ImmutableList<LibraryTab>> = settings.settings
         .map { s -> s.appearance.libraryTabs.ifEmpty { LibrarySection.entries }.map { LibraryTab.valueOf(it.name) }.toImmutableList() }
@@ -86,6 +92,10 @@ class LibraryViewModel @Inject constructor(
     fun setArtistSort(sort: ArtistSort) = updateAppearance { it.copy(artistSort = sort) }
     fun setAlbumSort(sort: AlbumSort, ascending: Boolean) = updateAppearance { it.copy(albumSort = sort, albumAscending = ascending) }
     fun setTrackSort(sort: TrackSort, ascending: Boolean) = updateAppearance { it.copy(trackSort = sort, trackAscending = ascending) }
+    fun setArtistFilter(filter: LibraryFilter) = updateAppearance { it.copy(artistFilter = filter) }
+    fun setAlbumFilter(filter: LibraryFilter) = updateAppearance { it.copy(albumFilter = filter) }
+    fun setTrackFilter(filter: LibraryFilter) = updateAppearance { it.copy(trackFilter = filter) }
+    fun setPlaylistFilter(filter: LibraryFilter) = updateAppearance { it.copy(playlistFilter = filter) }
     fun setArtistsGrid(grid: Boolean) = updateAppearance { it.copy(artistsLayout = grid.toLayout()) }
     fun setAlbumsGrid(grid: Boolean) = updateAppearance { it.copy(albumsLayout = grid.toLayout()) }
     fun setPlaylistsGrid(grid: Boolean) = updateAppearance { it.copy(playlistsLayout = grid.toLayout()) }
@@ -96,38 +106,50 @@ class LibraryViewModel @Inject constructor(
     }
 
     // ---- content (null = first load pending) ----
-    val artists: StateFlow<ImmutableList<Artist>?> = artistSort
-        .flatMapLatest { library.artists(it) }
+    val artists: StateFlow<ImmutableList<Artist>?> = combine(artistSort, artistFilter) { s, f -> s to f }
+        .flatMapLatest { (sort, filter) -> library.artists(sort, filter) }
         .map { it.toImmutableList() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val albums: StateFlow<ImmutableList<Album>?> = combine(albumSort, albumAscending) { s, a -> s to a }
-        .flatMapLatest { (sort, asc) -> library.albums(sort, asc) }
+    val albums: StateFlow<ImmutableList<Album>?> = combine(albumSort, albumAscending, albumFilter) { s, a, f -> Triple(s, a, f) }
+        .flatMapLatest { (sort, asc, filter) -> library.albums(sort, asc, filter) }
         .map { it.toImmutableList() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private val trackOrder = combine(trackSort, trackAscending) { s, a -> s to a }
+    private val trackOrder = combine(trackSort, trackAscending, trackFilter) { s, a, f -> Triple(s, a, f) }
 
     /** Songs tab rows, paged from the cache: a 50k-track library costs the same as a 500-track one. */
     val pagedTracks: Flow<PagingData<Track>> = trackOrder
-        .flatMapLatest { (sort, asc) -> library.pagedTracks(sort, asc) }
+        .flatMapLatest { (sort, asc, filter) -> library.pagedTracks(sort, asc, filter) }
         .cachedIn(viewModelScope)
 
-    /** Total for the Songs header; `null` until the first count arrives. */
-    val trackCount: StateFlow<Int?> = library.trackCount().map<Int, Int?> { it }.asState(null)
+    /** Total for the Songs header, after filtering; `null` until the first count arrives. */
+    val trackCount: StateFlow<Int?> = trackFilter
+        .flatMapLatest { library.trackCount(it) }
+        .map<Int, Int?> { it }
+        .asState(null)
 
     /** Alphabet-rail positions for [pagedTracks], from sort keys only. */
     val trackLetters: StateFlow<LetterIndex> = trackOrder
-        .flatMapLatest { (sort, asc) -> library.trackLetterIndex(sort, asc) }
+        .flatMapLatest { (sort, asc, filter) -> library.trackLetterIndex(sort, asc, filter) }
         .asState(LetterIndex.EMPTY)
 
-    val playlists: StateFlow<ImmutableList<Playlist>?> = library.playlists()
+    val playlists: StateFlow<ImmutableList<Playlist>?> = playlistFilter
+        .flatMapLatest { library.playlists(it) }
         .map { it.toImmutableList() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val genres: StateFlow<ImmutableList<Genre>?> = library.genres()
         .map { it.toImmutableList() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Choices for the Genre filter chip. */
+    val genreNames: StateFlow<ImmutableList<String>> = library.genres()
+        .map { list -> list.map { it.name }.toImmutableList() }
+        .asState(persistentListOf())
+
+    /** The library's year span, for the Year filter chip. */
+    val yearRange: StateFlow<IntRange?> = library.yearRange().asState(null)
 
     val gridColumns: StateFlow<Int> = settings.settings.map { it.appearance.gridColumns }.asState(0)
     val showTrackNumbers: StateFlow<Boolean> = settings.settings.map { it.appearance.showTrackNumbers }.asState(true)
@@ -142,7 +164,7 @@ class LibraryViewModel @Inject constructor(
      */
     fun playTrackAt(index: Int, track: Track) {
         viewModelScope.launch {
-            val slice = library.tracksSlice(trackSort.value, trackAscending.value, offset = index, limit = QUEUE_WINDOW)
+            val slice = library.tracksSlice(trackSort.value, trackAscending.value, offset = index, limit = QUEUE_WINDOW, filter = trackFilter.value)
             // In offline mode the list is filtered after paging, so a list index is not a DB offset:
             // anchor the queue on the song that was tapped either way.
             val queue = if (slice.firstOrNull()?.id == track.id) slice else listOf(track) + slice.filter { it.id != track.id }
@@ -151,12 +173,19 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun playAllSongs(shuffle: Boolean) {
-        if (shuffle) {
+        val filter = trackFilter.value
+        if (shuffle && !filter.isActive) {
             shuffleLibrary()
             return
         }
         viewModelScope.launch {
-            val list = library.tracksSlice(trackSort.value, trackAscending.value, offset = 0, limit = QUEUE_WINDOW)
+            if (shuffle) {
+                // A filtered list shuffles only what it shows, from the cache.
+                val picks = library.randomCachedTracks(SHUFFLE_CAP, filter)
+                if (picks.isNotEmpty()) playback.playTracks(picks, 0, shuffle = false, queueTitle = "Songs")
+                return@launch
+            }
+            val list = library.tracksSlice(trackSort.value, trackAscending.value, offset = 0, limit = QUEUE_WINDOW, filter = filter)
             if (list.isNotEmpty()) playback.playTracks(list, 0, queueTitle = "Songs")
         }
     }

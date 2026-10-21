@@ -9,6 +9,9 @@ import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.CatalogTrack
+import app.polyphony.core.domain.model.FilterField
+import app.polyphony.core.domain.model.ItemKind
+import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.RequestOutcome
 import app.polyphony.core.domain.model.SearchResults
@@ -76,11 +79,17 @@ data class SearchUiState(
     val scopesAvailable: Boolean = false,
     val scope: SearchScope = SearchScope.LIBRARY,
     val everything: EverythingUi = EverythingUi(),
+    /** Narrows the library sections; starts empty every time Search opens. */
+    val filter: LibraryFilter = LibraryFilter.NONE,
 ) {
     val hasQuery: Boolean get() = query.isNotBlank()
     val isLibraryEmpty: Boolean get() = artists.isEmpty() && albums.isEmpty() && tracks.isEmpty() && playlists.isEmpty()
     val isEmpty: Boolean get() = isLibraryEmpty && everything.isEmpty
-    val showsEverything: Boolean get() = scopesAvailable && scope == SearchScope.ALL
+    val showsEverything: Boolean get() = scopesAvailable && scope == SearchScope.ALL && !filter.isActive
+
+    /** Downloaded is a scope chip on continuo servers, so the filter row leaves it out there. */
+    val filterFields: Set<FilterField>
+        get() = LibraryFilter.fieldsFor(ItemKind.TRACK).let { if (scopesAvailable) it - FilterField.DOWNLOADED else it }
 }
 
 private data class RemoteState(
@@ -110,6 +119,7 @@ class SearchViewModel @Inject constructor(
     private val remote = MutableStateFlow(RemoteState())
     private val catalog = MutableStateFlow(CatalogState())
     private val chosenScope = MutableStateFlow(SearchScope.ALL)
+    private val filter = MutableStateFlow(LibraryFilter.NONE)
     private val requested = MutableStateFlow<Map<String, Availability>>(emptyMap())
     private val requesting = MutableStateFlow<Set<String>>(emptySet())
     private var remoteJob: Job? = null
@@ -130,21 +140,32 @@ class SearchViewModel @Inject constructor(
     private val scope: Flow<SearchScope> = combine(chosenScope, linked) { s, l -> if (l) s else SearchScope.LIBRARY }
         .distinctUntilChanged()
 
-    private val localResults = combine(query.map { it.trim() }.debounce(150).distinctUntilChanged(), scope) { q, s -> q to s }
-        .flatMapLatest { (q, s) ->
-            if (q.isBlank()) flowOf(SearchResults()) else library.searchLocal(q, 30, downloadedOnly = s == SearchScope.DOWNLOADED)
+    /** The chips plus the Downloaded scope, which is the same narrowing. */
+    private val effectiveFilter: Flow<LibraryFilter> = combine(filter, scope) { f, s ->
+        if (s == SearchScope.DOWNLOADED) f.copy(downloadedOnly = true) else f
+    }.distinctUntilChanged()
+
+    private val localResults = combine(query.map { it.trim() }.debounce(150).distinctUntilChanged(), effectiveFilter) { q, f -> q to f }
+        .flatMapLatest { (q, f) ->
+            if (q.isBlank()) flowOf(SearchResults()) else library.searchLocal(q, 30, f)
         }
 
-    private val matchingPlaylists = combine(query.map { it.trim() }.debounce(150), library.playlists()) { q, playlists ->
+    private val matchingPlaylists = combine(
+        query.map { it.trim() }.debounce(150),
+        effectiveFilter.flatMapLatest { f ->
+            if (f.excludesAll(ItemKind.PLAYLIST)) flowOf(emptyList()) else library.playlists(f.restrictedTo(ItemKind.PLAYLIST))
+        },
+    ) { q, playlists ->
         if (q.isBlank()) emptyList() else playlists.filter { it.name.contains(q, ignoreCase = true) }.take(10)
     }
 
     private val libraryState: Flow<SearchUiState> = combine(
-        query, localResults, matchingPlaylists, remote, recent,
-    ) { q, local, playlists, remoteState, recentList ->
-        val remoteResults = remoteState.results?.takeIf { remoteState.forQuery == q.trim() }
+        query, localResults, matchingPlaylists, combine(remote, effectiveFilter) { r, f -> r to f }, recent,
+    ) { q, local, playlists, (remoteState, f), recentList ->
+        val remoteResults = remoteState.results?.takeIf { remoteState.forQuery == q.trim() }?.let { filterRemote(it, f) }
         SearchUiState(
             query = q,
+            filter = f,
             artists = merge(local.artists, remoteResults?.artists) { it.id },
             albums = merge(local.albums, remoteResults?.albums) { it.id },
             tracks = merge(local.tracks, remoteResults?.tracks) { it.id },
@@ -180,11 +201,20 @@ class SearchViewModel @Inject constructor(
         s.copy(
             scopesAvailable = isLinked,
             scope = sc,
-            everything = if (isLinked && sc == SearchScope.ALL) every else EverythingUi(),
+            everything = if (isLinked && sc == SearchScope.ALL && !s.filter.isActive) every else EverythingUi(),
             currentTrackId = pb.currentTrack?.id,
             isPlaying = pb.isPlaying,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchUiState())
+
+    /** Choices for the Genre filter chip. */
+    val genreNames: StateFlow<ImmutableList<String>> = library.genres()
+        .map { list -> list.map { it.name }.toImmutableList() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), persistentListOf())
+
+    /** The library's year span, for the Year filter chip. */
+    val yearRange: StateFlow<IntRange?> = library.yearRange()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun onQueryChange(value: String) {
         query.value = value
@@ -218,18 +248,39 @@ class SearchViewModel @Inject constructor(
         runScopeSearches(force = false)
     }
 
+    fun setFilter(value: LibraryFilter) {
+        if (filter.value == value) return
+        filter.value = value
+        // Clearing the filters brings the Everything tier back; fetch it if this term never had it.
+        if (!value.isActive) runScopeSearches(force = false)
+    }
+
+    /**
+     * Server results narrowed the way the local SQL narrows the cache. Downloads are all cached,
+     * so the local results already hold every downloaded match: a Downloaded filter drops these.
+     */
+    private fun filterRemote(results: SearchResults, f: LibraryFilter): SearchResults {
+        if (!f.isActive) return results
+        if (f.downloadedOnly) return SearchResults()
+        return SearchResults(
+            artists = if (f.excludesAll(ItemKind.ARTIST)) emptyList() else results.artists.filter(f::matches),
+            albums = if (f.excludesAll(ItemKind.ALBUM)) emptyList() else results.albums.filter(f::matches),
+            tracks = results.tracks.filter(f::matches),
+        )
+    }
+
     private fun effectiveScope(): SearchScope = if (linked.value) chosenScope.value else SearchScope.LIBRARY
 
     private fun runScopeSearches(force: Boolean) {
         val q = submitted?.takeIf { it == query.value.trim() } ?: return
         val s = effectiveScope()
         if (s != SearchScope.DOWNLOADED && (force || remote.value.forQuery != q)) searchRemote()
-        if (s == SearchScope.ALL && linked.value && (force || catalog.value.forQuery != q)) searchEverything()
+        if (s == SearchScope.ALL && linked.value && !filter.value.isActive && (force || catalog.value.forQuery != q)) searchEverything()
     }
 
     fun searchRemote() {
         val q = query.value.trim()
-        if (q.isBlank() || effectiveScope() == SearchScope.DOWNLOADED) return
+        if (q.isBlank() || effectiveScope() == SearchScope.DOWNLOADED || filter.value.downloadedOnly) return
         remoteJob?.cancel()
         remote.value = RemoteState(forQuery = q, loading = true)
         remoteJob = viewModelScope.launch {
