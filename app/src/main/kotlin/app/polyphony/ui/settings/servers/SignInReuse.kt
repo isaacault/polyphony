@@ -1,7 +1,6 @@
 package app.polyphony.ui.settings.servers
 
 import app.polyphony.core.domain.model.Server
-import app.polyphony.core.domain.model.ServerOptions
 import app.polyphony.core.domain.provider.ConnectRequest
 
 /** A sign-in that server edit made with a typed password: what it sent and the server it got. */
@@ -21,6 +20,6 @@ object SignInReuse {
 
     fun reusable(last: SignIn?, request: ConnectRequest): Server? {
         if (last == null || last.request != request) return null
-        return last.server.takeIf { it.options[ServerOptions.CONTINUO] == "true" }
+        return last.server.takeIf { it.isContinuo }
     }
 }
