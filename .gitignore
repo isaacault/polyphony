@@ -19,3 +19,4 @@ keystore.properties
 
 # Local build logs
 build-*.log
+.claude/
