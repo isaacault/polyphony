@@ -56,17 +56,17 @@ interface TrackDao {
 
     @Query(
         "SELECT * FROM tracks WHERE serverId = :serverId AND artistId = :artistId " +
-            "ORDER BY year DESC, albumName COLLATE NOCASE, COALESCE(discNumber, 1), COALESCE(trackNumber, 0)",
+            "ORDER BY year DESC, albumSortKey, COALESCE(discNumber, 1), COALESCE(trackNumber, 0)",
     )
     fun observeForArtist(serverId: String, artistId: String): Flow<List<TrackEntity>>
 
     @Query(
         "SELECT * FROM tracks WHERE serverId = :serverId AND genre = :genre COLLATE NOCASE " +
-            "ORDER BY artistName COLLATE NOCASE, albumName COLLATE NOCASE, COALESCE(discNumber, 1), COALESCE(trackNumber, 0)",
+            "ORDER BY artistSortKey, albumSortKey, COALESCE(discNumber, 1), COALESCE(trackNumber, 0)",
     )
     fun observeByGenre(serverId: String, genre: String): Flow<List<TrackEntity>>
 
-    @Query("SELECT * FROM tracks WHERE serverId = :serverId AND starred = 1 ORDER BY title COLLATE NOCASE")
+    @Query("SELECT * FROM tracks WHERE serverId = :serverId AND starred = 1 ORDER BY titleSortKey")
     fun observeStarred(serverId: String): Flow<List<TrackEntity>>
 
     @Query(

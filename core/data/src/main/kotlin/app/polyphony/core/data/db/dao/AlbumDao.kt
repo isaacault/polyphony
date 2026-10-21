@@ -27,13 +27,13 @@ interface AlbumDao {
     @Query("SELECT * FROM albums WHERE serverId = :serverId AND id = :id")
     suspend fun get(serverId: String, id: String): AlbumEntity?
 
-    @Query("SELECT * FROM albums WHERE serverId = :serverId AND artistId = :artistId ORDER BY year DESC, name COLLATE NOCASE")
+    @Query("SELECT * FROM albums WHERE serverId = :serverId AND artistId = :artistId ORDER BY year DESC, nameSortKey")
     fun observeByArtist(serverId: String, artistId: String): Flow<List<AlbumEntity>>
 
-    @Query("SELECT * FROM albums WHERE serverId = :serverId AND genre = :genre COLLATE NOCASE ORDER BY artistName COLLATE NOCASE, year, name COLLATE NOCASE")
+    @Query("SELECT * FROM albums WHERE serverId = :serverId AND genre = :genre COLLATE NOCASE ORDER BY artistSortKey, year, nameSortKey")
     fun observeByGenre(serverId: String, genre: String): Flow<List<AlbumEntity>>
 
-    @Query("SELECT * FROM albums WHERE serverId = :serverId AND starred = 1 ORDER BY COALESCE(sortName, name) COLLATE NOCASE")
+    @Query("SELECT * FROM albums WHERE serverId = :serverId AND starred = 1 ORDER BY nameSortKey")
     fun observeStarred(serverId: String): Flow<List<AlbumEntity>>
 
     @Query("SELECT * FROM albums WHERE serverId = :serverId ORDER BY createdAt DESC, name COLLATE NOCASE LIMIT :limit")

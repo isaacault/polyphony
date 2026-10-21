@@ -1,9 +1,11 @@
 package app.polyphony.core.data.db.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Fts4
 import androidx.room.FtsOptions
 import androidx.room.Index
+import app.polyphony.core.domain.model.sortKey
 
 @Entity(
     tableName = "artists",
@@ -28,6 +30,9 @@ data class ArtistEntity(
     val musicBrainzId: String?,
     val biography: String?,
     val syncGeneration: Long,
+    /** [sortKey] of the name: what the A–Z sorts order by. Derived, so callers never pass it. */
+    @ColumnInfo(collate = ColumnInfo.NOCASE, defaultValue = "''")
+    val nameSortKey: String = sortKey(name, sortName),
 )
 
 @Fts4(contentEntity = ArtistEntity::class, tokenizer = FtsOptions.TOKENIZER_UNICODE61)
@@ -72,6 +77,11 @@ data class AlbumEntity(
     val isCompilation: Boolean,
     val musicBrainzId: String?,
     val syncGeneration: Long,
+    /** [sortKey] of the name and of the artist name: what the A–Z sorts order by. Derived. */
+    @ColumnInfo(collate = ColumnInfo.NOCASE, defaultValue = "''")
+    val nameSortKey: String = sortKey(name, sortName),
+    @ColumnInfo(collate = ColumnInfo.NOCASE, defaultValue = "''")
+    val artistSortKey: String = sortKey(artistName),
 )
 
 @Fts4(contentEntity = AlbumEntity::class, tokenizer = FtsOptions.TOKENIZER_UNICODE61)
@@ -89,6 +99,9 @@ data class AlbumFtsEntity(
         Index(value = ["serverId", "albumId"]),
         Index(value = ["serverId", "artistId"]),
         Index(value = ["serverId", "title"]),
+        Index(value = ["serverId", "titleSortKey"]),
+        Index(value = ["serverId", "artistSortKey"]),
+        Index(value = ["serverId", "albumSortKey"]),
         Index(value = ["serverId", "createdAt"]),
         Index(value = ["serverId", "playCount"]),
         Index(value = ["serverId", "genre"]),
@@ -131,6 +144,16 @@ data class TrackEntity(
     val path: String?,
     val createdAt: Long,
     val syncGeneration: Long,
+    /**
+     * [sortKey] of the title, artist and album: what the Songs sorts order by. Derived, and
+     * indexed so a page of a 50k-track list is an index walk rather than a full sort.
+     */
+    @ColumnInfo(collate = ColumnInfo.NOCASE, defaultValue = "''")
+    val titleSortKey: String = sortKey(title),
+    @ColumnInfo(collate = ColumnInfo.NOCASE, defaultValue = "''")
+    val artistSortKey: String = sortKey(artistName),
+    @ColumnInfo(collate = ColumnInfo.NOCASE, defaultValue = "''")
+    val albumSortKey: String = sortKey(albumName),
 )
 
 @Fts4(contentEntity = TrackEntity::class, tokenizer = FtsOptions.TOKENIZER_UNICODE61)

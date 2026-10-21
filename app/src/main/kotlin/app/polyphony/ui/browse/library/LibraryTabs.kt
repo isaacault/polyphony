@@ -42,6 +42,7 @@ import app.polyphony.core.domain.model.AlbumSort
 import app.polyphony.core.domain.model.ArtistSort
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.model.TrackSort
+import app.polyphony.core.domain.model.sortKey
 import app.polyphony.core.ui.components.EmptyState
 import app.polyphony.core.ui.components.FastScroller
 import app.polyphony.core.ui.components.GenreRow
@@ -112,9 +113,9 @@ internal fun ArtistsTab(vm: LibraryViewModel) {
                 scroller = if (sort == ArtistSort.NAME) {
                     {
                         FastScroller(
-                            availableLetters = remember(list) { availableLetters(list) { it.sortName ?: it.name } },
+                            availableLetters = remember(list) { availableLetters(list) { sortKey(it.name, it.sortName) } },
                             onLetterSelected = { letter ->
-                                val index = letterIndex(list, letter) { it.sortName ?: it.name }
+                                val index = letterIndex(list, letter) { sortKey(it.name, it.sortName) }
                                 scope.launch { if (grid) gridState.scrollToItem(index) else listState.scrollToItem(index) }
                             },
                         )
@@ -167,8 +168,8 @@ internal fun AlbumsTab(vm: LibraryViewModel) {
             list.isEmpty() -> EmptyState(title = stringResource(R.string.browse_empty_albums), body = stringResource(R.string.browse_empty_library_hint))
             else -> {
                 val nameOf: (Album) -> String? = when (sort) {
-                    AlbumSort.ARTIST -> { a -> a.artistName }
-                    else -> { a -> a.sortName ?: a.name }
+                    AlbumSort.ARTIST -> { a -> sortKey(a.artistName) }
+                    else -> { a -> sortKey(a.name, a.sortName) }
                 }
                 ScrollerHost(
                     scroller = if ((sort == AlbumSort.NAME || sort == AlbumSort.ARTIST) && ascending) {

@@ -53,6 +53,19 @@ class MappersTest {
     }
 
     @Test
+    fun `entities carry article-free sort keys`() {
+        val artist = Artist("ar1", "s1", "The Strokes", sortName = null).toEntity(1)
+        assertEquals("Strokes", artist.nameSortKey)
+        val album = Album("a1", "s1", "The Dark Side of the Moon", artistName = "A Tribe Called Quest").toEntity(1)
+        assertEquals("Dark Side of the Moon", album.nameSortKey)
+        assertEquals("Tribe Called Quest", album.artistSortKey)
+        val track = Track("t1", "s1", "A Day in the Life", artistName = null, albumName = "The White Album", durationMs = 1).toEntity(1)
+        assertEquals("Day in the Life", track.titleSortKey)
+        assertEquals("", track.artistSortKey)
+        assertEquals("White Album", track.albumSortKey)
+    }
+
+    @Test
     fun `album and artist and playlist round trip`() {
         val album = Album("a1", "s1", "Album", "Album", "ar1", "Artist", 1999, "Jazz", 10, 3_000_000, "c", "u", true, 5, 3, 10L, 20L, false, "mb")
         assertEquals(album, album.toEntity(1).toDomain())

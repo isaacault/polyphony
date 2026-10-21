@@ -26,7 +26,7 @@ interface ArtistDao {
     @Query("SELECT * FROM artists WHERE serverId = :serverId AND id = :id")
     suspend fun get(serverId: String, id: String): ArtistEntity?
 
-    @Query("SELECT * FROM artists WHERE serverId = :serverId AND starred = 1 ORDER BY COALESCE(sortName, name) COLLATE NOCASE")
+    @Query("SELECT * FROM artists WHERE serverId = :serverId AND starred = 1 ORDER BY nameSortKey")
     fun observeStarred(serverId: String): Flow<List<ArtistEntity>>
 
     @Query(

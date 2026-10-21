@@ -40,6 +40,22 @@ class MigrationsTest {
         }
     }
 
+    @Test
+    fun migratesFromV2BackfillingArticleFreeSortKeys() {
+        helper.createDatabase(DB, 2).use { db ->
+            db.execSQL(
+                "INSERT INTO artists (id, serverId, name, sortName, albumCount, artworkId, artworkUrl, starred, rating, " +
+                    "musicBrainzId, biography, syncGeneration) VALUES ('a1', 's1', 'The Strokes', '', 0, NULL, NULL, 0, 0, NULL, NULL, 0)",
+            )
+        }
+        helper.runMigrationsAndValidate(DB, 3, true, *Migrations.ALL).use { db ->
+            db.query("SELECT nameSortKey FROM artists").use { c ->
+                c.moveToFirst()
+                assertEquals("Strokes", c.getString(0))
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }
