@@ -2,6 +2,7 @@ package app.polyphony.core.domain.repository
 
 import app.polyphony.core.domain.model.AlbumSort
 import app.polyphony.core.domain.model.ArtistSort
+import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.model.TrackSort
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -48,6 +49,19 @@ class AppSettingsCompatTest {
         assertEquals(AlbumSort.ARTIST, decoded.appearance.albumSort)
         assertEquals(false, decoded.appearance.albumAscending)
         assertEquals(TrackSort.ALBUM, decoded.appearance.trackSort)
+    }
+
+    @Test
+    fun `library filters default to none and round-trip per tab`() {
+        val legacy = json.decodeFromString(AppSettings.serializer(), """{"appearance":{"themeMode":"DARK"}}""")
+        assertEquals(LibraryFilter.NONE, legacy.appearance.trackFilter)
+        assertEquals(LibraryFilter.NONE, legacy.appearance.albumFilter)
+        val songs = LibraryFilter(minRating = 3, downloadedOnly = true, genre = "Jazz", yearFrom = 1990, yearTo = 1999)
+        val settings = AppSettings(appearance = AppearanceSettings(trackFilter = songs, artistFilter = LibraryFilter(favouritesOnly = true)))
+        val decoded = json.decodeFromString(AppSettings.serializer(), json.encodeToString(AppSettings.serializer(), settings))
+        assertEquals(songs, decoded.appearance.trackFilter)
+        assertEquals(LibraryFilter(favouritesOnly = true), decoded.appearance.artistFilter)
+        assertEquals(LibraryFilter.NONE, decoded.appearance.albumFilter)
     }
 
     @Test

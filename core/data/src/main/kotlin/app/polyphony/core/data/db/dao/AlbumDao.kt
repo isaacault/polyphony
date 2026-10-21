@@ -19,6 +19,7 @@ interface AlbumDao {
     suspend fun upsert(item: AlbumEntity)
 
     @RawQuery(observedEntities = [AlbumEntity::class])
+    /** [query] from `SortQueries` or `SearchQueries`. */
     fun observeSorted(query: SupportSQLiteQuery): Flow<List<AlbumEntity>>
 
     @Query("SELECT * FROM albums WHERE serverId = :serverId AND id = :id")
@@ -32,6 +33,10 @@ interface AlbumDao {
 
     @Query("SELECT * FROM albums WHERE serverId = :serverId AND genre = :genre COLLATE NOCASE ORDER BY artistSortKey, year, nameSortKey")
     fun observeByGenre(serverId: String, genre: String): Flow<List<AlbumEntity>>
+
+    /** Earliest and latest known album year: the bounds of the year filter. */
+    @Query("SELECT MIN(year) AS earliest, MAX(year) AS latest FROM albums WHERE serverId = :serverId AND year > 0")
+    fun observeYearRange(serverId: String): Flow<YearBounds>
 
     @Query("SELECT * FROM albums WHERE serverId = :serverId AND starred = 1 ORDER BY nameSortKey")
     fun observeStarred(serverId: String): Flow<List<AlbumEntity>>
@@ -54,19 +59,6 @@ interface AlbumDao {
     /** Deterministic pseudo-random order for a given seed, so Home stays stable between recompositions. */
     @Query("SELECT * FROM albums WHERE serverId = :serverId ORDER BY ABS((rowid * 1103515245 + :seed) % 2147483647) LIMIT :limit")
     fun observeRandom(serverId: String, limit: Int, seed: Long): Flow<List<AlbumEntity>>
-
-    @Query(
-        "SELECT albums.* FROM albums JOIN albums_fts ON albums.rowid = albums_fts.rowid " +
-            "WHERE albums_fts MATCH :match AND albums.serverId = :serverId " +
-            "ORDER BY albums.name COLLATE NOCASE LIMIT :limit",
-    )
-    fun searchFts(serverId: String, match: String, limit: Int): Flow<List<AlbumEntity>>
-
-    @Query(
-        "SELECT * FROM albums WHERE serverId = :serverId AND (name LIKE :pattern ESCAPE '\\' OR artistName LIKE :pattern ESCAPE '\\') " +
-            "ORDER BY name COLLATE NOCASE LIMIT :limit",
-    )
-    fun searchLike(serverId: String, pattern: String, limit: Int): Flow<List<AlbumEntity>>
 
     @Query("SELECT id, trackCount FROM albums WHERE serverId = :serverId")
     suspend fun getTrackCounts(serverId: String): List<AlbumTrackCount>
@@ -95,3 +87,6 @@ interface AlbumDao {
     @Query("SELECT COUNT(*) FROM albums WHERE serverId = :serverId")
     suspend fun count(serverId: String): Int
 }
+
+/** See `AlbumDao.observeYearRange`; both null when no album has a year. */
+data class YearBounds(val earliest: Int?, val latest: Int?)

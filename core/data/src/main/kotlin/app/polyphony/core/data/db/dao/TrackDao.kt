@@ -18,8 +18,17 @@ interface TrackDao {
     @Upsert
     suspend fun upsert(item: TrackEntity)
 
+    /** [query] from `SortQueries.tracks` or `SearchQueries`. */
     @RawQuery(observedEntities = [TrackEntity::class])
     fun observeSorted(query: SupportSQLiteQuery): Flow<List<TrackEntity>>
+
+    /** [query] from `SortQueries.trackCount`. */
+    @RawQuery(observedEntities = [TrackEntity::class])
+    fun observeCountOf(query: SupportSQLiteQuery): Flow<Int>
+
+    /** [query] from `SortQueries.trackIds`. */
+    @RawQuery(observedEntities = [TrackEntity::class])
+    fun observeIds(query: SupportSQLiteQuery): Flow<List<String>>
 
     /** [query] from `SortQueries.tracks`; Room's offset paging source, which supports jumping. */
     @RawQuery(observedEntities = [TrackEntity::class])
@@ -75,19 +84,6 @@ interface TrackDao {
             "ON h.trackId = t.id WHERE t.serverId = :serverId ORDER BY h.lastPlayed DESC LIMIT :limit",
     )
     fun observeRecentlyPlayed(serverId: String, limit: Int): Flow<List<TrackEntity>>
-
-    @Query(
-        "SELECT tracks.* FROM tracks JOIN tracks_fts ON tracks.rowid = tracks_fts.rowid " +
-            "WHERE tracks_fts MATCH :match AND tracks.serverId = :serverId " +
-            "ORDER BY tracks.title COLLATE NOCASE LIMIT :limit",
-    )
-    fun searchFts(serverId: String, match: String, limit: Int): Flow<List<TrackEntity>>
-
-    @Query(
-        "SELECT * FROM tracks WHERE serverId = :serverId AND (title LIKE :pattern ESCAPE '\\' OR artistName LIKE :pattern ESCAPE '\\' OR albumName LIKE :pattern ESCAPE '\\') " +
-            "ORDER BY title COLLATE NOCASE LIMIT :limit",
-    )
-    fun searchLike(serverId: String, pattern: String, limit: Int): Flow<List<TrackEntity>>
 
     @Query("UPDATE tracks SET starred = :starred WHERE serverId = :serverId AND id = :id")
     suspend fun setStarred(serverId: String, id: String, starred: Boolean)

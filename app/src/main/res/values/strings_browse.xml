@@ -195,4 +195,22 @@
     <string name="browse_swipe_favorite">Favourite</string>
     <string name="browse_swipe_unfavorite">Unfavourite</string>
     <string name="browse_swipe_info">Info</string>
+    <!-- Library and search filters -->
+    <string name="browse_filter_favourites">Favourites</string>
+    <string name="browse_filter_downloaded">Downloaded</string>
+    <string name="browse_filter_rating_any">Rating</string>
+    <string name="browse_filter_rating_at_least">%1$d★ and up</string>
+    <string name="browse_filter_rating_five">5★ only</string>
+    <string name="browse_filter_genre">Genre</string>
+    <string name="browse_filter_genre_any">Any genre</string>
+    <string name="browse_filter_year">Year</string>
+    <string name="browse_filter_year_any">Any year</string>
+    <string name="browse_filter_year_range">%1$d–%2$d</string>
+    <string name="browse_filter_year_from">%1$d on</string>
+    <string name="browse_filter_year_to">Up to %1$d</string>
+    <string name="browse_filter_apply">Apply</string>
+    <string name="browse_filter_clear">Clear</string>
+    <string name="browse_filter_clear_all">Clear filters</string>
+    <string name="browse_filter_no_matches">Nothing matches these filters</string>
+    <string name="browse_filter_no_matches_hint">Try loosening or clearing a filter.</string>
 </resources>

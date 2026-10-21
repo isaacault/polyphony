@@ -7,6 +7,7 @@ import app.polyphony.core.domain.model.ArtistSort
 import app.polyphony.core.domain.model.Genre
 import app.polyphony.core.domain.model.ItemKind
 import app.polyphony.core.domain.model.LetterIndex
+import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.model.Lyrics
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.SearchResults
@@ -23,12 +24,12 @@ import kotlinx.coroutines.flow.StateFlow
  */
 interface LibraryRepository {
     // ---- Artists ----
-    fun artists(sort: ArtistSort = ArtistSort.NAME): Flow<List<Artist>>
+    fun artists(sort: ArtistSort = ArtistSort.NAME, filter: LibraryFilter = LibraryFilter.NONE): Flow<List<Artist>>
     fun artist(id: String): Flow<Artist?>
     fun starredArtists(): Flow<List<Artist>>
 
     // ---- Albums ----
-    fun albums(sort: AlbumSort = AlbumSort.NAME, ascending: Boolean = true): Flow<List<Album>>
+    fun albums(sort: AlbumSort = AlbumSort.NAME, ascending: Boolean = true, filter: LibraryFilter = LibraryFilter.NONE): Flow<List<Album>>
     fun album(id: String): Flow<Album?>
     fun albumsByArtist(artistId: String): Flow<List<Album>>
     fun albumsByGenre(genre: String): Flow<List<Album>>
@@ -46,19 +47,33 @@ interface LibraryRepository {
      * and anything else that can show tens of thousands of rows: it never materialises the whole
      * list, and a write to the tracks table only reloads the pages on screen.
      */
-    fun pagedTracks(sort: TrackSort = TrackSort.TITLE, ascending: Boolean = true): Flow<PagingData<Track>>
+    fun pagedTracks(
+        sort: TrackSort = TrackSort.TITLE,
+        ascending: Boolean = true,
+        filter: LibraryFilter = LibraryFilter.NONE,
+    ): Flow<PagingData<Track>>
 
-    /** Number of tracks [pagedTracks] will show (after offline filtering). */
-    fun trackCount(): Flow<Int>
+    /** Number of tracks [pagedTracks] will show for [filter] (after offline filtering). */
+    fun trackCount(filter: LibraryFilter = LibraryFilter.NONE): Flow<Int>
 
-    /** Alphabet-rail positions for [pagedTracks] with the same sort, built from sort keys only. */
-    fun trackLetterIndex(sort: TrackSort = TrackSort.TITLE, ascending: Boolean = true): Flow<LetterIndex>
+    /** Alphabet-rail positions for [pagedTracks] with the same sort and filter, built from sort keys only. */
+    fun trackLetterIndex(
+        sort: TrackSort = TrackSort.TITLE,
+        ascending: Boolean = true,
+        filter: LibraryFilter = LibraryFilter.NONE,
+    ): Flow<LetterIndex>
 
     /** [limit] tracks from [offset] in the same order as [pagedTracks]: builds a queue without loading the whole list. */
-    suspend fun tracksSlice(sort: TrackSort, ascending: Boolean, offset: Int, limit: Int): List<Track>
+    suspend fun tracksSlice(
+        sort: TrackSort,
+        ascending: Boolean,
+        offset: Int,
+        limit: Int,
+        filter: LibraryFilter = LibraryFilter.NONE,
+    ): List<Track>
 
-    /** A random sample of the active server's cached tracks, for shuffling without the server. */
-    suspend fun randomCachedTracks(limit: Int): List<Track>
+    /** A random sample of the active server's cached tracks matching [filter], for shuffling without the server. */
+    suspend fun randomCachedTracks(limit: Int, filter: LibraryFilter = LibraryFilter.NONE): List<Track>
     fun track(id: String): Flow<Track?>
     fun tracksForAlbum(albumId: String): Flow<List<Track>>
     fun tracksForArtist(artistId: String): Flow<List<Track>>
@@ -69,19 +84,24 @@ interface LibraryRepository {
     suspend fun getTracks(ids: List<String>): List<Track>
 
     // ---- Playlists ----
-    fun playlists(): Flow<List<Playlist>>
+    fun playlists(filter: LibraryFilter = LibraryFilter.NONE): Flow<List<Playlist>>
     fun playlist(id: String): Flow<Playlist?>
     fun tracksForPlaylist(playlistId: String): Flow<List<Track>>
 
     // ---- Genres ----
     fun genres(): Flow<List<Genre>>
 
+    /** Earliest and latest album year in the cache, for the year filter; `null` when no album has one. */
+    fun yearRange(): Flow<IntRange?>
+
     // ---- Search ----
     /**
-     * Local, instant search over the cached library. [downloadedOnly] keeps only what is on the
-     * phone (the Downloaded search scope), whether or not offline mode is on.
+     * Local, instant search over the cached library, narrowed by [filter] in SQL so the limit
+     * still fills. Its `downloadedOnly` keeps only what is on the phone (the Downloaded search
+     * scope), whether or not offline mode is on. A section the filter cannot apply to (a rating
+     * filter and artists' genres, see [LibraryFilter.excludesAll]) comes back empty.
      */
-    fun searchLocal(query: String, limit: Int = 30, downloadedOnly: Boolean = false): Flow<SearchResults>
+    fun searchLocal(query: String, limit: Int = 30, filter: LibraryFilter = LibraryFilter.NONE): Flow<SearchResults>
     /** Remote search for things not yet synced. */
     suspend fun searchRemote(query: String): SearchResults
 
