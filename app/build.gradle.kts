@@ -114,6 +114,7 @@ dependencies {
     implementation(project(":core:ui"))
     implementation(project(":core:downloads"))
     implementation(project(":core:dlna"))
+    implementation(project(":core:requests"))
     implementation(project(":provider:subsonic"))
     implementation(project(":provider:jellyfin"))
 
