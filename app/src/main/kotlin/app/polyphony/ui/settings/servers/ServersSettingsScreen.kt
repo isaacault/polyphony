@@ -193,7 +193,11 @@ private fun ServerRow(
     var menuOpen by remember { mutableStateOf(false) }
     PreferenceRow(
         title = server.name,
-        summary = "${server.type.displayName} · ${server.displayHost}",
+        summary = if (server.needsContinuoSignIn) {
+            "${server.displayHost} · ${stringResource(R.string.continuo_server_needs_sign_in)}"
+        } else {
+            "${server.type.displayName} · ${server.displayHost}"
+        },
         icon = when (server.type) {
             ServerType.SUBSONIC -> Icons.Rounded.Storage
             ServerType.JELLYFIN -> Icons.Rounded.Dns

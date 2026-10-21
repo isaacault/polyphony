@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A continuo server without this install's device session (e.g. restored from a backup) -->
+    <string name="continuo_server_needs_sign_in">Needs your continuo password</string>
+    <string name="continuo_server_password_sign_in">Enter your continuo password to sign this phone in</string>
+    <plurals name="continuo_backup_restored_sign_in">
+        <item quantity="one">Enter the continuo password for %1$d server in Settings → Servers</item>
+        <item quantity="other">Enter the continuo password for %1$d servers in Settings → Servers</item>
+    </plurals>
+</resources>

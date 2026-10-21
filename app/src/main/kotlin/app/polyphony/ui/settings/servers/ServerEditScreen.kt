@@ -100,6 +100,8 @@ data class ServerEditUiState(
     val baseUrl: String = "",
     val username: String = "",
     val password: String = "",
+    /** A continuo server with no device session here (e.g. restored from a backup). */
+    val needsContinuoSignIn: Boolean = false,
     val legacyAuth: Boolean = false,
     val trustSelfSigned: Boolean = false,
     val remoteBaseUrl: String = "",
@@ -148,6 +150,7 @@ class ServerEditViewModel @Inject constructor(
                         name = server.name,
                         baseUrl = server.baseUrl,
                         username = server.username,
+                        needsContinuoSignIn = server.needsContinuoSignIn,
                         legacyAuth = server.options[ServerOptions.LEGACY_AUTH] == "true",
                         trustSelfSigned = server.options[ServerOptions.TRUST_SELF_SIGNED] == "true",
                         remoteBaseUrl = server.options[ServerOptions.REMOTE_BASE_URL].orEmpty(),
@@ -371,7 +374,10 @@ fun ServerEditScreen(viewModel: ServerEditViewModel = hiltViewModel()) {
                         value = state.password,
                         onValueChange = viewModel::onPassword,
                         label = stringResource(R.string.settings_server_password),
-                        supporting = stringResource(R.string.settings_server_password_keep),
+                        supporting = stringResource(
+                            if (state.needsContinuoSignIn) R.string.continuo_server_password_sign_in
+                            else R.string.settings_server_password_keep,
+                        ),
                     )
                 }
             }
