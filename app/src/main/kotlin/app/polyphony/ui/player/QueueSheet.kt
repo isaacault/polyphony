@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -25,6 +26,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -40,7 +45,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -77,6 +85,9 @@ fun QueueSheet(
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsStateWithLifecycle()
     val haptics = rememberHaptics(hapticsEnabled)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val snackHost = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     var items by remember { mutableStateOf(playback.queue.toQueueItems()) }
     var dragging by remember { mutableStateOf(false) }
@@ -126,9 +137,19 @@ fun QueueSheet(
                             val dismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = { value ->
                                     if (value == SwipeToDismissBoxValue.EndToStart) {
+                                        val removed = item.track
+                                        val removedIndex = index
                                         items = items.toMutableList().apply { removeAt(index) }
                                         viewModel.removeFromQueue(index)
                                         haptics.gestureEnd()
+                                        scope.launch {
+                                            val result = snackHost.showSnackbar(
+                                                message = context.getString(R.string.queue_removed, removed.title),
+                                                actionLabel = context.getString(R.string.browse_action_undo),
+                                                duration = SnackbarDuration.Short,
+                                            )
+                                            if (result == SnackbarResult.ActionPerformed) viewModel.insertIntoQueue(removedIndex, removed)
+                                        }
                                         true
                                     } else {
                                         false
@@ -181,6 +202,7 @@ fun QueueSheet(
                     }
                 }
             }
+            SnackbarHost(snackHost, modifier = Modifier.navigationBarsPadding())
         }
     }
 }

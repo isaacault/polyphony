@@ -150,6 +150,7 @@ class PlayerViewModel @Inject constructor(
     fun seekTo(positionMs: Long) = playbackController.seekTo(positionMs)
     fun skipToQueueItem(index: Int) = playbackController.skipToQueueItem(index)
     fun removeFromQueue(index: Int) = playbackController.removeFromQueue(index)
+    fun insertIntoQueue(index: Int, track: Track) = playbackController.insertIntoQueue(index, listOf(track))
     fun moveQueueItem(from: Int, to: Int) = playbackController.moveQueueItem(from, to)
     fun clearQueue() = playbackController.clearQueue()
     fun toggleShuffle() = playbackController.setShuffle(!playback.value.shuffleEnabled)

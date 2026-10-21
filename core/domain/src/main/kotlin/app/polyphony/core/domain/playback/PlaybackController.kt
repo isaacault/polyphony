@@ -81,6 +81,8 @@ interface PlaybackController {
     fun playNext(tracks: List<Track>)
     fun addToQueue(tracks: List<Track>)
     fun removeFromQueue(index: Int)
+    /** Re-insert tracks at [index] (used to undo a removal). */
+    fun insertIntoQueue(index: Int, tracks: List<Track>)
     fun moveQueueItem(from: Int, to: Int)
     fun clearQueue()
 
