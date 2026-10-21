@@ -2,6 +2,7 @@ package app.polyphony.ui.common
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,6 +54,7 @@ import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.ui.components.ArtworkImage
+import app.polyphony.core.ui.components.StarRating
 import app.polyphony.core.ui.components.albumSubtitle
 import app.polyphony.core.ui.theme.ArtworkShapes
 import app.polyphony.navigation.LocalNavigator
@@ -104,6 +106,7 @@ fun TrackOptionsSheet(
             haptics.performHapticFeedback(if (track.starred) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
             vm.toggleStarred(track); onDismiss()
         }
+        RatingRow(initial = track.rating, onRate = { vm.rate(track, it) })
         HorizontalDivider(Modifier.padding(vertical = 4.dp))
         if (track.albumId != null) {
             SheetItem(Icons.Rounded.Album, stringResource(R.string.browse_action_go_to_album)) {
@@ -166,12 +169,27 @@ fun AlbumOptionsSheet(
             haptics.performHapticFeedback(if (album.starred) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
             vm.toggleStarred(album); onDismiss()
         }
+        RatingRow(initial = album.rating, onRate = { vm.rate(album, it) })
         if (album.artistId != null) {
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
             SheetItem(Icons.Rounded.Person, stringResource(R.string.browse_action_go_to_artist)) {
                 onDismiss(); album.artistId?.let(navigator::openArtist)
             }
         }
+    }
+}
+
+/** A labelled 1–5 star row for the option sheets; keeps the stars responsive without dismissing. */
+@Composable
+private fun RatingRow(initial: Int, onRate: (Int) -> Unit) {
+    var rating by remember { mutableStateOf(initial) }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(stringResource(R.string.browse_action_rating), style = MaterialTheme.typography.bodyLarge)
+        StarRating(rating = rating, onRate = { rating = it; onRate(it) }, starSize = 22)
     }
 }
 

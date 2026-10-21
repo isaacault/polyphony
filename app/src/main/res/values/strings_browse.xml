@@ -99,6 +99,7 @@
     <string name="browse_action_go_to_genre">Go to genre</string>
     <string name="browse_action_go_to_favorites">Go to favourites</string>
     <string name="browse_action_song_info">Song info</string>
+    <string name="browse_action_rating">Rating</string>
     <string name="browse_action_new_playlist">New playlist</string>
     <string name="browse_action_create">Create</string>
     <string name="browse_action_rename">Rename</string>
