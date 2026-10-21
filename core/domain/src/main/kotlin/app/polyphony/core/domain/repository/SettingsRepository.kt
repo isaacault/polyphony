@@ -52,6 +52,8 @@ data class AppearanceSettings(
     val pureBlack: Boolean = false,
     /** Tint the Now Playing screen with colours extracted from the artwork. */
     val artworkColorsInPlayer: Boolean = true,
+    /** On a metered/cellular connection, request smaller cover art to save data. */
+    val reduceImageDataOnMobile: Boolean = true,
     /** 0 = automatic based on width. */
     val gridColumns: Int = 0,
     val playerArtworkStyle: PlayerArtworkStyle = PlayerArtworkStyle.ROUNDED,

@@ -98,6 +98,8 @@
     <string name="settings_appearance_artwork_colors_summary">Tint Now Playing with colours from the album art</string>
     <string name="settings_appearance_blur">Blurred artwork background</string>
     <string name="settings_appearance_blur_summary">Soft, dimmed copy of the artwork behind the player</string>
+    <string name="settings_appearance_reduce_image_data">Save data on mobile</string>
+    <string name="settings_appearance_reduce_image_data_summary">Load smaller cover art on a metered or cellular connection</string>
     <string name="settings_appearance_artwork_style">Artwork shape</string>
     <string name="settings_appearance_style_rounded">Rounded</string>
     <string name="settings_appearance_style_square">Square</string>
