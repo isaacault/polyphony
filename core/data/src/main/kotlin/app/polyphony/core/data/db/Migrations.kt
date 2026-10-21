@@ -25,5 +25,36 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
+    /**
+     * v3: stored A–Z sort keys (leading "The"/"A"/"An" dropped, NOCASE) on artists, albums and
+     * tracks, plus indexes for the Songs sorts. Existing rows are backfilled with the SQL twin of
+     * `sortKey`; rows written from then on get their keys from the entity defaults.
+     */
+    private val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            val columns = mapOf(
+                "artists" to listOf("nameSortKey" to "COALESCE(NULLIF(trim(sortName), ''), name)"),
+                "albums" to listOf(
+                    "nameSortKey" to "COALESCE(NULLIF(trim(sortName), ''), name)",
+                    "artistSortKey" to "COALESCE(artistName, '')",
+                ),
+                "tracks" to listOf(
+                    "titleSortKey" to "title",
+                    "artistSortKey" to "COALESCE(artistName, '')",
+                    "albumSortKey" to "COALESCE(albumName, '')",
+                ),
+            )
+            for ((table, keys) in columns) {
+                for ((column, source) in keys) {
+                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `$column` TEXT NOT NULL COLLATE NOCASE DEFAULT ''")
+                    db.execSQL("UPDATE `$table` SET `$column` = ${SortQueries.sortable(source)}")
+                }
+            }
+            for (column in listOf("titleSortKey", "artistSortKey", "albumSortKey")) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_tracks_serverId_$column` ON `tracks` (`serverId`, `$column`)")
+            }
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
 }

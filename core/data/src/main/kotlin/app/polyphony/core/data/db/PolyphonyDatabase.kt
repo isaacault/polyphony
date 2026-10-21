@@ -75,6 +75,6 @@ abstract class PolyphonyDatabase : RoomDatabase() {
          * Bump together with a new entry in [Migrations.ALL] and the exported JSON under
          * `core/data/schemas`; `MigrationsChainTest` fails the build if the chain has a gap.
          */
-        const val VERSION = 2
+        const val VERSION = 3
     }
 }
