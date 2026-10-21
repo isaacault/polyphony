@@ -3,6 +3,7 @@ package app.polyphony.ui.player
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -32,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -51,6 +53,7 @@ import app.polyphony.core.ui.util.formatBytes
 import app.polyphony.core.ui.util.formatDuration
 import app.polyphony.core.ui.util.formatDurationLong
 import java.util.Locale
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 @Composable
@@ -63,47 +66,62 @@ fun SleepTimerDialog(
 ) {
     val presets = listOf(5, 10, 15, 30, 45, 60, 90)
     var finishTrack by remember { mutableStateOf(false) }
+    // Ticks once a second while a timer runs so "Ends in" counts down instead of freezing.
+    val now by produceState(System.currentTimeMillis(), endsAtEpochMs) {
+        while (endsAtEpochMs != null) {
+            value = System.currentTimeMillis()
+            delay(1_000L - value % 1_000L)
+        }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Rounded.Bedtime, null) },
         title = { Text(stringResource(R.string.player_sleep_timer)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 endsAtEpochMs?.let {
-                    val remaining = (it - System.currentTimeMillis()).coerceAtLeast(0L)
+                    val remaining = it - now
                     Text(
-                        text = stringResource(R.string.player_sleep_timer_ends, formatDurationLong(remaining)),
+                        // A finish-the-track timer whose time is up waits for the track change.
+                        text = if (remaining > 0) {
+                            stringResource(R.string.player_sleep_timer_ends, formatDurationLong(remaining))
+                        } else {
+                            stringResource(R.string.sleep_timer_ends_with_track)
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    presets.take(4).forEach { m ->
-                        FilterChip(selected = false, onClick = { onPickMinutes(m, finishTrack); onDismiss() }, label = { Text(stringResource(R.string.sleep_timer_minutes, m)) })
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    presets.drop(4).forEach { m ->
-                        FilterChip(selected = false, onClick = { onPickMinutes(m, finishTrack); onDismiss() }, label = { Text(stringResource(R.string.sleep_timer_minutes, m)) })
-                    }
-                    FilterChip(selected = false, onClick = { onEndOfTrack(); onDismiss() }, label = { Text(stringResource(R.string.sleep_timer_end_of_track)) })
-                }
+                // Before the presets: picking one starts the timer at once, so this must be set first.
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable { finishTrack = !finishTrack },
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(stringResource(R.string.sleep_timer_finish_track), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(checked = finishTrack, onCheckedChange = { finishTrack = it })
                 }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    presets.forEach { m ->
+                        FilterChip(selected = false, onClick = { onPickMinutes(m, finishTrack); onDismiss() }, label = { Text(stringResource(R.string.sleep_timer_minutes, m)) })
+                    }
+                }
+                FilterChip(
+                    selected = false,
+                    onClick = { onEndOfTrack(); onDismiss() },
+                    label = { Text(stringResource(R.string.sleep_timer_end_of_track)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         },
-        confirmButton = {
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_close)) } },
+        dismissButton = {
             if (endsAtEpochMs != null) {
                 TextButton(onClick = { onCancelTimer(); onDismiss() }) { Text(stringResource(R.string.sleep_timer_cancel)) }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) } },
     )
 }
 
