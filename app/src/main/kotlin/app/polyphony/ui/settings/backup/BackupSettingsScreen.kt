@@ -47,7 +47,7 @@ private const val BACKUP_MIME = "application/json"
 sealed interface BackupMessage {
     data object Exported : BackupMessage
     data class ExportFailed(val reason: String?) : BackupMessage
-    data class Restored(val serverCount: Int) : BackupMessage
+    data class Restored(val serverCount: Int, val needsSignIn: Int) : BackupMessage
     data class RestoreFailed(val reason: String?) : BackupMessage
 }
 
@@ -91,7 +91,7 @@ class BackupSettingsViewModel @Inject constructor(
                 }
                 backupManager.restore(text)
             }
-                .onSuccess { _messages.send(BackupMessage.Restored(it.serverCount)) }
+                .onSuccess { _messages.send(BackupMessage.Restored(it.serverCount, it.needsSignIn)) }
                 .onFailure { _messages.send(BackupMessage.RestoreFailed(it.message)) }
         }
     }
@@ -113,7 +113,7 @@ fun BackupSettingsScreen(viewModel: BackupSettingsViewModel = hiltViewModel()) {
             when (message) {
                 BackupMessage.Exported -> snackbar.showSnackbar(exported)
                 is BackupMessage.ExportFailed -> snackbar.showSnackbar(message.reason ?: exportFailed)
-                is BackupMessage.Restored -> snackbar.showSnackbar(restoredMessage(context, message.serverCount))
+                is BackupMessage.Restored -> snackbar.showSnackbar(restoredMessage(context, message.serverCount, message.needsSignIn))
                 is BackupMessage.RestoreFailed -> snackbar.showSnackbar(message.reason ?: restoreFailed)
             }
         }
@@ -155,5 +155,10 @@ fun BackupSettingsScreen(viewModel: BackupSettingsViewModel = hiltViewModel()) {
     }
 }
 
-private fun restoredMessage(context: Context, serverCount: Int): String =
-    context.resources.getQuantityString(R.plurals.settings_backup_restored, serverCount, serverCount)
+private fun restoredMessage(context: Context, serverCount: Int, needsSignIn: Int): String {
+    val restored = context.resources.getQuantityString(R.plurals.settings_backup_restored, serverCount, serverCount)
+    if (needsSignIn == 0) return restored
+    // continuo servers come back without a device session; each needs one fresh sign-in.
+    val signIn = context.resources.getQuantityString(R.plurals.continuo_backup_restored_sign_in, needsSignIn, needsSignIn)
+    return "$restored\n$signIn"
+}

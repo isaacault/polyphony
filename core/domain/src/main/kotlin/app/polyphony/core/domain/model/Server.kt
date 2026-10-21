@@ -28,6 +28,31 @@ data class Server(
 ) {
     val displayHost: String
         get() = baseUrl.removePrefix("https://").removePrefix("http://").trimEnd('/')
+
+    /** True when this server is a continuo server ([ServerOptions.CONTINUO]). */
+    val isContinuo: Boolean
+        get() = options[ServerOptions.CONTINUO] == "true"
+
+    /**
+     * A continuo server with no app password for this install, e.g. one restored from a backup
+     * ([withoutContinuoSession]): it needs the continuo password once to sign this phone in as a
+     * new device.
+     */
+    val needsContinuoSignIn: Boolean
+        get() = isContinuo && credential.isEmpty()
+
+    /**
+     * This server without its continuo device: no app password, device id or refresh token, but
+     * still marked continuo so the app asks for a fresh sign-in. A continuo session belongs to one
+     * install; a copy used on a second phone would present already-rotated refresh tokens, and
+     * continuo revokes the device for both. Any other server is returned unchanged.
+     */
+    fun withoutContinuoSession(): Server =
+        if (!isContinuo) this
+        else copy(
+            credential = "",
+            options = options - ServerOptions.CONTINUO_DEVICE_ID - ServerOptions.CONTINUO_REFRESH_TOKEN,
+        )
 }
 
 /** Keys used inside [Server.options]. */
