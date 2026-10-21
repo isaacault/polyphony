@@ -399,6 +399,13 @@ class PlaybackControllerImpl @Inject constructor(
         if (index in 0 until c.mediaItemCount) c.removeMediaItem(index)
     }
 
+    override fun insertIntoQueue(index: Int, tracks: List<Track>) {
+        if (tracks.isEmpty()) return
+        queueStore.putAll(tracks)
+        val items = tracks.map(::itemFor)
+        withController { c -> c.addMediaItems(index.coerceIn(0, c.mediaItemCount), items) }
+    }
+
     override fun moveQueueItem(from: Int, to: Int) = withController { c ->
         if (from in 0 until c.mediaItemCount && to in 0 until c.mediaItemCount && from != to) c.moveMediaItem(from, to)
     }

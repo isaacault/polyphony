@@ -49,6 +49,7 @@
     <string name="queue_saved">Playlist “%1$s” created</string>
     <string name="queue_empty">Nothing in the queue</string>
     <string name="queue_remove">Remove from queue</string>
+    <string name="queue_removed">Removed “%1$s”</string>
     <string name="queue_drag">Drag to reorder</string>
 
     <!-- Lyrics -->
