@@ -276,4 +276,82 @@ class ContinuoRequestRepositoryTest {
         val auth = fake.seen.filter { it.first.url.encodedPath == "/v1/events" }.map { it.first.header("Authorization") }
         assertTrue(auth.size >= 2 && auth.all { it == "Bearer at_1" })
     }
+
+    private val notificationsBody = """{"items":[
+      {"id":4,"type":"request_available","title":"Ready to play","body":"Honeycomb — Jitwam",
+       "createdAt":"2026-10-21T08:30:00+00:00","readAt":null,"requestId":1,
+       "action":{"type":"open_album","navidromeAlbumId":"nd-h","requestId":1,"deepLink":"polyphony://album/music-api.example.com/nd-h"}},
+      {"id":5,"type":"request_needs_attention","title":"A request needs a look","body":"Third: ambiguous",
+       "createdAt":"2026-10-21T09:00:00+00:00","readAt":"2026-10-21T09:05:00+00:00","requestId":3,
+       "action":{"type":"open_request","requestId":3,"deepLink":"polyphony://requests/3"}},
+      {"id":6,"type":"something_new","title":"Hello","body":"","createdAt":"garbage","readAt":null,"action":null,"requestId":null}
+    ],"cursor":6,"unreadCount":2}"""
+
+    @Test
+    fun `notifications are listed with their actions`() = runTest {
+        val fake = FakeContinuo().apply { routes["GET /v1/notifications"] = { _, _ -> 200 to notificationsBody } }
+        val page = repo(fake, FakeServers(server)).notifications(server, since = 3, unreadOnly = true, limit = 50)
+
+        assertEquals(listOf(4L, 5L, 6L), page.items.map { it.id })
+        assertEquals(6L, page.cursor)
+        assertEquals(2, page.unreadCount)
+        val available = page.items[0]
+        assertEquals("request_available", available.type)
+        assertEquals("Honeycomb — Jitwam", available.body)
+        assertEquals("polyphony://album/music-api.example.com/nd-h", available.deepLink)
+        assertEquals("nd-h", available.libraryAlbumId)
+        assertEquals(1L, available.requestId)
+        assertEquals(java.time.Instant.parse("2026-10-21T08:30:00Z").toEpochMilli(), available.createdAtMillis)
+        assertTrue(!available.read)
+        assertTrue(page.items[1].read)
+        assertEquals("polyphony://requests/3", page.items[1].deepLink)
+        val unknown = page.items[2]
+        assertNull(unknown.deepLink)
+        assertNull(unknown.body)
+        assertNull(unknown.createdAtMillis)
+        assertNull(unknown.requestId)
+
+        val sent = fake.seen.last { it.first.url.encodedPath == "/v1/notifications" }.first.url
+        assertEquals("3", sent.queryParameter("since"))
+        assertEquals("true", sent.queryParameter("unread"))
+        assertEquals("50", sent.queryParameter("limit"))
+    }
+
+    @Test
+    fun `an empty page keeps the cursor where it was`() = runTest {
+        val fake = FakeContinuo().apply {
+            routes["GET /v1/notifications"] = { _, _ -> 200 to """{"items":[],"unreadCount":0}""" }
+        }
+        val page = repo(fake, FakeServers(server)).notifications(server, since = 12, limit = 900)
+        assertTrue(page.items.isEmpty())
+        assertEquals(12L, page.cursor)
+        assertEquals("500", fake.seen.last { it.first.url.encodedPath == "/v1/notifications" }.first.url.queryParameter("limit"))
+    }
+
+    @Test
+    fun `mark read sends ids or all and returns the unread count`() = runTest {
+        val fake = FakeContinuo().apply {
+            routes["POST /v1/notifications/read"] = { _, body ->
+                200 to (if (body!!.contains("\"all\":true")) """{"ok":true,"marked":3,"unreadCount":0}"""
+                else """{"ok":true,"marked":1,"unreadCount":4}""")
+            }
+        }
+        val repo = repo(fake, FakeServers(server))
+        assertEquals(4, repo.markRead(server, listOf(7, 7, 8)))
+        assertEquals("""{"ids":[7,8]}""", fake.seen.last { it.first.url.encodedPath == "/v1/notifications/read" }.second)
+        assertEquals(0, repo.markAllRead(server))
+        assertEquals("""{"all":true}""", fake.seen.last { it.first.url.encodedPath == "/v1/notifications/read" }.second)
+    }
+
+    @Test
+    fun `a failed mark read is reported`() = runTest {
+        val fake = FakeContinuo().apply {
+            routes["POST /v1/notifications/read"] = { _, _ -> 400 to """{"error":{"code":"bad_request","message":"Pass ids or all=true."}}""" }
+        }
+        try {
+            repo(fake, FakeServers(server)).markRead(server, listOf(1)); fail("expected Server")
+        } catch (e: ProviderException.Server) {
+            assertEquals(400, e.code); assertEquals("Pass ids or all=true.", e.message)
+        }
+    }
 }

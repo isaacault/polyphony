@@ -81,6 +81,7 @@ fun PolyphonyShell(
 
     val playback by shellViewModel.playback.collectAsStateWithLifecycle()
     val hasServers by shellViewModel.hasServers.collectAsStateWithLifecycle()
+    val continuoLinked by shellViewModel.continuoLinked.collectAsStateWithLifecycle()
     val backStackEntry by navigator.navController.currentBackStackEntryAsState()
     val destination = backStackEntry?.destination
 
@@ -118,6 +119,8 @@ fun PolyphonyShell(
     LaunchedEffect(deepLink) {
         if (deepLink != null) {
             // Finish before consuming: clearing the link recomposes and cancels this effect.
+            val receipt = DeepLink.receiptOf(deepLink.toString())
+            if (receipt != null) shellViewModel.markNotificationRead(receipt)
             when (val link = DeepLink.parse(deepLink.toString())) {
                 DeepLink.Player -> if (playback.isActive) sheetState.expand()
                 DeepLink.Search -> navigator.openSearch()
@@ -131,8 +134,14 @@ fun PolyphonyShell(
                     }
                 }
                 is DeepLink.Requests -> if (!onOnboarding) {
+                    receipt?.let { shellViewModel.activateServer(it.serverId) }
                     sheetState.snapCollapsed()
                     navigator.openRequests(link.id)
+                }
+                DeepLink.Inbox -> if (!onOnboarding) {
+                    receipt?.let { shellViewModel.activateServer(it.serverId) }
+                    sheetState.snapCollapsed()
+                    navigator.openInbox()
                 }
                 null -> Unit
             }
@@ -140,7 +149,8 @@ fun PolyphonyShell(
         }
     }
     BackHandler(enabled = sheetState.isExpanded) { sheetState.collapse() }
-    NotificationPermissionEffect(active = playback.isActive)
+    // Playback's media notification, and continuo's request notifications (#118).
+    NotificationPermissionEffect(active = playback.isActive || continuoLinked)
 
     val scrimVisible by remember(sheetState) { derivedStateOf { sheetState.fraction > 0.001f } }
 

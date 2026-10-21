@@ -1,6 +1,7 @@
 package app.polyphony.core.requests
 
 import app.polyphony.core.domain.model.CatalogResults
+import app.polyphony.core.domain.model.InboxPage
 import app.polyphony.core.domain.model.MusicRequest
 import app.polyphony.core.domain.model.RequestAction
 import app.polyphony.core.domain.model.RequestEvent
@@ -109,5 +110,25 @@ class ContinuoRequestRepository internal constructor(
         }
         if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't do that")
         return runCatching { client.decode(ActionResultDto.serializer(), reply.body).message }.getOrNull().orEmpty()
+    }
+
+    override suspend fun notifications(server: Server, since: Long, unreadOnly: Boolean, limit: Int): InboxPage {
+        val from = since.coerceAtLeast(0)
+        val reply = client.get(server, "/v1/notifications?since=$from&unread=$unreadOnly&limit=${limit.coerceIn(1, 500)}")
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't list notifications")
+        return client.decode(NotificationListDto.serializer(), reply.body).toDomain(from)
+    }
+
+    override suspend fun markRead(server: Server, ids: List<Long>): Int {
+        if (ids.isEmpty()) return notifications(server, limit = 1).unreadCount
+        return postRead(server, Json.encodeToString(MarkReadIdsBody.serializer(), MarkReadIdsBody(ids.distinct())))
+    }
+
+    override suspend fun markAllRead(server: Server): Int = postRead(server, """{"all":true}""")
+
+    private suspend fun postRead(server: Server, body: String): Int {
+        val reply = client.post(server, "/v1/notifications/read", body)
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't mark notifications read")
+        return client.decode(MarkReadDto.serializer(), reply.body).unreadCount
     }
 }

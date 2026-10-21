@@ -228,3 +228,64 @@ internal fun RequestUpdateDto.toDomain() = app.polyphony.core.domain.model.Reque
     pipeline = pipeline?.toDomain(),
     libraryAlbumId = play?.navidromeAlbumId,
 )
+
+// ---- notifications (continuo PLAN.md §3.4) ----
+
+@Serializable
+internal data class NotificationActionDto(
+    val type: String? = null,
+    val deepLink: String? = null,
+    val navidromeAlbumId: String? = null,
+    val requestId: Long? = null,
+)
+
+@Serializable
+internal data class NotificationDto(
+    val id: Long,
+    val type: String = "",
+    val title: String? = null,
+    val body: String? = null,
+    val createdAt: String? = null,
+    val readAt: String? = null,
+    val action: NotificationActionDto? = null,
+    val requestId: Long? = null,
+)
+
+@Serializable
+internal data class NotificationListDto(
+    val items: List<NotificationDto> = emptyList(),
+    val cursor: Long? = null,
+    val unreadCount: Int = 0,
+)
+
+@Serializable
+internal data class MarkReadIdsBody(val ids: List<Long>)
+
+@Serializable
+internal data class MarkReadDto(val ok: Boolean = true, val marked: Int = 0, val unreadCount: Int = 0)
+
+/** continuo writes `2026-10-21T08:30:00+00:00`; anything unparseable is simply left out. */
+internal fun parseTimestamp(value: String?): Long? {
+    if (value.isNullOrBlank()) return null
+    return runCatching { java.time.OffsetDateTime.parse(value).toInstant().toEpochMilli() }
+        .recoverCatching { java.time.LocalDateTime.parse(value).toInstant(java.time.ZoneOffset.UTC).toEpochMilli() }
+        .getOrNull()
+}
+
+internal fun NotificationDto.toDomain() = app.polyphony.core.domain.model.InboxNotification(
+    id = id,
+    type = type,
+    title = title.orEmpty(),
+    body = body?.takeIf { it.isNotBlank() },
+    createdAtMillis = parseTimestamp(createdAt),
+    read = readAt != null,
+    deepLink = action?.deepLink?.takeIf { it.isNotBlank() },
+    libraryAlbumId = action?.navidromeAlbumId,
+    requestId = action?.requestId ?: requestId,
+)
+
+internal fun NotificationListDto.toDomain(since: Long) = app.polyphony.core.domain.model.InboxPage(
+    items = items.map { it.toDomain() },
+    cursor = cursor ?: items.lastOrNull()?.id ?: since,
+    unreadCount = unreadCount,
+)

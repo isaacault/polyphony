@@ -18,6 +18,7 @@ import app.polyphony.core.playback.transcode.TranscodeCapabilityProbe
 import app.polyphony.diagnostics.CrashRecorder
 import app.polyphony.image.ArtworkSizeInterceptor
 import app.polyphony.image.DataSaver
+import app.polyphony.inbox.InboxScheduler
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,11 +45,15 @@ class PolyphonyApplication : Application(), Configuration.Provider, SingletonIma
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var networkMonitor: NetworkMonitor
 
+    /** Keeps the continuo inbox poll scheduled while a continuo-linked server exists (#118). */
+    @Inject lateinit var inboxScheduler: InboxScheduler
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
         super.onCreate()
         CrashRecorder.install(this)
+        inboxScheduler.start(appScope)
         // Keep the artwork data saver in step with the setting and whether the network is metered.
         appScope.launch {
             combine(

@@ -58,6 +58,7 @@ import app.polyphony.core.ui.components.QualityBadge
 import app.polyphony.core.ui.components.listContentPadding
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.inbox.InboxButton
 import app.polyphony.ui.shell.LocalSnackbarHostState
 
 /** continuo requests (#117): what was asked for, where each one is, and what can be done. */
@@ -99,6 +100,7 @@ fun RequestsScreen(viewModel: RequestsViewModel = hiltViewModel()) {
                         }
                     },
                     actions = {
+                        if (state.linked) InboxButton()
                         IconButton(onClick = viewModel::reload) {
                             Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.requests_action_refresh))
                         }
