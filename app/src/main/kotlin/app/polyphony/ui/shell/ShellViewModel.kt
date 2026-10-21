@@ -6,6 +6,7 @@ import app.polyphony.core.domain.playback.CastController
 import app.polyphony.core.domain.playback.CastState
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.playback.PlaybackState
+import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,14 +15,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class ShellViewModel @Inject constructor(
-    playbackController: PlaybackController,
+    private val playbackController: PlaybackController,
     castController: CastController,
     serverRepository: ServerRepository,
     settingsRepository: SettingsRepository,
+    private val libraryRepository: LibraryRepository,
 ) : ViewModel() {
 
     val playback: StateFlow<PlaybackState> = playbackController.state
@@ -42,4 +45,23 @@ class ShellViewModel @Inject constructor(
         .map { it.playback.hapticFeedback }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    /**
+     * Shuffle the whole library and start playback. Mirrors `LibraryViewModel.shuffleLibrary` so
+     * the `polyphony://shuffle` launcher shortcut behaves exactly like "Shuffle all" in Library:
+     * a server-side random pick when online, a cached random sample otherwise.
+     */
+    fun shuffleLibrary() {
+        viewModelScope.launch {
+            val remote = runCatching { libraryRepository.getRandomTracks(SHUFFLE_CAP) }.getOrDefault(emptyList())
+            val picks = remote.ifEmpty { libraryRepository.randomCachedTracks(SHUFFLE_CAP) }
+            if (picks.isNotEmpty()) {
+                playbackController.playTracks(picks, 0, shuffle = false, queueTitle = "Shuffle all")
+            }
+        }
+    }
+
+    private companion object {
+        const val SHUFFLE_CAP = 300
+    }
 }

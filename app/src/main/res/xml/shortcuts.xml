@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Static launcher shortcuts (long-press the app icon). Each fires an implicit VIEW intent at a
+  polyphony:// deep link, resolved by MainActivity's existing VIEW intent-filter; keeping the
+  intents implicit means they work for every build type (the debug build's applicationId suffix
+  would break a hard-coded targetPackage). MainActivity reads the Uri and the shell routes it:
+    search   -> Search tab      shuffle -> shuffle-all playback      player -> Now Playing sheet
+  Order here is the order the launcher shows them.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="search"
+        android:enabled="true"
+        android:icon="@mipmap/ic_shortcut_search"
+        android:shortcutShortLabel="@string/shortcut_search_short"
+        android:shortcutLongLabel="@string/shortcut_search_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="polyphony://search" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="shuffle"
+        android:enabled="true"
+        android:icon="@mipmap/ic_shortcut_shuffle"
+        android:shortcutShortLabel="@string/shortcut_shuffle_short"
+        android:shortcutLongLabel="@string/shortcut_shuffle_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="polyphony://shuffle" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="player"
+        android:enabled="true"
+        android:icon="@mipmap/ic_shortcut_player"
+        android:shortcutShortLabel="@string/shortcut_player_short"
+        android:shortcutLongLabel="@string/shortcut_player_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="polyphony://player" />
+    </shortcut>
+</shortcuts>

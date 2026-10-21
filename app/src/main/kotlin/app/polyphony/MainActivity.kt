@@ -23,7 +23,11 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var settingsRepository: SettingsRepository
 
-    /** `polyphony://player` opens the Now Playing sheet; other links are ignored for now. */
+    /**
+     * `polyphony://` deep links, also fired by the launcher app shortcuts: `player` opens the Now
+     * Playing sheet, `search` opens the Search tab, `shuffle` starts shuffle-all playback. The
+     * shell ([PolyphonyShell]) routes the host; unknown hosts are ignored.
+     */
     private val deepLink = MutableStateFlow<Uri?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {

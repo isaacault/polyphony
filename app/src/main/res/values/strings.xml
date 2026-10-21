@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Polyphony</string>
+
+    <!-- Launcher app shortcuts (long-press the app icon). Short labels show on the launcher,
+         long labels in accessibility / pinned-shortcut surfaces. -->
+    <string name="shortcut_search_short">Search</string>
+    <string name="shortcut_search_long">Search your library</string>
+    <string name="shortcut_shuffle_short">Shuffle</string>
+    <string name="shortcut_shuffle_long">Shuffle all</string>
+    <string name="shortcut_player_short">Player</string>
+    <string name="shortcut_player_long">Open player</string>
 </resources>
