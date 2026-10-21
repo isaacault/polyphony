@@ -64,6 +64,7 @@ import app.polyphony.ui.browse.AlbumList
 import app.polyphony.ui.browse.ArtistGrid
 import app.polyphony.ui.browse.ArtistList
 import app.polyphony.ui.browse.ListControlsRow
+import app.polyphony.ui.browse.ScrollToTopOnReorder
 import app.polyphony.ui.browse.ScrollerHost
 import app.polyphony.ui.browse.gridCells
 import app.polyphony.ui.common.TrackSwipeRow
@@ -102,6 +103,7 @@ internal fun ArtistsTab(vm: LibraryViewModel) {
             start = { SortMenu(sortOptions, sort, ascending = true, onChange = { s, _ -> vm.setArtistSort(s) }, showDirection = false) },
             end = { GridListToggle(isGrid = grid, onToggle = vm::setArtistsGrid) },
         )
+        ScrollToTopOnReorder(order = sort, content = artists) { if (grid) gridState.scrollToItem(0) else listState.scrollToItem(0) }
         val list = artists
         when {
             list == null -> LoadingPlaceholder(if (grid) PlaceholderStyle.GRID else PlaceholderStyle.LIST)
@@ -158,6 +160,7 @@ internal fun AlbumsTab(vm: LibraryViewModel) {
             start = { SortMenu(sortOptions, sort, ascending, onChange = vm::setAlbumSort) },
             end = { GridListToggle(isGrid = grid, onToggle = vm::setAlbumsGrid) },
         )
+        ScrollToTopOnReorder(order = sort to ascending, content = albums) { if (grid) gridState.scrollToItem(0) else listState.scrollToItem(0) }
         val list = albums
         when {
             list == null -> LoadingPlaceholder(if (grid) PlaceholderStyle.GRID else PlaceholderStyle.LIST)
@@ -225,6 +228,8 @@ internal fun SongsTab(vm: LibraryViewModel) {
                 }
             },
         )
+        // The Play/Shuffle header is item 0 with a fixed key, so the top stays put as the new order loads.
+        ScrollToTopOnReorder(order = sort to ascending, content = null) { listState.scrollToItem(0) }
         val loading = items.loadState.refresh is LoadState.Loading
         when {
             items.itemCount == 0 && (loading || count == null) -> LoadingPlaceholder(PlaceholderStyle.LIST)

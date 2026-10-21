@@ -21,6 +21,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -33,6 +38,8 @@ import app.polyphony.core.ui.components.ArtistRow
 import app.polyphony.core.ui.components.listContentPadding
 import app.polyphony.core.ui.theme.Dimens
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 fun gridCells(columns: Int): GridCells =
     if (columns > 0) GridCells.Fixed(columns) else GridCells.Adaptive(Dimens.minGridTile)
@@ -155,6 +162,33 @@ fun ListControlsRow(
         end()
     }
 }
+
+/**
+ * Sends a list back to the top when [order] (its sort, direction and filters) changes. Keyed lazy
+ * lists otherwise hold on to the first visible item, so a re-sort leaves you looking at the same
+ * rows and seems to do nothing.
+ *
+ * Pass the list being shown as [content]: the jump waits until it is replaced, because jumping
+ * while the old rows are still there would let the key tracking follow them to their new place.
+ * Pass `null` when the list starts with an item whose key never moves (a header), which keeps
+ * the top pinned on its own. The first composition never scrolls, so a restored position stays.
+ */
+@Composable
+fun ScrollToTopOnReorder(order: Any?, content: Any?, scrollToTop: suspend () -> Unit) {
+    val applied = remember { arrayOf(order) }
+    val latestContent by rememberUpdatedState(content)
+    val latestScroll by rememberUpdatedState(scrollToTop)
+    LaunchedEffect(order) {
+        if (order == applied[0]) return@LaunchedEffect
+        applied[0] = order
+        val stale = latestContent
+        // An order that happens to produce an equal list never emits a new one: don't wait forever.
+        if (stale != null) withTimeoutOrNull(REORDER_WAIT_MS) { snapshotFlow { latestContent }.first { it !== stale } }
+        latestScroll()
+    }
+}
+
+private const val REORDER_WAIT_MS = 2_000L
 
 /** Box helper so a FastScroller can overlay a list that fills the tab. */
 @Composable
