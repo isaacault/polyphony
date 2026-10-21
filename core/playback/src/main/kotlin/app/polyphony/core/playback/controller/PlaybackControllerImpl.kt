@@ -417,10 +417,13 @@ class PlaybackControllerImpl @Inject constructor(
 
     override fun setPlaybackSpeed(speed: Float) = withController { it.setPlaybackSpeed(speed.coerceIn(0.25f, 3f)) }
 
-    override fun setSleepTimer(endsAtEpochMs: Long?) = withController { c ->
+    override fun setSleepTimer(endsAtEpochMs: Long?, finishTrack: Boolean) = withController { c ->
         c.sendCustomCommand(
             CustomCommands.of(CustomCommands.SET_SLEEP_TIMER),
-            Bundle().apply { putLong(CustomCommands.ARG_ENDS_AT, endsAtEpochMs ?: -1L) },
+            Bundle().apply {
+                putLong(CustomCommands.ARG_ENDS_AT, endsAtEpochMs ?: -1L)
+                putBoolean(CustomCommands.ARG_FINISH_TRACK, finishTrack)
+            },
         )
     }
 

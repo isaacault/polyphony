@@ -87,7 +87,7 @@ interface PlaybackController {
     fun setShuffle(enabled: Boolean)
     fun setRepeatMode(mode: RepeatMode)
     fun setPlaybackSpeed(speed: Float)
-    fun setSleepTimer(endsAtEpochMs: Long?)
+    fun setSleepTimer(endsAtEpochMs: Long?, finishTrack: Boolean = false)
 
     /** Clears the latency-degraded state so the normal profile applies again. */
     fun restoreQuality()

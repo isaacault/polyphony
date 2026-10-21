@@ -351,8 +351,8 @@ fun NowPlayingScreen(
         when (dialog) {
             PlayerDialog.SleepTimer -> SleepTimerDialog(
                 endsAtEpochMs = playback.sleepTimerEndsAtEpochMs,
-                onPickMinutes = {
-                    viewModel.setSleepTimerMinutes(it)
+                onPickMinutes = { minutes, finishTrack ->
+                    viewModel.setSleepTimerMinutes(minutes, finishTrack)
                     viewModel.showMessage(sleepSet)
                 },
                 onEndOfTrack = {
