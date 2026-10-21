@@ -1,11 +1,21 @@
 package app.polyphony.core.requests
 
 import app.polyphony.core.domain.model.CatalogResults
+import app.polyphony.core.domain.model.MusicRequest
+import app.polyphony.core.domain.model.RequestAction
+import app.polyphony.core.domain.model.RequestEvent
 import app.polyphony.core.domain.model.RequestOutcome
 import app.polyphony.core.domain.model.Server
+import app.polyphony.core.domain.provider.ProviderException
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.network.ServerHttpClientFactory
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.isActive
 import kotlinx.serialization.json.Json
 import java.net.URLEncoder
 import javax.inject.Inject
@@ -42,5 +52,62 @@ class ContinuoRequestRepository internal constructor(
             }
             else -> throw client.serverError(reply, "continuo couldn't request that album")
         }
+    }
+
+    override suspend fun requests(server: Server, activeOnly: Boolean): List<MusicRequest> {
+        val scope = if (activeOnly) "active" else "all"
+        val reply = client.get(server, "/v1/requests?scope=$scope&limit=200")
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't list requests")
+        val host = hostOf(server.baseUrl)
+        return client.decode(RequestListDto.serializer(), reply.body).items.map { it.toDomain(host) }
+    }
+
+    override fun events(server: Server): Flow<RequestEvent> = flow {
+        var failures = 0
+        var refreshToken = false
+        var reconnecting = false
+        while (currentCoroutineContext().isActive) {
+            try {
+                // A refused or expired session ends the stream: ProviderException.Unauthorized escapes.
+                val token = client.accessToken(server, force = refreshToken)
+                refreshToken = false
+                client.events(server, "/v1/events", token).collect { (type, data) ->
+                    when (type) {
+                        "hello" -> {
+                            failures = 0
+                            // Anything may have changed while disconnected.
+                            if (reconnecting) emit(RequestEvent.Resync)
+                            reconnecting = false
+                        }
+                        "request.updated" -> runCatching { client.decode(RequestUpdateDto.serializer(), data) }
+                            .getOrNull()?.let { emit(it.toDomain()) }
+                        "request.available" -> emit(RequestEvent.Resync)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ProviderException.Unauthorized) {
+                throw e
+            } catch (e: ContinuoClient.StreamUnauthorized) {
+                refreshToken = true
+            } catch (e: Exception) {
+                // Network blip, server restart: reconnect below.
+            }
+            reconnecting = true
+            failures++
+            delay((1_000L shl failures.coerceAtMost(5)).coerceAtMost(30_000L))
+        }
+    }
+
+    override suspend fun perform(server: Server, requestId: Long, action: RequestAction): String {
+        val base = "/v1/requests/$requestId"
+        val reply = when (action) {
+            RequestAction.SEARCH_NOW -> client.post(server, "$base/search-now", "{}")
+            RequestAction.RETRY -> client.post(server, "$base/retry", "{}")
+            RequestAction.DROP_DOWNLOAD -> client.post(server, "$base/drop-download", "{}")
+            RequestAction.REMOVE -> client.delete(server, base)
+        }
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't do that")
+        return runCatching { client.decode(ActionResultDto.serializer(), reply.body).message }.getOrNull().orEmpty()
     }
 }

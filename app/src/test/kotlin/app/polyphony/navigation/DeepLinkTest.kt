@@ -29,6 +29,12 @@ class DeepLinkTest {
     }
 
     @Test
+    fun `requests links`() {
+        assertEquals(DeepLink.Requests(17), DeepLink.parse("polyphony://requests/17"))
+        assertEquals(DeepLink.Requests(null), DeepLink.parse("polyphony://requests"))
+    }
+
+    @Test
     fun `launcher shortcut links still work`() {
         assertEquals(DeepLink.Player, DeepLink.parse("polyphony://player"))
         assertEquals(DeepLink.Search, DeepLink.parse("polyphony://search"))
@@ -39,7 +45,8 @@ class DeepLinkTest {
     fun `malformed or foreign links are ignored`() {
         assertNull(DeepLink.parse("polyphony://album/music-api.ault.me"))
         assertNull(DeepLink.parse("polyphony://album/a/b/c"))
-        assertNull(DeepLink.parse("polyphony://requests/17"))
+        assertNull(DeepLink.parse("polyphony://requests/not-a-number"))
+        assertNull(DeepLink.parse("polyphony://requests/1/2"))
         assertNull(DeepLink.parse("https://album/music-api.ault.me/x"))
         assertNull(DeepLink.parse("not a uri at all ::"))
     }

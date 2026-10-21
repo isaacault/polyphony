@@ -130,6 +130,10 @@ fun PolyphonyShell(
                         linkScope.launch { snackbarHostState.showSnackbar(missingServerText.format(link.server)) }
                     }
                 }
+                is DeepLink.Requests -> if (!onOnboarding) {
+                    sheetState.snapCollapsed()
+                    navigator.openRequests(link.id)
+                }
                 null -> Unit
             }
             onDeepLinkConsumed()

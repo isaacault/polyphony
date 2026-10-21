@@ -8,6 +8,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DownloadForOffline
+import androidx.compose.material.icons.rounded.LibraryAdd
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
@@ -40,6 +41,7 @@ import app.polyphony.R
 import app.polyphony.core.ui.components.SyncProgressBar
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.ui.common.OfflineModeBanner
+import app.polyphony.ui.common.rememberContinuoLinked
 import app.polyphony.ui.common.OfflineModeIconButton
 import kotlinx.coroutines.launch
 
@@ -60,6 +62,7 @@ fun LibraryScreen(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val sync by viewModel.syncState.collectAsStateWithLifecycle()
     var menuOpen by remember { mutableStateOf(false) }
+    val continuoLinked by rememberContinuoLinked()
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -86,6 +89,13 @@ fun LibraryScreen(
                                     leadingIcon = { Icon(Icons.Rounded.DownloadForOffline, contentDescription = null) },
                                     onClick = { menuOpen = false; navigator.openDownloads() },
                                 )
+                                if (continuoLinked) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.requests_title)) },
+                                        leadingIcon = { Icon(Icons.Rounded.LibraryAdd, contentDescription = null) },
+                                        onClick = { menuOpen = false; navigator.openRequests() },
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.browse_nav_settings)) },
                                     leadingIcon = { Icon(Icons.Rounded.Settings, contentDescription = null) },

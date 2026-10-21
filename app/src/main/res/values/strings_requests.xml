@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings owned by the continuo Requests screen (#117). -->
+<resources>
+    <string name="requests_title">Requests</string>
+    <string name="requests_scope_active">Active</string>
+    <string name="requests_scope_all">All</string>
+    <string name="requests_empty_title">No requests</string>
+    <string name="requests_empty_body">Search with All selected and tap Request on anything that isn\'t in your library.</string>
+    <string name="requests_empty_active_body">Nothing is on its way. Finished requests are under All.</string>
+    <string name="requests_failed">Couldn\'t load requests. Check your connection.</string>
+    <string name="requests_not_linked">Requests need a continuo server. Add one in Settings → Servers.</string>
+    <string name="requests_sign_in">This device was signed out of continuo. Sign in again in Settings → Servers.</string>
+    <string name="requests_by">Requested by %1$s</string>
+    <!-- pipeline stages (continuo's names) -->
+    <string name="requests_stage_requested">Requested</string>
+    <string name="requests_stage_searching">Searching</string>
+    <string name="requests_stage_downloading">Downloading</string>
+    <string name="requests_stage_importing">Importing</string>
+    <string name="requests_stage_scanning">Adding to library</string>
+    <string name="requests_stage_available">Ready to play</string>
+    <string name="requests_stage_error">Couldn\'t add</string>
+    <string name="requests_stage_needs_attention">Needs a look</string>
+    <string name="requests_still_looking">Still looking</string>
+    <string name="requests_source_soulseek">Soulseek</string>
+    <string name="requests_source_torrent">Torrent</string>
+    <string name="requests_stalled">Stalled</string>
+    <!-- actions -->
+    <string name="requests_action_open">Open album</string>
+    <string name="requests_action_refresh">Refresh</string>
+    <string name="requests_action_search_now">Search now</string>
+    <string name="requests_action_retry">Retry</string>
+    <string name="requests_action_drop">Drop download</string>
+    <string name="requests_action_remove">Remove</string>
+    <string name="requests_remove_title">Remove this request?</string>
+    <string name="requests_remove_body">%1$s will stop being searched for. Anything already downloaded stays in your library.</string>
+    <string name="requests_action_done">Done.</string>
+    <string name="requests_message">%1$s</string>
+    <string name="requests_cancel">Cancel</string>
+</resources>

@@ -1,6 +1,5 @@
 package app.polyphony.ui.browse.search
 
-import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.polyphony.R
@@ -19,6 +18,7 @@ import app.polyphony.core.domain.provider.ProviderException
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
+import app.polyphony.ui.common.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableSet
@@ -83,9 +83,6 @@ data class SearchUiState(
     val showsEverything: Boolean get() = scopesAvailable && scope == SearchScope.ALL
 }
 
-/** One-off messages for the shell's snackbar. */
-data class SearchMessage(@StringRes val text: Int, val arg: String? = null)
-
 private data class RemoteState(
     val forQuery: String = "",
     val results: SearchResults? = null,
@@ -121,8 +118,8 @@ class SearchViewModel @Inject constructor(
     /** The last submitted term: switching scope re-runs the searches that scope needs. */
     private var submitted: String? = null
 
-    private val messages = Channel<SearchMessage>(Channel.BUFFERED)
-    val events: Flow<SearchMessage> = messages.receiveAsFlow()
+    private val messages = Channel<UiMessage>(Channel.BUFFERED)
+    val events: Flow<UiMessage> = messages.receiveAsFlow()
 
     private val linked: StateFlow<Boolean> = servers.activeServer
         .map { requests.supports(it) }
@@ -261,7 +258,7 @@ class SearchViewModel @Inject constructor(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    if (e is ProviderException.Unauthorized) messages.send(SearchMessage(R.string.browse_request_sign_in))
+                    if (e is ProviderException.Unauthorized) messages.send(UiMessage(R.string.browse_request_sign_in))
                     Result.failure(e)
                 }
             }
@@ -279,23 +276,23 @@ class SearchViewModel @Inject constructor(
                 when (val outcome = requests.requestAlbum(server, releaseGroupId)) {
                     is RequestOutcome.Requested -> {
                         requested.update { it + (releaseGroupId to Availability.Requested(outcome.requestId, "requested")) }
-                        messages.send(SearchMessage(R.string.browse_request_sent))
+                        messages.send(UiMessage(R.string.browse_request_sent))
                     }
                     is RequestOutcome.AlreadyRequested -> {
                         requested.update { it + (releaseGroupId to Availability.Requested(outcome.requestId, "requested")) }
-                        messages.send(SearchMessage(R.string.browse_request_already))
+                        messages.send(UiMessage(R.string.browse_request_already))
                     }
                     is RequestOutcome.InLibrary -> {
                         requested.update { it + (releaseGroupId to Availability.InLibrary(outcome.libraryAlbumId)) }
-                        messages.send(SearchMessage(R.string.browse_request_in_library))
+                        messages.send(UiMessage(R.string.browse_request_in_library))
                     }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ProviderException.Unauthorized) {
-                messages.send(SearchMessage(R.string.browse_request_sign_in))
+                messages.send(UiMessage(R.string.browse_request_sign_in))
             } catch (e: Exception) {
-                messages.send(SearchMessage(R.string.browse_request_failed, e.message ?: e.javaClass.simpleName))
+                messages.send(UiMessage(R.string.browse_request_failed, e.message ?: e.javaClass.simpleName))
             } finally {
                 requesting.update { it - releaseGroupId }
             }

@@ -26,6 +26,12 @@ sealed interface DeepLink {
      */
     data class Album(val server: String, val albumId: String) : DeepLink
 
+    /**
+     * `polyphony://requests` or `polyphony://requests/{id}`: the Requests screen of the active
+     * continuo server, scrolled to [id] (continuo's "needs a look" notifications carry this).
+     */
+    data class Requests(val id: Long?) : DeepLink
+
     companion object {
         fun parse(link: String): DeepLink? {
             val uri = runCatching { URI(link) }.getOrNull() ?: return null
@@ -36,6 +42,11 @@ sealed interface DeepLink {
                 "search" -> Search
                 "shuffle" -> Shuffle
                 "album" -> segments.takeIf { it.size == 2 }?.let { (server, albumId) -> Album(server, albumId) }
+                "requests" -> when (segments.size) {
+                    0 -> Requests(null)
+                    1 -> segments[0].toLongOrNull()?.let { Requests(it) }
+                    else -> null
+                }
                 else -> null
             }
         }

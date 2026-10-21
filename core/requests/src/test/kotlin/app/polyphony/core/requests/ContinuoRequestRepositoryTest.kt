@@ -1,6 +1,8 @@
 package app.polyphony.core.requests
 
 import app.polyphony.core.domain.model.Availability
+import app.polyphony.core.domain.model.RequestAction
+import app.polyphony.core.domain.model.RequestEvent
 import app.polyphony.core.domain.model.RequestOutcome
 import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.model.ServerOptions
@@ -12,6 +14,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
@@ -80,8 +84,9 @@ class ContinuoRequestRepositoryTest {
                 else if (auth?.startsWith("Bearer at_") != true) 401 to "{}"
                 else routes["${req.method} ${req.url.encodedPath}"]?.invoke(req, body) ?: (404 to "{}")
             }
+            val type = if (req.url.encodedPath == "/v1/events") "text/event-stream" else "application/json"
             Response.Builder().request(req).protocol(Protocol.HTTP_1_1).code(code).message("x")
-                .body(text.toResponseBody("application/json".toMediaType())).build()
+                .body(text.toResponseBody(type.toMediaType())).build()
         }).build()
     }
 
@@ -202,5 +207,73 @@ class ContinuoRequestRepositoryTest {
             repo(FakeContinuo(), FakeServers(bare)).search(bare, "a"); fail("expected Unauthorized")
         } catch (_: ProviderException.Unauthorized) {
         }
+    }
+
+    private val listBody = """{"items":[
+      {"id":1,"kind":"album","title":"Honeycomb","artist":"Jitwam","year":2019,
+       "artwork":{"url":"https://coverartarchive.org/x"},"ids":{"musicBrainzReleaseGroupId":"rg-h","navidromeAlbumId":"nd-h"},
+       "status":"available","stillLooking":false,
+       "pipeline":{"stages":["requested","searching","downloading","importing","scanning","available"],"stage":"available","stageIndex":5,"percent":100,"detail":"In your library — ready to play."},
+       "play":{"navidromeAlbumId":"nd-h","deepLink":"polyphony://album/music-api.example.com/nd-h"},"requestedBy":"isaac"},
+      {"id":2,"title":"Selftitled","artist":"Jitwam","status":"downloading","stillLooking":false,
+       "pipeline":{"stageIndex":2,"percent":42.5,"detail":"Downloading via qBittorrent","source":"torrent",
+                   "download":{"client":"qBittorrent","stalled":true,"queueId":7}}},
+      {"id":3,"title":"Third","status":"searching","stillLooking":true,
+       "pipeline":{"stageIndex":1,"detail":"Still looking — 14 search cycles"},"error":null}
+    ],"cursor":null}"""
+
+    @Test
+    fun `requests are listed with their pipelines`() = runTest {
+        val fake = FakeContinuo().apply { routes["GET /v1/requests"] = { _, _ -> 200 to listBody } }
+        val list = repo(fake, FakeServers(server)).requests(server, activeOnly = true)
+        assertEquals(listOf(1L, 2L, 3L), list.map { it.id })
+        assertEquals("nd-h", list[0].libraryAlbumId)
+        assertNull(list[0].artworkUrl)
+        assertEquals(5, list[0].pipeline!!.stageIndex)
+        val dl = list[1].pipeline!!
+        assertTrue(dl.hasDownload && dl.stalled && dl.source == "torrent" && dl.percent == 42.5f)
+        assertTrue(list[2].stillLooking && list[2].libraryAlbumId == null)
+        assertEquals("active", fake.seen.last { it.first.url.encodedPath == "/v1/requests" }.first.url.queryParameter("scope"))
+    }
+
+    @Test
+    fun `actions hit the right endpoints and return continuo's message`() = runTest {
+        val fake = FakeContinuo().apply {
+            routes["POST /v1/requests/7/search-now"] = { _, _ -> 200 to """{"ok":true,"message":"Searching now — this can take a minute."}""" }
+            routes["POST /v1/requests/7/retry"] = { _, _ -> 200 to """{"ok":true,"message":"Retrying — searching again now."}""" }
+            routes["POST /v1/requests/7/drop-download"] = { _, _ -> 409 to """{"error":{"code":"nothing_to_drop","message":"Nothing is downloading for this request."}}""" }
+            routes["DELETE /v1/requests/7"] = { _, _ -> 200 to """{"ok":true,"message":"Request removed."}""" }
+        }
+        val repo = repo(fake, FakeServers(server))
+        assertEquals("Searching now — this can take a minute.", repo.perform(server, 7, RequestAction.SEARCH_NOW))
+        assertEquals("Retrying — searching again now.", repo.perform(server, 7, RequestAction.RETRY))
+        assertEquals("Request removed.", repo.perform(server, 7, RequestAction.REMOVE))
+        try {
+            repo.perform(server, 7, RequestAction.DROP_DOWNLOAD); fail("expected Server")
+        } catch (e: ProviderException.Server) {
+            assertEquals(409, e.code); assertEquals("Nothing is downloading for this request.", e.message)
+        }
+    }
+
+    @Test
+    fun `event stream delivers updates and asks for a resync after reconnecting`() = runTest {
+        val fake = FakeContinuo().apply {
+            routes["GET /v1/events"] = { _, _ ->
+                200 to "event: hello\ndata: {\"user\":\"isaac\"}\n\n" +
+                    ": ping\n\n" +
+                    "event: request.updated\ndata: {\"id\":2,\"status\":\"importing\",\"stillLooking\":false," +
+                    "\"pipeline\":{\"stageIndex\":3,\"detail\":\"Importing into your library…\"}}\n\n" +
+                    "event: notification.new\ndata: {\"id\":9}\n\n"
+            }
+        }
+        val events = repo(fake, FakeServers(server)).events(server).take(2).toList()
+        val updated = events[0] as RequestEvent.Updated
+        assertEquals(2L, updated.id)
+        assertEquals("importing", updated.status)
+        assertEquals(3, updated.pipeline!!.stageIndex)
+        // The stream ended (server closed it); after the reconnect's hello the app must reload.
+        assertEquals(RequestEvent.Resync, events[1])
+        val auth = fake.seen.filter { it.first.url.encodedPath == "/v1/events" }.map { it.first.header("Authorization") }
+        assertTrue(auth.size >= 2 && auth.all { it == "Bearer at_1" })
     }
 }

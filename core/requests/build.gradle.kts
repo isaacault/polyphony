@@ -29,6 +29,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
+    implementation(libs.okhttp.sse)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

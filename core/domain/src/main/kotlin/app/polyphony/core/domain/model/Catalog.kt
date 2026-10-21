@@ -63,3 +63,58 @@ sealed interface RequestOutcome {
     data class AlreadyRequested(val requestId: Long?) : RequestOutcome
     data class InLibrary(val libraryAlbumId: String?) : RequestOutcome
 }
+
+/**
+ * A request on a continuo server: one album that was asked for, and where it is now. [status] is
+ * continuo's (pending, searching, downloading, importing, scanning, available, error,
+ * needs_attention); there is no terminal failure, an album nobody has is "searching" with
+ * [stillLooking] set.
+ */
+data class MusicRequest(
+    val id: Long,
+    val title: String,
+    val artist: String?,
+    val year: Int?,
+    val artworkUrl: String?,
+    val status: String,
+    val stillLooking: Boolean,
+    val pipeline: RequestPipeline?,
+    val error: String?,
+    val releaseGroupId: String?,
+    /** The Navidrome album to open once [status] is available. */
+    val libraryAlbumId: String?,
+    val requestedBy: String?,
+    val createdAt: String?,
+)
+
+/** continuo's live pipeline for a request: the stepper and its one-line explanation. */
+data class RequestPipeline(
+    val stages: List<String>,
+    val stageIndex: Int,
+    val percent: Float,
+    val detail: String,
+    /** soulseek | torrent, once known. */
+    val source: String?,
+    /** A Lidarr queue item is downloading (so it can be dropped). */
+    val hasDownload: Boolean,
+    val stalled: Boolean,
+    /** Why it needs a look (import_not_visible, ambiguous_match, upgrade_detected), if it does. */
+    val attentionReason: String?,
+)
+
+/** Live changes to requests, from continuo's event stream. */
+sealed interface RequestEvent {
+    data class Updated(
+        val id: Long,
+        val status: String,
+        val stillLooking: Boolean,
+        val pipeline: RequestPipeline?,
+        val libraryAlbumId: String?,
+    ) : RequestEvent
+
+    /** Something changed that the event didn't describe (or the stream reconnected): reload. */
+    data object Resync : RequestEvent
+}
+
+/** What can be done to a request from the app. */
+enum class RequestAction { SEARCH_NOW, RETRY, DROP_DOWNLOAD, REMOVE }
