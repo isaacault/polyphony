@@ -133,6 +133,9 @@ class ServerEditViewModel @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     private var original: Server? = null
 
+    /** The last sign-in with a typed password, so Save can reuse the continuo device Test made. */
+    private var lastSignIn: SignIn? = null
+
     private val _state = MutableStateFlow(ServerEditUiState())
     val state: StateFlow<ServerEditUiState> = _state.asStateFlow()
 
@@ -260,16 +263,17 @@ class ServerEditViewModel @Inject constructor(
             val info = factory.create(candidate).ping()
             candidate to info
         } else {
-            val authed = factory.authenticate(
-                ConnectRequest(
-                    type = base.type,
-                    name = form.name.trim(),
-                    baseUrl = url,
-                    username = form.username.trim(),
-                    password = form.password,
-                    options = options,
-                ),
+            val request = ConnectRequest(
+                type = base.type,
+                name = form.name.trim(),
+                baseUrl = url,
+                username = form.username.trim(),
+                password = form.password,
+                options = options,
             )
+            // Each continuo sign-in creates a device, so Save reuses the one an identical Test made.
+            val authed = SignInReuse.reusable(lastSignIn, request)
+                ?: factory.authenticate(request).also { lastSignIn = SignIn(request, it) }
             // A continuo sign-in issues a new device: its id and token must replace the old ones
             // carried over in `options`, or the new app password would sit next to a stale session.
             val merged = authed.copy(
