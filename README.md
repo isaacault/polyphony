@@ -130,7 +130,9 @@ app → core:ui, core:playback, core:data, core:dlna, core:downloads, provider:*
 ```
 
 Adding a backend means implementing `MediaProvider` + `MediaProviderFactory` in a new
-`provider:*` module and binding the factory into the Hilt set — nothing else changes.
+`provider:*` module and binding the factory into the Hilt set — nothing else changes. See
+[docs/providers.md](docs/providers.md) for the full provider contract and a step-by-step guide to
+adding one.
 
 ## Roadmap
 

@@ -21,6 +21,10 @@ provider/subsonic   Subsonic / OpenSubsonic / Navidrome implementation of MediaP
 provider/jellyfin   Jellyfin implementation of MediaProvider (official Kotlin SDK)
 ```
 
+Adding a music backend (Plex, Emby, local files, …) is a self-contained `provider:*` module.
+See [docs/providers.md](docs/providers.md) for the `MediaProvider` contract, registration, and a
+step-by-step guide.
+
 ## Key contracts (core:domain)
 
 | Contract | Purpose |
