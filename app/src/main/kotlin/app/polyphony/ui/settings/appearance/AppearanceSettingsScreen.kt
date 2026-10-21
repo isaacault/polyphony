@@ -168,6 +168,12 @@ fun AppearanceSettingsScreen(viewModel: AppearanceViewModel = hiltViewModel()) {
                 checked = s.blurredPlayerBackground,
                 onCheckedChange = { on -> viewModel.update { it.copy(blurredPlayerBackground = on) } },
             )
+            SwitchPreference(
+                title = stringResource(R.string.settings_appearance_reduce_image_data),
+                summary = stringResource(R.string.settings_appearance_reduce_image_data_summary),
+                checked = s.reduceImageDataOnMobile,
+                onCheckedChange = { on -> viewModel.update { it.copy(reduceImageDataOnMobile = on) } },
+            )
             SegmentedPreference(
                 title = stringResource(R.string.settings_appearance_artwork_style),
                 options = listOf(

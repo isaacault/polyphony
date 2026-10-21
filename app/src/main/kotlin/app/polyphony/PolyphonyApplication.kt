@@ -12,9 +12,20 @@ import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import app.polyphony.core.domain.repository.DownloadRepository
+import app.polyphony.core.domain.repository.NetworkMonitor
+import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.playback.transcode.TranscodeCapabilityProbe
 import app.polyphony.diagnostics.CrashRecorder
+import app.polyphony.image.ArtworkSizeInterceptor
+import app.polyphony.image.DataSaver
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import javax.inject.Inject
 
@@ -30,9 +41,23 @@ class PolyphonyApplication : Application(), Configuration.Provider, SingletonIma
     /** Injected eagerly so servers get their transcoding support probed after the first sync. */
     @Inject lateinit var transcodeProbe: TranscodeCapabilityProbe
 
+    @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var networkMonitor: NetworkMonitor
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     override fun onCreate() {
         super.onCreate()
         CrashRecorder.install(this)
+        // Keep the artwork data saver in step with the setting and whether the network is metered.
+        appScope.launch {
+            combine(
+                settingsRepository.settings.map { it.appearance.reduceImageDataOnMobile }.distinctUntilChanged(),
+                networkMonitor.state.map { it.isMetered }.distinctUntilChanged(),
+            ) { reduce, metered -> reduce && metered }
+                .distinctUntilChanged()
+                .collect { DataSaver.reduceArtwork = it }
+        }
     }
 
     override val workManagerConfiguration: Configuration
@@ -43,6 +68,7 @@ class PolyphonyApplication : Application(), Configuration.Provider, SingletonIma
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
             .components {
+                add(ArtworkSizeInterceptor())
                 add(OkHttpNetworkFetcherFactory(callFactory = { okHttpClient.get() }))
             }
             .memoryCache {
