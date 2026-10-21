@@ -10,6 +10,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.SettingsBackupRestore
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -137,6 +138,12 @@ fun SettingsScreen(viewModel: SettingsHubViewModel = hiltViewModel()) {
                 },
                 icon = Icons.Rounded.DownloadForOffline,
                 onClick = navigator::openDownloadsSettings,
+            )
+            ActionPreference(
+                title = stringResource(R.string.settings_backup),
+                summary = stringResource(R.string.settings_backup_summary),
+                icon = Icons.Rounded.SettingsBackupRestore,
+                onClick = navigator::openBackupSettings,
             )
         }
         preferenceCategory(key = "about") {

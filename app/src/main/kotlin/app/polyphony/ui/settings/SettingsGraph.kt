@@ -4,6 +4,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import app.polyphony.navigation.AboutRoute
 import app.polyphony.navigation.AppearanceSettingsRoute
+import app.polyphony.navigation.BackupSettingsRoute
 import app.polyphony.navigation.DownloadRuleEditRoute
 import app.polyphony.navigation.DownloadsSettingsRoute
 import app.polyphony.navigation.LibrarySettingsRoute
@@ -17,6 +18,7 @@ import app.polyphony.navigation.StreamingSettingsRoute
 import app.polyphony.navigation.TranscodeProfileEditRoute
 import app.polyphony.ui.settings.about.AboutScreen
 import app.polyphony.ui.settings.appearance.AppearanceSettingsScreen
+import app.polyphony.ui.settings.backup.BackupSettingsScreen
 import app.polyphony.ui.settings.downloads.DownloadsSettingsScreen
 import app.polyphony.ui.downloads.DownloadRuleEditScreen
 import app.polyphony.ui.settings.library.LibrarySettingsScreen
@@ -41,5 +43,6 @@ fun NavGraphBuilder.settingsGraph(navigator: PolyphonyNavigator) {
     composable<LibrarySettingsRoute> { LibrarySettingsScreen() }
     composable<DownloadsSettingsRoute> { DownloadsSettingsScreen() }
     composable<DownloadRuleEditRoute> { DownloadRuleEditScreen() }
+    composable<BackupSettingsRoute> { BackupSettingsScreen() }
     composable<AboutRoute> { AboutScreen() }
 }
