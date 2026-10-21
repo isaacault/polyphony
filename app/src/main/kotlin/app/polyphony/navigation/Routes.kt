@@ -20,6 +20,8 @@ sealed interface Route
 /** "See all" lists from the Home screen; [kind] is an [AlbumListKind] name. */
 @Serializable data class AlbumListRoute(val kind: String) : Route
 @Serializable data object DownloadsRoute : Route
+/** continuo requests (#117); [focusId] scrolls to one, e.g. from a "needs a look" notification. */
+@Serializable data class RequestsRoute(val focusId: Long? = null) : Route
 
 enum class AlbumListKind { RECENTLY_ADDED, RECENTLY_PLAYED, MOST_PLAYED, RANDOM, STARRED }
 

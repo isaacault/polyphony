@@ -213,7 +213,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                     }
                 }
                 if (state.showsEverything) {
-                    everythingSection(state.everything, onRequest = viewModel::request)
+                    everythingSection(state.everything, onRequest = viewModel::request, onOpenRequests = { navigator.openRequests() })
                 }
                 item(key = "remote") {
                     Column(Modifier.fillMaxWidth().padding(Dimens.screenPadding), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -313,12 +313,18 @@ private fun ScopeChips(selected: SearchScope, onSelect: (SearchScope) -> Unit) {
 }
 
 /** The Everything tier: catalogue albums and tracks that aren't in the library, with Request. */
-private fun LazyListScope.everythingSection(everything: EverythingUi, onRequest: (String) -> Unit) {
+private fun LazyListScope.everythingSection(
+    everything: EverythingUi,
+    onRequest: (String) -> Unit,
+    onOpenRequests: () -> Unit,
+) {
     if (!everything.isEmpty) {
         item(key = "h-everything") {
             SectionHeader(
                 title = stringResource(R.string.browse_search_everything),
                 subtitle = stringResource(R.string.browse_search_everything_subtitle),
+                onSeeAll = onOpenRequests,
+                seeAllLabel = stringResource(R.string.requests_title),
             )
         }
         items(everything.albums, key = { "e-al-" + it.key }, contentType = { "everything" }) { album ->

@@ -5,6 +5,9 @@ import app.polyphony.core.domain.model.ServerOptions
 import app.polyphony.core.domain.provider.ProviderException
 import app.polyphony.core.domain.repository.ServerRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -13,10 +16,15 @@ import kotlinx.serialization.json.Json
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.sse.EventSource
+import okhttp3.sse.EventSourceListener
+import okhttp3.sse.EventSources
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -31,7 +39,7 @@ import kotlin.coroutines.resumeWithException
  * already-rotated token makes continuo revoke the device (playback included).
  */
 internal class ContinuoClient(
-    private val callFactory: (Server) -> Call.Factory,
+    private val callFactory: (Server) -> OkHttpClient,
     private val json: Json,
     private val servers: ServerRepository,
     private val clock: () -> Long = System::currentTimeMillis,
@@ -50,6 +58,43 @@ internal class ContinuoClient(
 
     suspend fun post(server: Server, path: String, jsonBody: String): Reply = send(server) {
         Request.Builder().url(server.baseUrl.trimEnd('/') + path).post(jsonBody.toRequestBody(JSON))
+    }
+
+    suspend fun delete(server: Server, path: String): Reply = send(server) {
+        Request.Builder().url(server.baseUrl.trimEnd('/') + path).delete()
+    }
+
+    /** The stream was refused with 401: the caller refreshes the access token and reconnects. */
+    class StreamUnauthorized : IOException("event stream refused the access token")
+
+    /**
+     * Server-sent events from [path] as (event type, data) pairs, until the server closes the
+     * stream (completes) or it fails (throws; [StreamUnauthorized] on a 401). No read timeout:
+     * continuo sends a keep-alive comment every 25 s, close to a normal client's read timeout.
+     */
+    fun events(server: Server, path: String, accessToken: String): Flow<Pair<String, String>> = callbackFlow {
+        val request = Request.Builder()
+            .url(server.baseUrl.trimEnd('/') + path)
+            .header("Authorization", "Bearer $accessToken")
+            .header("Accept", "text/event-stream")
+            .build()
+        val streaming = callFactory(server).newBuilder().readTimeout(0, TimeUnit.MILLISECONDS).build()
+        val source = EventSources.createFactory(streaming).newEventSource(request, object : EventSourceListener() {
+            override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
+                trySend((type ?: "message") to data)
+            }
+
+            override fun onClosed(eventSource: EventSource) {
+                close()
+            }
+
+            override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
+                val code = response?.code
+                runCatching { response?.close() }
+                close(if (code == 401) StreamUnauthorized() else t ?: IOException("event stream failed (HTTP $code)"))
+            }
+        })
+        awaitClose { source.cancel() }
     }
 
     private suspend fun send(server: Server, build: () -> Request.Builder): Reply {

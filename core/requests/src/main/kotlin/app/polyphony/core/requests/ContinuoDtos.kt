@@ -128,3 +128,103 @@ internal fun SearchDto.toDomain(artworkHost: String?): CatalogResults {
 }
 
 internal fun hostOf(url: String): String? = runCatching { java.net.URI(url).host?.lowercase() }.getOrNull()
+
+// ---- requests (continuo PLAN.md §3.3) ----
+
+@Serializable
+internal data class RequestListDto(val items: List<RequestDto> = emptyList())
+
+@Serializable
+internal data class RequestIdsDto(
+    val musicBrainzReleaseGroupId: String? = null,
+    val navidromeAlbumId: String? = null,
+)
+
+@Serializable
+internal data class DownloadDto(val stalled: Boolean = false, val queueId: Long? = null)
+
+@Serializable
+internal data class AttentionDto(val reason: String? = null)
+
+@Serializable
+internal data class PipelineDto(
+    val stages: List<String> = emptyList(),
+    val stage: String? = null,
+    val stageIndex: Int = 0,
+    val percent: Float = 0f,
+    val detail: String = "",
+    val source: String? = null,
+    val download: DownloadDto? = null,
+    val attention: AttentionDto? = null,
+)
+
+@Serializable
+internal data class RequestErrorDto(val message: String? = null)
+
+@Serializable
+internal data class PlayDto(val navidromeAlbumId: String? = null)
+
+@Serializable
+internal data class RequestDto(
+    val id: Long,
+    val title: String? = null,
+    val artist: String? = null,
+    val year: Int? = null,
+    val artwork: ArtworkDto? = null,
+    val ids: RequestIdsDto? = null,
+    val status: String = "pending",
+    val stillLooking: Boolean = false,
+    val pipeline: PipelineDto? = null,
+    val error: RequestErrorDto? = null,
+    val requestedBy: String? = null,
+    val createdAt: String? = null,
+    val play: PlayDto? = null,
+)
+
+/** `request.updated` SSE payload: a slim request. */
+@Serializable
+internal data class RequestUpdateDto(
+    val id: Long,
+    val status: String,
+    val stillLooking: Boolean = false,
+    val pipeline: PipelineDto? = null,
+    val play: PlayDto? = null,
+)
+
+@Serializable
+internal data class ActionResultDto(val ok: Boolean = true, val message: String? = null)
+
+internal fun PipelineDto.toDomain() = app.polyphony.core.domain.model.RequestPipeline(
+    stages = stages,
+    stageIndex = stageIndex,
+    percent = percent,
+    detail = detail,
+    source = source,
+    hasDownload = download?.queueId != null,
+    stalled = download?.stalled == true,
+    attentionReason = attention?.reason,
+)
+
+internal fun RequestDto.toDomain(artworkHost: String?) = app.polyphony.core.domain.model.MusicRequest(
+    id = id,
+    title = title.orEmpty(),
+    artist = artist,
+    year = year,
+    artworkUrl = artwork?.url?.takeIf { artworkHost != null && hostOf(it) == artworkHost },
+    status = status,
+    stillLooking = stillLooking,
+    pipeline = pipeline?.toDomain(),
+    error = error?.message,
+    releaseGroupId = ids?.musicBrainzReleaseGroupId,
+    libraryAlbumId = play?.navidromeAlbumId ?: ids?.navidromeAlbumId?.takeIf { status == "available" },
+    requestedBy = requestedBy,
+    createdAt = createdAt,
+)
+
+internal fun RequestUpdateDto.toDomain() = app.polyphony.core.domain.model.RequestEvent.Updated(
+    id = id,
+    status = status,
+    stillLooking = stillLooking,
+    pipeline = pipeline?.toDomain(),
+    libraryAlbumId = play?.navidromeAlbumId,
+)
