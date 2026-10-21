@@ -48,6 +48,14 @@ class TrackActionsViewModel @Inject constructor(
         viewModelScope.launch { runCatching { library.setStarred(album.id, ItemKind.ALBUM, !album.starred) } }
     }
 
+    fun rate(track: Track, rating: Int) {
+        viewModelScope.launch { runCatching { library.setRating(track.id, ItemKind.TRACK, rating) } }
+    }
+
+    fun rate(album: Album, rating: Int) {
+        viewModelScope.launch { runCatching { library.setRating(album.id, ItemKind.ALBUM, rating) } }
+    }
+
     fun addToPlaylist(playlistId: String, trackIds: List<String>, onDone: (Result<Unit>) -> Unit = {}) {
         viewModelScope.launch { onDone(runCatching { library.addToPlaylist(playlistId, trackIds) }) }
     }
