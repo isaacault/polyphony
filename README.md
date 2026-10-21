@@ -31,6 +31,9 @@ built to be artwork-forward, fast and smooth, and unapologetically open: GPL-3.0
   ReplayGain tags, custom headers for reverse proxies, self-signed certificates)
 - Jellyfin (official Kotlin SDK; favourites, playlists, instant mix, lyrics, playback reporting)
 - Multiple servers, switchable from the Home screen
+- [continuo](https://github.com/isaacault/continuo) servers (a request service in front of
+  Navidrome): sign in with the continuo account, and "Ready to play" notifications open the album.
+  Requests in the app (an *Everything* tier next to Downloaded and Library) are on the roadmap
 
 **Library**
 - Full library sync into a local Room database, so browsing, sorting and search are instant and

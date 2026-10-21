@@ -107,7 +107,7 @@
     },
     {
       "title": "M3 · Beyond",
-      "description": "Things no comparable app offers: bandwidth-aware quality and bit-perfect output."
+      "description": "Things no comparable app offers: unified sources (Downloaded / Library / Everything, with acquisition through a continuo server), bandwidth-aware quality, bit-perfect output."
     }
   ],
   "issues": [
@@ -212,6 +212,14 @@
     {"title": "Headphone and output presets for transcoding profiles", "milestone": "M3 · Beyond", "labels": ["area/transcoding", "type/feature", "priority/p2"],
      "body": "Extend per-device rules from Cast/DLNA to local outputs: pin a profile to a Bluetooth device name or to wired/USB output, so lossless goes to the DAC and Opus to earbuds."},
     {"title": "Shared listening: queue hand-off between phones", "milestone": "M3 · Beyond", "labels": ["area/playback", "type/feature", "priority/p2"],
-     "body": "Export the current queue and position as a link or QR so another Polyphony install on the same server can continue playback."}
+     "body": "Export the current queue and position as a link or QR so another Polyphony install on the same server can continue playback."},
+    {"title": "Unified sources: Downloaded / Library / Everything", "milestone": "M3 · Beyond", "labels": ["area/ui", "area/library", "type/feature", "priority/p1"],
+     "body": "One player across three tiers, labelled the way Spotify separates downloaded from streaming: **Downloaded** (on the phone), **Library** (on the server: purchases, NAS, past requests) and **Everything** (anything that exists, from a continuo server's catalogue; requestable, later playable while it downloads). Search gets an All / Library / Downloaded scope and results carry a badge for their tier. Only appears when the active server is continuo-linked (`Server.options[\"continuo\"]`); with plain Subsonic or Jellyfin Polyphony stays exactly a player. Server side: https://github.com/isaacault/continuo."},
+    {"title": "continuo: search scopes, tier badges and request buttons", "milestone": "M3 · Beyond", "labels": ["area/ui", "area/providers", "type/feature", "priority/p1"],
+     "body": "For a continuo-linked server, the All scope calls continuo's `/v1/search`, which merges library and catalogue hits with an `availability` each; Library and Downloaded keep today's search. Catalogue hits get a Request button, in-flight ones a Requested / Downloading chip. Needs `core:requests` (OkHttp + kotlinx.serialization client for `/v1`, refresh-token rotation)."},
+    {"title": "continuo: requests screen with live progress", "milestone": "M3 · Beyond", "labels": ["area/ui", "type/feature", "priority/p1"],
+     "body": "Requests with the pipeline stepper (requested → searching → downloading → importing → scanning → available) and its detail line, live over SSE; retry, search now, drop download, remove. `polyphony://requests/{id}` deep link."},
+    {"title": "continuo: play now from Everything", "milestone": "M3 · Beyond", "labels": ["area/playback", "type/feature", "priority/p2"],
+     "body": "Play a track that isn't in the library yet: a high-priority request whose first file plays while the rest downloads (continuo serves the growing file; Polyphony resolves stream URLs at load time, so the queue item waits for it). Designed from the latency continuo measures per source (continuo#10); realistic time to first sound is tens of seconds from Soulseek, so the UI shows the wait."}
   ]
 }
