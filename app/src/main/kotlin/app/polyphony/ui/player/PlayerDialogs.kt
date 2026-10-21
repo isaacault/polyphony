@@ -25,6 +25,7 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,12 +56,13 @@ import kotlin.math.roundToInt
 @Composable
 fun SleepTimerDialog(
     endsAtEpochMs: Long?,
-    onPickMinutes: (Int) -> Unit,
+    onPickMinutes: (Int, Boolean) -> Unit,
     onEndOfTrack: () -> Unit,
     onCancelTimer: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val presets = listOf(5, 10, 15, 30, 45, 60, 90)
+    var finishTrack by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Rounded.Bedtime, null) },
@@ -77,14 +79,22 @@ fun SleepTimerDialog(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     presets.take(4).forEach { m ->
-                        FilterChip(selected = false, onClick = { onPickMinutes(m); onDismiss() }, label = { Text(stringResource(R.string.sleep_timer_minutes, m)) })
+                        FilterChip(selected = false, onClick = { onPickMinutes(m, finishTrack); onDismiss() }, label = { Text(stringResource(R.string.sleep_timer_minutes, m)) })
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     presets.drop(4).forEach { m ->
-                        FilterChip(selected = false, onClick = { onPickMinutes(m); onDismiss() }, label = { Text(stringResource(R.string.sleep_timer_minutes, m)) })
+                        FilterChip(selected = false, onClick = { onPickMinutes(m, finishTrack); onDismiss() }, label = { Text(stringResource(R.string.sleep_timer_minutes, m)) })
                     }
                     FilterChip(selected = false, onClick = { onEndOfTrack(); onDismiss() }, label = { Text(stringResource(R.string.sleep_timer_end_of_track)) })
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { finishTrack = !finishTrack },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(stringResource(R.string.sleep_timer_finish_track), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Switch(checked = finishTrack, onCheckedChange = { finishTrack = it })
                 }
             }
         },

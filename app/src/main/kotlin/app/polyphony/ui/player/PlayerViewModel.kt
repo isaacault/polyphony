@@ -166,8 +166,8 @@ class PlayerViewModel @Inject constructor(
     fun disconnectCast() = castController.disconnect()
 
     // ---- Sleep timer ----
-    fun setSleepTimerMinutes(minutes: Int?) {
-        playbackController.setSleepTimer(minutes?.let { System.currentTimeMillis() + it * 60_000L })
+    fun setSleepTimerMinutes(minutes: Int?, finishTrack: Boolean = false) {
+        playbackController.setSleepTimer(minutes?.let { System.currentTimeMillis() + it * 60_000L }, finishTrack)
     }
 
     fun setSleepTimerEndOfTrack() {
