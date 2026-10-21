@@ -24,9 +24,11 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var settingsRepository: SettingsRepository
 
     /**
-     * `polyphony://` deep links, also fired by the launcher app shortcuts: `player` opens the Now
-     * Playing sheet, `search` opens the Search tab, `shuffle` starts shuffle-all playback. The
-     * shell ([PolyphonyShell]) routes the host; unknown hosts are ignored.
+     * `polyphony://` deep links, also fired by the launcher app shortcuts and by continuo's "Ready
+     * to play" notifications: `player` opens the Now Playing sheet, `search` the Search tab,
+     * `shuffle` starts shuffle-all playback, `album/{server}/{albumId}` opens an album. Parsed by
+     * [app.polyphony.navigation.DeepLink], routed by the shell ([PolyphonyShell]); unknown links
+     * are ignored.
      */
     private val deepLink = MutableStateFlow<Uri?>(null)
 

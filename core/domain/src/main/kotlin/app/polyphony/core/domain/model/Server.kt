@@ -58,6 +58,22 @@ object ServerOptions {
 
     /** Epoch millis of the last transcoding probe. */
     const val TRANSCODE_PROBED_AT = "transcodeProbedAt"
+
+    /**
+     * "true" when [Server.baseUrl] is a continuo server (the Subsonic façade in front of Navidrome).
+     * Its [Server.credential] is then this install's per-device app password, never the account
+     * password.
+     */
+    const val CONTINUO = "continuo"
+
+    /** continuo's id for this install (`dev_…`); revoking it there cuts off requests and playback. */
+    const val CONTINUO_DEVICE_ID = "continuoDeviceId"
+
+    /** continuo refresh token for this install's account session (rotated on every use). */
+    const val CONTINUO_REFRESH_TOKEN = "continuoRefreshToken"
+
+    /** Keys a fresh continuo sign-in replaces; an edit must not keep the previous device's values. */
+    val CONTINUO_KEYS = setOf(CONTINUO, CONTINUO_DEVICE_ID, CONTINUO_REFRESH_TOKEN)
 }
 
 data class ServerInfo(

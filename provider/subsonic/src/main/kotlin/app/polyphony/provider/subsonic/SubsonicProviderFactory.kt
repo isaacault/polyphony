@@ -1,5 +1,6 @@
 package app.polyphony.provider.subsonic
 
+import android.os.Build
 import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.model.ServerOptions
 import app.polyphony.core.domain.model.ServerType
@@ -12,6 +13,7 @@ import app.polyphony.provider.subsonic.api.SubsonicApi
 import app.polyphony.provider.subsonic.api.SubsonicApiException
 import app.polyphony.provider.subsonic.api.SubsonicUrlBuilder
 import app.polyphony.provider.subsonic.api.toProviderException
+import app.polyphony.provider.subsonic.continuo.ContinuoSignIn
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import okhttp3.Call
@@ -36,6 +38,8 @@ class SubsonicProviderFactory @Inject constructor(
         if (request.username.isBlank()) throw ProviderException.Unauthorized("Username is required")
 
         val client = clientFactory.clientFor(request.options)
+        @Suppress("NAME_SHADOWING")
+        val request = signInIfContinuo(client, baseUrl, request)
         val serverId = UUID.randomUUID().toString()
         val deviceId = UUID.randomUUID().toString()
         val legacyRequested = request.options[ServerOptions.LEGACY_AUTH] == "true"
@@ -71,6 +75,37 @@ class SubsonicProviderFactory @Inject constructor(
     }
 
     override fun create(server: Server): MediaProvider = createProvider(server, clientFactory.clientFor(server))
+
+    /**
+     * A continuo server takes the account password once and hands back this device's app
+     * password; from then on it is plain Subsonic. Any other server passes through unchanged.
+     */
+    private suspend fun signInIfContinuo(client: Call.Factory, baseUrl: String, request: ConnectRequest): ConnectRequest {
+        val continuo = ContinuoSignIn(client, json)
+        if (!continuo.isContinuo(baseUrl)) return request
+        val options = request.options - ServerOptions.CONTINUO_KEYS
+        return when (val result = continuo.signIn(baseUrl, request.username.trim(), request.password, deviceName())) {
+            is ContinuoSignIn.Result.SignedIn -> request.copy(
+                username = result.session.library.username,
+                password = result.session.library.password,
+                options = options + mapOf(
+                    ServerOptions.CONTINUO to "true",
+                    ServerOptions.CONTINUO_DEVICE_ID to result.session.device.id,
+                    ServerOptions.CONTINUO_REFRESH_TOKEN to result.session.refreshToken,
+                ),
+            )
+            // Not the account password. It may be an app password pasted by hand, so the Subsonic
+            // check that follows decides.
+            ContinuoSignIn.Result.WrongPassword -> request.copy(options = options + (ServerOptions.CONTINUO to "true"))
+        }
+    }
+
+    private fun deviceName(): String {
+        val manufacturer = Build.MANUFACTURER.orEmpty()
+        val model = Build.MODEL.orEmpty()
+        return if (model.startsWith(manufacturer, ignoreCase = true) || manufacturer.isBlank()) model.ifBlank { "Android" }
+        else "$manufacturer $model"
+    }
 
     private fun createProvider(server: Server, callFactory: Call.Factory): SubsonicProvider =
         SubsonicProvider(server, SubsonicApi(callFactory, json, SubsonicUrlBuilder.forServer(server)))
