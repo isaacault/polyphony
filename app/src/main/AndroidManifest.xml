@@ -36,6 +36,11 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="polyphony" />
             </intent-filter>
+
+            <!-- Static launcher shortcuts (long-press the app icon). -->
+            <meta-data
+                android:name="android.app.shortcut.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <provider

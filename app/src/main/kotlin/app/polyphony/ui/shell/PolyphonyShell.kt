@@ -106,9 +106,14 @@ fun PolyphonyShell(
     LaunchedEffect(showPlayer) {
         if (!showPlayer) sheetState.snapCollapsed()
     }
+    // polyphony:// deep links, also fired by the launcher app shortcuts (see res/xml/shortcuts.xml).
     LaunchedEffect(deepLink) {
         if (deepLink != null) {
-            if (deepLink.host == "player" && playback.isActive) sheetState.expand()
+            when (deepLink.host) {
+                "player" -> if (playback.isActive) sheetState.expand()
+                "search" -> navigator.openSearch()
+                "shuffle" -> shellViewModel.shuffleLibrary()
+            }
             onDeepLinkConsumed()
         }
     }
