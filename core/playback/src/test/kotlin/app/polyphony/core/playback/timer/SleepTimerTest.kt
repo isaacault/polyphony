@@ -56,6 +56,17 @@ class SleepTimerTest {
     }
 
     @Test
+    fun `end of track is a finish-track timer that is already due`() = runTest {
+        val f = Fixture(backgroundScope) { testScheduler.currentTime }
+        f.timer.set(endsAtEpochMs = testScheduler.currentTime, finishTrack = true)
+        advanceTimeBy(600_000) // however long the track runs (paused, slowed down) it never fires on time alone
+        assertEquals("still playing", 0, f.paused)
+        f.timer.onTrackChanged()
+        assertEquals("paused at the track change", 1, f.paused)
+        assertNull(f.timer.endsAtEpochMs.value)
+    }
+
+    @Test
     fun `finish-track mode waits for the next transition and does not fade`() = runTest {
         val f = Fixture(backgroundScope) { testScheduler.currentTime }
         f.timer.set(endsAtEpochMs = 5_000L, finishTrack = true)

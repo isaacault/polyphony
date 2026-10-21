@@ -171,9 +171,12 @@ class PlayerViewModel @Inject constructor(
         playbackController.setSleepTimer(minutes?.let { System.currentTimeMillis() + it * 60_000L }, finishTrack)
     }
 
+    /**
+     * A finish-the-track timer that is already due: it pauses at the next track change, so pausing
+     * or a speed change cannot make it fire early the way a "time left in the track" estimate did.
+     */
     fun setSleepTimerEndOfTrack() {
-        val remaining = (position.value.durationMs - position.value.positionMs).coerceAtLeast(1_000L)
-        playbackController.setSleepTimer(System.currentTimeMillis() + remaining)
+        playbackController.setSleepTimer(System.currentTimeMillis(), finishTrack = true)
     }
 
     // ---- Library actions ----

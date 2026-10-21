@@ -59,11 +59,13 @@
 
     <!-- Dialogs -->
     <string name="dialog_cancel">Cancel</string>
+    <string name="dialog_close">Close</string>
     <string name="dialog_done">Done</string>
     <string name="dialog_create">Create</string>
     <string name="dialog_save">Save</string>
     <string name="sleep_timer_cancel">Cancel timer</string>
     <string name="sleep_timer_end_of_track">End of track</string>
+    <string name="sleep_timer_ends_with_track">Stops when this track ends</string>
     <string name="sleep_timer_finish_track">Let the current track finish</string>
     <string name="sleep_timer_minutes">%1$d min</string>
     <string name="sleep_timer_set">Sleep timer set</string>
