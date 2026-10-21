@@ -154,7 +154,7 @@ class PlaybackService : MediaLibraryService() {
         basePlayer = players.session
         player = basePlayer
 
-        sleepTimer = SleepTimer(scope) { player.pause() }
+        sleepTimer = SleepTimer(scope, pause = { player.pause() }, setVolume = { player.volume = it })
         reporter = PlaybackReporter(scope, serverLookup, libraryRepository).also {
             it.enabled = settings.scrobble
             it.threshold = settings.scrobbleThreshold
