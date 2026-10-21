@@ -1,29 +1,114 @@
 {
   "labels": [
-    {"name": "area/providers", "color": "1d76db", "description": "Subsonic, Jellyfin and future backends"},
-    {"name": "area/playback", "color": "0e8a16", "description": "Media3 engine, audio pipeline, queue"},
-    {"name": "area/cast", "color": "5319e7", "description": "Google Cast"},
-    {"name": "area/dlna", "color": "5319e7", "description": "UPnP / DLNA renderers"},
-    {"name": "area/downloads", "color": "fbca04", "description": "Offline downloads and rules"},
-    {"name": "area/transcoding", "color": "d93f0b", "description": "Quality profiles, rules, latency"},
-    {"name": "area/library", "color": "c2e0c6", "description": "Local cache, sync, metadata, search"},
-    {"name": "area/ui", "color": "f9d0c4", "description": "Compose screens, design, motion"},
-    {"name": "area/performance", "color": "e99695", "description": "Speed, memory, battery"},
-    {"name": "area/infra", "color": "bfdadc", "description": "Build, CI, releases, tooling"},
-    {"name": "type/feature", "color": "a2eeef", "description": "New capability"},
-    {"name": "type/bug", "color": "d73a4a", "description": "Something is broken"},
-    {"name": "type/verification", "color": "fef2c0", "description": "Needs testing on real hardware or servers"},
-    {"name": "type/chore", "color": "ededed", "description": "Maintenance"},
-    {"name": "priority/p0", "color": "b60205", "description": "Blocks daily use"},
-    {"name": "priority/p1", "color": "d93f0b", "description": "Important"},
-    {"name": "priority/p2", "color": "fbca04", "description": "Nice to have"},
-    {"name": "good first issue", "color": "7057ff", "description": "Scoped and approachable"},
-    {"name": "help wanted", "color": "008672", "description": "Contributions welcome"}
+    {
+      "name": "area/providers",
+      "color": "1d76db",
+      "description": "Subsonic, Jellyfin and future backends"
+    },
+    {
+      "name": "area/playback",
+      "color": "0e8a16",
+      "description": "Media3 engine, audio pipeline, queue"
+    },
+    {
+      "name": "area/cast",
+      "color": "5319e7",
+      "description": "Google Cast"
+    },
+    {
+      "name": "area/dlna",
+      "color": "5319e7",
+      "description": "UPnP / DLNA renderers"
+    },
+    {
+      "name": "area/downloads",
+      "color": "fbca04",
+      "description": "Offline downloads and rules"
+    },
+    {
+      "name": "area/transcoding",
+      "color": "d93f0b",
+      "description": "Quality profiles, rules, latency"
+    },
+    {
+      "name": "area/library",
+      "color": "c2e0c6",
+      "description": "Local cache, sync, metadata, search"
+    },
+    {
+      "name": "area/ui",
+      "color": "f9d0c4",
+      "description": "Compose screens, design, motion"
+    },
+    {
+      "name": "area/performance",
+      "color": "e99695",
+      "description": "Speed, memory, battery"
+    },
+    {
+      "name": "area/infra",
+      "color": "bfdadc",
+      "description": "Build, CI, releases, tooling"
+    },
+    {
+      "name": "type/feature",
+      "color": "a2eeef",
+      "description": "New capability"
+    },
+    {
+      "name": "type/bug",
+      "color": "d73a4a",
+      "description": "Something is broken"
+    },
+    {
+      "name": "type/verification",
+      "color": "fef2c0",
+      "description": "Needs testing on real hardware or servers"
+    },
+    {
+      "name": "type/chore",
+      "color": "ededed",
+      "description": "Maintenance"
+    },
+    {
+      "name": "priority/p0",
+      "color": "b60205",
+      "description": "Blocks daily use"
+    },
+    {
+      "name": "priority/p1",
+      "color": "d93f0b",
+      "description": "Important"
+    },
+    {
+      "name": "priority/p2",
+      "color": "fbca04",
+      "description": "Nice to have"
+    },
+    {
+      "name": "good first issue",
+      "color": "7057ff",
+      "description": "Scoped and approachable"
+    },
+    {
+      "name": "help wanted",
+      "color": "008672",
+      "description": "Contributions welcome"
+    }
   ],
   "milestones": [
-    {"title": "M1 · Daily driver", "description": "Everything needed to use Polyphony as the only player with a Subsonic/Navidrome or Jellyfin server, including Cast and DLNA on real hardware."},
-    {"title": "M2 · Parity", "description": "Feature depth people expect from a mature self-hosted music client: more providers, crossfade, equaliser, smart playlists, scrobbling, widgets."},
-    {"title": "M3 · Beyond", "description": "Things no comparable app offers: unified sources, bandwidth-aware quality, bit-perfect output."}
+    {
+      "title": "M1 · Daily driver",
+      "description": "Everything needed to use Polyphony as the only player with a Subsonic/Navidrome or Jellyfin server, including Cast and DLNA on real hardware."
+    },
+    {
+      "title": "M2 · Parity",
+      "description": "Feature depth people expect from a mature self-hosted music client: more providers, crossfade, equaliser, smart playlists, scrobbling, widgets."
+    },
+    {
+      "title": "M3 · Beyond",
+      "description": "Things no comparable app offers: bandwidth-aware quality and bit-perfect output."
+    }
   ],
   "issues": [
     {"title": "Verify Google Cast on real receivers", "milestone": "M1 · Daily driver", "labels": ["area/cast", "type/verification", "priority/p0"],
@@ -114,14 +199,6 @@
      "body": "Fade volume over the last 30 s, optional \"finish track\" (exists), and a quick-extend affordance from the notification."},
     {"title": "Localisation infrastructure", "milestone": "M2 · Parity", "labels": ["area/infra", "type/chore", "priority/p2", "help wanted"],
      "body": "All strings are in resources. Set up Weblate (or Crowdin), add `locales_config.xml`, and ship the first community translations."},
-    {"title": "Unified sources: Downloaded / Library / Streaming toggle", "milestone": "M3 · Beyond", "labels": ["area/ui", "area/library", "type/feature", "priority/p1"],
-     "body": "Generalise offline mode into a three-way scope. \"Streaming\" adds catalog-only providers (see the Spotify issues) whose items can be played through an external route and saved to either the streaming library or the home library via a request backend."},
-    {"title": "Spotify catalog and library via Web API", "milestone": "M3 · Beyond", "labels": ["area/providers", "type/feature", "priority/p2"],
-     "body": "PKCE login with the user's own developer app, search, saved albums/tracks/playlists, save-to-library. Catalog-only provider capability (no stream URLs). Track Spotify API policy changes."},
-    {"title": "Spotify playback: App Remote or Music Assistant bridge", "milestone": "M3 · Beyond", "labels": ["area/playback", "type/feature", "priority/p2"],
-     "body": "Decide between (a) Spotify App Remote SDK (playback inside the Spotify app, our UI controls it) and (b) registering the phone as a Music Assistant player (Sendspin) so MA streams Spotify and other services. Embedding librespot is out of scope for licensing reasons."},
-    {"title": "Music Assistant player bridge (Sendspin)", "milestone": "M3 · Beyond", "labels": ["area/playback", "type/feature", "priority/p2"],
-     "body": "Implement the Sendspin player protocol so Polyphony appears as a player in Music Assistant, enabling MA's providers (Spotify, Tidal, Qobuz, YouTube Music) to stream to the phone."},
     {"title": "Bit-perfect USB DAC output", "milestone": "M3 · Beyond", "labels": ["area/playback", "type/feature", "priority/p2"],
      "body": "Custom `AudioSink` that opens the USB DAC directly (AAudio/Oboe exclusive mode or `AudioTrack` with matching sample rate and bit depth) to avoid system resampling and mixing. Device compatibility matrix required."},
     {"title": "Provider plugin interface documentation and contributor guide", "milestone": "M3 · Beyond", "labels": ["area/infra", "type/chore", "priority/p2", "help wanted"],
