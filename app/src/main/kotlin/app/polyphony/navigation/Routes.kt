@@ -35,6 +35,7 @@ enum class AlbumListKind { RECENTLY_ADDED, RECENTLY_PLAYED, MOST_PLAYED, RANDOM,
 @Serializable data object LibrarySettingsRoute : Route
 @Serializable data object DownloadsSettingsRoute : Route
 @Serializable data class DownloadRuleEditRoute(val ruleId: String? = null) : Route
+@Serializable data object BackupSettingsRoute : Route
 @Serializable data object AboutRoute : Route
 
 // ---- Onboarding ----

@@ -39,6 +39,8 @@
     <string name="settings_cast_devices_summary">Per-device quality overrides</string>
     <string name="settings_library">Library</string>
     <string name="settings_library_last_sync">Last synced: %1$s</string>
+    <string name="settings_backup">Backup &amp; restore</string>
+    <string name="settings_backup_summary">Save settings and servers to a file, or restore them</string>
     <string name="settings_about">About</string>
     <string name="settings_about_summary">Polyphony %1$s · open source</string>
     <string name="settings_version_footer">Polyphony %1$s</string>
@@ -317,4 +319,18 @@
     <string name="settings_swipe_action_favorite">Add to or remove from favourites</string>
     <string name="settings_swipe_action_download">Download or remove download</string>
     <string name="settings_swipe_action_info">Song info</string>
+
+    <!-- Backup &amp; restore -->
+    <string name="settings_backup_note">The backup is a single JSON file that holds your app settings and every configured server, including server passwords and access tokens. Keep it somewhere private — anyone with the file can sign in to your servers.</string>
+    <string name="settings_backup_export">Export backup</string>
+    <string name="settings_backup_export_summary">Write settings and %1$d server(s) to a file you choose</string>
+    <string name="settings_backup_restore">Restore backup</string>
+    <string name="settings_backup_restore_summary">Replace settings and add servers from a backup file</string>
+    <string name="settings_backup_exported">Backup saved</string>
+    <string name="settings_backup_export_failed">Could not save the backup</string>
+    <string name="settings_backup_restore_failed">Could not read the backup file</string>
+    <plurals name="settings_backup_restored">
+        <item quantity="one">Backup restored · %1$d server added</item>
+        <item quantity="other">Backup restored · %1$d servers added</item>
+    </plurals>
 </resources>

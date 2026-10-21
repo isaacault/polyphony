@@ -57,6 +57,7 @@ class PolyphonyNavigator(val navController: NavHostController) {
     fun openLibrarySettings() = navController.navigate(LibrarySettingsRoute, singleTop)
     fun openDownloadsSettings() = navController.navigate(DownloadsSettingsRoute, singleTop)
     fun openDownloadRule(ruleId: String?) = navController.navigate(DownloadRuleEditRoute(ruleId), singleTop)
+    fun openBackupSettings() = navController.navigate(BackupSettingsRoute, singleTop)
     fun openAbout() = navController.navigate(AboutRoute, singleTop)
 
     fun openOnboarding() = navController.navigate(OnboardingRoute) {
