@@ -27,12 +27,14 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,11 +42,14 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import app.polyphony.core.ui.components.LocalContentBottomPadding
 import app.polyphony.core.ui.motion.Motion
 import app.polyphony.core.ui.theme.Dimens
+import app.polyphony.R
+import app.polyphony.navigation.DeepLink
 import app.polyphony.navigation.PolyphonyNavHost
 import app.polyphony.navigation.PolyphonyNavigator
 import app.polyphony.navigation.Route
 import app.polyphony.ui.common.TrackSwipeScope
 import app.polyphony.ui.player.PlayerViewModel
+import kotlinx.coroutines.launch
 
 /**
  * Bottom space taken by the shell's chrome (bottom bar + mini player), excluding the system
@@ -106,13 +111,26 @@ fun PolyphonyShell(
     LaunchedEffect(showPlayer) {
         if (!showPlayer) sheetState.snapCollapsed()
     }
-    // polyphony:// deep links, also fired by the launcher app shortcuts (see res/xml/shortcuts.xml).
+    val linkScope = rememberCoroutineScope()
+    val missingServerText = stringResource(R.string.browse_link_server_missing)
+    // polyphony:// deep links, also fired by the launcher app shortcuts (see res/xml/shortcuts.xml)
+    // and by continuo's "Ready to play" notifications.
     LaunchedEffect(deepLink) {
         if (deepLink != null) {
-            when (deepLink.host) {
-                "player" -> if (playback.isActive) sheetState.expand()
-                "search" -> navigator.openSearch()
-                "shuffle" -> shellViewModel.shuffleLibrary()
+            // Finish before consuming: clearing the link recomposes and cancels this effect.
+            when (val link = DeepLink.parse(deepLink.toString())) {
+                DeepLink.Player -> if (playback.isActive) sheetState.expand()
+                DeepLink.Search -> navigator.openSearch()
+                DeepLink.Shuffle -> shellViewModel.shuffleLibrary()
+                is DeepLink.Album -> if (!onOnboarding) {
+                    if (shellViewModel.activateServerFor(link)) {
+                        sheetState.snapCollapsed()
+                        navigator.openAlbum(link.albumId)
+                    } else {
+                        linkScope.launch { snackbarHostState.showSnackbar(missingServerText.format(link.server)) }
+                    }
+                }
+                null -> Unit
             }
             onDeepLinkConsumed()
         }

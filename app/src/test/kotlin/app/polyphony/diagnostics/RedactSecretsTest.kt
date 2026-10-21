@@ -33,6 +33,15 @@ class RedactSecretsTest {
     }
 
     @Test
+    fun `continuo sign-in responses are redacted`() {
+        val out = redactSecrets("{\"accessToken\": \"eyJ\", \"refreshToken\": \"crt_abc\", \"password\": \"app-secret\", \"username\": \"isaac\"}")
+        assertFalse(out.contains("crt_abc"))
+        assertFalse(out.contains("app-secret"))
+        assertFalse(out.contains("eyJ"))
+        assertTrue(out.contains("\"username\": \"isaac\""))
+    }
+
+    @Test
     fun `ordinary text is untouched`() {
         val text = "decision: Original quality reason=DEFAULT host=10.0.2.2 t=now"
         assertEquals(text, redactSecrets(text))

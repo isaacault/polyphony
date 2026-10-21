@@ -176,4 +176,4 @@ internal fun redactSecrets(text: String): String = text
     .replace(Regex("(?i)([?&](?:t|s|p|u|api_key|apikey|token|access_token|password|x-emby-token)=)[^&\\s\"'<>]+"), "$1<redacted>")
     .replace(Regex("(?i)(authorization:\\s*)[^\\n]+"), "$1<redacted>")
     .replace(Regex("(?i)(token=\")[^\"]+(\")"), "$1<redacted>$2")
-    .replace(Regex("(?i)(\"(?:credential|password|accessToken|storePassword)\"\\s*:\\s*\")[^\"]*(\")"), "$1<redacted>$2")
+    .replace(Regex("(?i)(\"(?:credential|password|accessToken|refreshToken|storePassword)\"\\s*:\\s*\")[^\"]*(\")"), "$1<redacted>$2")

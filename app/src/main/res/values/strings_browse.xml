@@ -6,6 +6,8 @@
     <string name="browse_nav_search">Search</string>
     <string name="browse_nav_settings">Settings</string>
     <string name="browse_title_servers">Servers</string>
+    <!-- a polyphony://album/{server}/{id} link (e.g. continuo's "Ready to play") named no configured server -->
+    <string name="browse_link_server_missing">That album is on %1$s, which isn\'t one of your servers.</string>
     <string name="browse_action_manage_servers">Manage servers</string>
     <string name="browse_action_back">Back</string>
     <string name="browse_action_more">More options</string>

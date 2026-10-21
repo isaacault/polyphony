@@ -267,10 +267,12 @@ class ServerEditViewModel @Inject constructor(
                     options = options,
                 ),
             )
+            // A continuo sign-in issues a new device: its id and token must replace the old ones
+            // carried over in `options`, or the new app password would sit next to a stale session.
             val merged = authed.copy(
                 id = base.id,
                 createdAt = base.createdAt,
-                options = authed.options + options,
+                options = authed.options + (options - ServerOptions.CONTINUO_KEYS),
             )
             val info = runCatching { factory.create(merged).ping() }.getOrNull()
             merged to info
