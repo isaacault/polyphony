@@ -125,7 +125,7 @@ fun MiniPlayer(
             ArtworkImage(
                 url = track.artworkUrl,
                 contentDescription = null,
-                modifier = Modifier.size(44.dp),
+                modifier = Modifier.size(40.dp),
                 shape = ArtworkShapes.listThumb,
             )
             Column(

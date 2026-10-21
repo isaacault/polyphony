@@ -58,18 +58,18 @@ fun MediaRow(
         modifier = modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick ?: onMoreClick)
-            .padding(start = Dimens.screenPadding, end = 4.dp, top = 6.dp, bottom = 6.dp)
-            .heightIn(min = 56.dp),
+            .padding(start = Dimens.screenPadding, end = 4.dp, top = 4.dp, bottom = 4.dp)
+            .heightIn(min = 52.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ArtworkImage(url = artworkUrl, contentDescription = null, modifier = Modifier.size(artworkSize), shape = shape, placeholder = placeholder)
         Spacer(Modifier.width(Dimens.itemSpacing))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
