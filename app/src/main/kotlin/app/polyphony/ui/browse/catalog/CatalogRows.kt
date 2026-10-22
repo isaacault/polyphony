@@ -1,8 +1,8 @@
 package app.polyphony.ui.browse.catalog
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,24 +10,30 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.HourglassTop
+import androidx.compose.material.icons.rounded.LibraryAdd
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.polyphony.R
+import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Availability
+import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogArtist
+import app.polyphony.core.ui.components.AlbumCard
 import app.polyphony.core.ui.components.ArtworkImage
 import app.polyphony.core.ui.components.MediaRow
 import app.polyphony.core.ui.components.QualityBadge
@@ -41,8 +47,8 @@ internal fun PartialBadge(partial: Availability.Partial) {
 }
 
 /**
- * A catalogue item that isn't in the library: dimmed, with Request when it can be requested or a
- * status chip when a request is under way. [onClick] opens it, where there is something to open.
+ * A catalogue item that isn't in the library, at full brightness like a library row: what marks it
+ * is [RequestAction] at the end. [onClick] opens it, where there is something to open.
  */
 @Composable
 internal fun CatalogRow(
@@ -64,10 +70,9 @@ internal fun CatalogRow(
             .heightIn(min = 52.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Dimmed: not in your library. The Request button keeps full contrast.
-        ArtworkImage(url = artworkUrl, contentDescription = null, modifier = Modifier.size(Dimens.listArtwork).alpha(CATALOG_ART_ALPHA))
+        ArtworkImage(url = artworkUrl, contentDescription = null, modifier = Modifier.size(Dimens.listArtwork))
         Spacer(Modifier.width(Dimens.itemSpacing))
-        Column(Modifier.weight(1f).alpha(CATALOG_TEXT_ALPHA)) {
+        Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (subtitle != null) {
                 Text(
@@ -79,22 +84,90 @@ internal fun CatalogRow(
                 )
             }
         }
-        Spacer(Modifier.width(8.dp))
-        if (EverythingSection.canRequest(availability, releaseGroupId) && releaseGroupId != null) {
-            FilledTonalButton(
-                onClick = { onRequest(releaseGroupId) },
-                enabled = !busy,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-            ) { Text(requestLabel, style = MaterialTheme.typography.labelLarge) }
-        } else {
-            availabilityLabel(availability)?.let { QualityBadge(label = stringResource(it)) }
+        RequestAction(availability, releaseGroupId, busy, requestLabel, onRequest)
+    }
+}
+
+/** What [RequestAction] shows for an item. */
+internal enum class RequestState { NONE, REQUESTABLE, BUSY, UNDER_WAY, NEEDS_LOOK }
+
+internal fun requestState(availability: Availability, releaseGroupId: String?, busy: Boolean): RequestState = when {
+    busy -> RequestState.BUSY
+    EverythingSection.canRequest(availability, releaseGroupId) -> RequestState.REQUESTABLE
+    availability is Availability.Requested && availability.state == "needs_attention" -> RequestState.NEEDS_LOOK
+    availability is Availability.Requested -> RequestState.UNDER_WAY
+    else -> RequestState.NONE
+}
+
+/**
+ * The mark of an item that isn't in the library. "Library add" (a stack with a plus) requests it:
+ * it reads as "add to the server's library" and never as the phone's download arrow. An hourglass
+ * means a request is under way, an alert that one needs a look. [label] is what the button says
+ * to TalkBack; the status icons say their status.
+ */
+@Composable
+internal fun RequestAction(
+    availability: Availability,
+    releaseGroupId: String?,
+    busy: Boolean,
+    label: String,
+    onRequest: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    when (requestState(availability, releaseGroupId, busy)) {
+        RequestState.NONE -> Unit
+        RequestState.BUSY -> Box(modifier.size(48.dp), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+        }
+        RequestState.REQUESTABLE -> IconButton(onClick = { releaseGroupId?.let(onRequest) }, modifier = modifier) {
+            Icon(Icons.Rounded.LibraryAdd, contentDescription = label, tint = MaterialTheme.colorScheme.primary)
+        }
+        RequestState.UNDER_WAY, RequestState.NEEDS_LOOK -> Box(modifier.size(48.dp), contentAlignment = Alignment.Center) {
+            val look = availability is Availability.Requested && availability.state == "needs_attention"
+            Icon(
+                if (look) Icons.Rounded.ErrorOutline else Icons.Rounded.HourglassTop,
+                contentDescription = availabilityLabel(availability)?.let { stringResource(it) },
+                tint = if (look) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
 
-// Not in the library: the artwork recedes, the text stays easy to read.
-private const val CATALOG_ART_ALPHA = 0.7f
-internal const val CATALOG_TEXT_ALPHA = 0.85f
+/**
+ * A catalogue album as a library-style card: the same artwork, title and year, with
+ * [RequestAction] on a small disc over the artwork's corner. Opens the album page.
+ */
+@Composable
+internal fun CatalogAlbumCard(
+    album: CatalogAlbum,
+    busy: Boolean,
+    onRequest: (String) -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier) {
+        AlbumCard(album = album.asAlbum(), onClick = onClick, subtitle = catalogAlbumSubtitle(album))
+        if (requestState(album.availability, album.releaseGroupId, busy) != RequestState.NONE) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+                modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
+            ) {
+                RequestAction(album.availability, album.releaseGroupId, busy, stringResource(R.string.browse_action_request), onRequest)
+            }
+        }
+    }
+}
+
+/** The year, and where a request stands once there is one. */
+@Composable
+internal fun catalogAlbumSubtitle(album: CatalogAlbum): String = listOfNotNull(
+    album.year?.toString(),
+    availabilityLabel(album.availability)?.let { stringResource(it) },
+).joinToString(" · ")
+
+// The library's card, fed a catalogue item: its id is a catalogue key, never a library id.
+internal fun CatalogAlbum.asAlbum() = Album(id = key, serverId = "", name = title, artistName = artist, year = year, artworkUrl = artworkUrl)
 
 /** The tonal status chip for a hit that's already under way. */
 internal fun availabilityLabel(availability: Availability): Int? = when (availability) {
@@ -108,7 +181,7 @@ internal fun availabilityLabel(availability: Availability): Int? = when (availab
     else -> null
 }
 
-/** A catalogue artist (nothing of theirs in the library): dimmed; opens their discography. */
+/** A catalogue artist (nothing of theirs in the library); opens their page. */
 @Composable
 internal fun CatalogArtistRow(artist: CatalogArtist, onClick: () -> Unit) {
     MediaRow(
@@ -118,37 +191,7 @@ internal fun CatalogArtistRow(artist: CatalogArtist, onClick: () -> Unit) {
         onClick = onClick,
         shape = CircleShape,
         placeholder = Icons.Rounded.Person,
-        modifier = Modifier.alpha(CATALOG_TEXT_ALPHA),
     )
-}
-
-/**
- * Discography groups as list items: [header] for each release type, then a catalogue row per
- * release with Request or its status. [onOpen] gets the release group and title of a tapped row.
- */
-internal fun LazyListScope.discographyItems(
-    groups: List<DiscographyGroup>,
-    requesting: Set<String>,
-    onRequest: (String) -> Unit,
-    onOpen: (releaseGroupId: String, title: String) -> Unit,
-    header: @Composable (ReleaseType) -> Unit,
-) {
-    groups.forEach { group ->
-        item(key = "dh-" + group.type) { header(group.type) }
-        items(group.albums, key = { "d-" + it.key }, contentType = { "catalog-album" }) { album ->
-            CatalogRow(
-                title = album.title,
-                subtitle = album.year?.toString(),
-                artworkUrl = album.artworkUrl,
-                availability = album.availability,
-                releaseGroupId = album.releaseGroupId,
-                busy = album.releaseGroupId in requesting,
-                requestLabel = stringResource(R.string.browse_action_request),
-                onRequest = onRequest,
-                onClick = album.releaseGroupId?.let { rg -> { onOpen(rg, album.title) } },
-            )
-        }
-    }
 }
 
 /** The section title for a release type. */
@@ -157,17 +200,6 @@ internal fun releaseTypeLabel(type: ReleaseType): Int = when (type) {
     ReleaseType.EP -> R.string.browse_catalog_eps
     ReleaseType.SINGLE -> R.string.browse_catalog_singles
     ReleaseType.OTHER -> R.string.browse_catalog_other
-}
-
-/** A small label over one release type's rows, under a page's "Not in your library" header. */
-@Composable
-internal fun ReleaseTypeLabel(type: ReleaseType) {
-    Text(
-        stringResource(releaseTypeLabel(type)),
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = Dimens.screenPadding, end = Dimens.screenPadding, top = 12.dp, bottom = 4.dp),
-    )
 }
 
 /** One quiet line about the catalogue part of a page: loading, failed or empty. */

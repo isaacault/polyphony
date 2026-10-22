@@ -61,9 +61,11 @@ import app.polyphony.core.ui.components.TrackRow
 import app.polyphony.core.ui.theme.ArtworkShapes
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.browse.catalog.CatalogAlbumCard
 import app.polyphony.ui.browse.catalog.CatalogNote
-import app.polyphony.ui.browse.catalog.ReleaseTypeLabel
-import app.polyphony.ui.browse.catalog.discographyItems
+import app.polyphony.ui.browse.catalog.Discography
+import app.polyphony.ui.browse.catalog.DiscographyEntry
+import app.polyphony.ui.browse.catalog.releaseTypeLabel
 import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.shell.LocalSnackbarHostState
 import app.polyphony.ui.common.AlbumOptionsSheet
@@ -216,7 +218,59 @@ fun ArtistScreen(viewModel: ArtistViewModel = hiltViewModel()) {
                             }
                         }
                     }
-                    if (state.albums.isNotEmpty()) {
+                    // continuo: your albums and the ones you don't have, in one grid per release type.
+                    state.discography.forEach { group ->
+                        item(key = "dh-" + group.type) {
+                            SectionHeader(
+                                title = stringResource(releaseTypeLabel(group.type)),
+                                subtitle = pluralStringResource(R.plurals.browse_count_albums, group.entries.size, group.entries.size),
+                            )
+                        }
+                        items(group.entries.chunked(2), key = { row -> "d-" + row.joinToString(",") { it.key } }, contentType = { "album-row" }) { row ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                row.forEach { entry ->
+                                    when (entry) {
+                                        is DiscographyEntry.Owned -> Box(Modifier.weight(1f)) {
+                                            val album = entry.album
+                                            val partial = state.partials[album.id]
+                                            AlbumCard(
+                                                album = album,
+                                                onClick = { navigator.openAlbum(album.id) },
+                                                onLongClick = { albumForOptions = album },
+                                                subtitle = listOfNotNull(
+                                                    album.year?.toString(),
+                                                    partial?.let { stringResource(R.string.browse_availability_partial, it.have, it.expected) },
+                                                ).joinToString(" · "),
+                                            )
+                                        }
+                                        is DiscographyEntry.Missing -> {
+                                            val album = entry.album
+                                            CatalogAlbumCard(
+                                                album = album,
+                                                busy = album.releaseGroupId in state.requesting,
+                                                onRequest = viewModel::request,
+                                                onClick = {
+                                                    val libraryId = Discography.libraryId(album.availability)
+                                                    when {
+                                                        libraryId != null -> navigator.openAlbum(libraryId)
+                                                        album.releaseGroupId != null -> navigator.openCatalogAlbum(album.releaseGroupId!!, album.title)
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                        }
+                                    }
+                                }
+                                if (row.size == 1) Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                    if (state.discography.isEmpty() && state.albums.isNotEmpty()) {
                         item(key = "albums-header") {
                             SectionHeader(title = stringResource(R.string.browse_tab_albums), subtitle = pluralStringResource(R.plurals.browse_count_albums, state.albums.size, state.albums.size))
                         }
@@ -245,16 +299,6 @@ fun ArtistScreen(viewModel: ArtistViewModel = hiltViewModel()) {
                                 if (row.size == 1) Spacer(Modifier.weight(1f))
                             }
                         }
-                    }
-                    // continuo: the rest of the discography, after the albums you have.
-                    if (state.catalogGroups.isNotEmpty()) {
-                        item(key = "catalog-header") {
-                            SectionHeader(
-                                title = stringResource(R.string.browse_catalog_not_in_library),
-                                subtitle = stringResource(R.string.browse_catalog_not_in_library_subtitle),
-                            )
-                        }
-                        discographyItems(state.catalogGroups, state.requesting, onRequest = viewModel::request, onOpen = navigator::openCatalogAlbum) { ReleaseTypeLabel(it) }
                     }
                     if (state.catalogLoading) item(key = "catalog-loading") { CatalogNote(R.string.browse_catalog_loading) }
                     if (state.catalogFailed) item(key = "catalog-failed") { CatalogNote(R.string.browse_catalog_failed, isError = true) }

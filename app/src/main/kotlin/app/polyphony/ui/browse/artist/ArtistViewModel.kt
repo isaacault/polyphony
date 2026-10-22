@@ -21,7 +21,7 @@ import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.navigation.ArtistRoute
 import app.polyphony.ui.browse.catalog.CatalogRequester
 import app.polyphony.ui.browse.catalog.Discography
-import app.polyphony.ui.browse.catalog.DiscographyGroup
+import app.polyphony.ui.browse.catalog.MergedGroup
 import app.polyphony.ui.common.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
@@ -58,8 +58,11 @@ data class ArtistUiState(
     val isLoaded: Boolean = false,
     val refreshFailed: Boolean = false,
     val topTracksLoading: Boolean = true,
-    /** The rest of the discography on a continuo server ([Discography.missing]); empty elsewhere. */
-    val catalogGroups: ImmutableList<DiscographyGroup> = persistentListOf(),
+    /**
+     * On a continuo server, your albums and the rest of the discography as one list
+     * ([Discography.merged]); empty elsewhere, and then the page shows [albums].
+     */
+    val discography: ImmutableList<MergedGroup> = persistentListOf(),
     val catalogLoading: Boolean = false,
     val catalogFailed: Boolean = false,
     /** Library albums the catalogue only partly matches, by album id. */
@@ -109,9 +112,10 @@ class ArtistViewModel @Inject constructor(
     ) { artist, albums, pb, failed, (top, sim, cat) ->
         val (load, req, busy) = cat
         val catalogAlbums = (load as? CatalogLoad.Loaded)?.albums.orEmpty()
+        val sorted = albums.sortedWith(compareByDescending<Album> { it.year ?: 0 }.thenBy { it.name })
         ArtistUiState(
             artist = artist,
-            albums = albums.sortedWith(compareByDescending<Album> { it.year ?: 0 }.thenBy { it.name }).toImmutableList(),
+            albums = sorted.toImmutableList(),
             topTracks = (top ?: emptyList()).toImmutableList(),
             similarArtists = sim.toImmutableList(),
             currentTrackId = pb.currentTrack?.id,
@@ -119,7 +123,7 @@ class ArtistViewModel @Inject constructor(
             isLoaded = true,
             refreshFailed = failed,
             topTracksLoading = top == null,
-            catalogGroups = Discography.missing(catalogAlbums, req).toImmutableList(),
+            discography = Discography.merged(sorted, catalogAlbums, req).toImmutableList(),
             catalogLoading = load == CatalogLoad.Loading,
             catalogFailed = load == CatalogLoad.Failed,
             partials = Discography.partials(catalogAlbums).toImmutableMap(),
