@@ -3,6 +3,7 @@ package app.polyphony.core.domain.repository
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogAlbumDetail
 import app.polyphony.core.domain.model.CatalogArtist
+import app.polyphony.core.domain.model.CatalogArtistPage
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxPage
@@ -30,6 +31,12 @@ interface RequestRepository {
      * with its availability: library albums are in it too, marked in_library or partial.
      */
     suspend fun artistAlbums(server: Server, artistMbid: String): List<CatalogAlbum>
+
+    /**
+     * The page for catalogue artist [artistMbid]: picture, biography, top songs and similar
+     * artists. Null when the server doesn't know the artist, or is too old to have artist pages.
+     */
+    suspend fun catalogArtist(server: Server, artistMbid: String): CatalogArtistPage?
 
     /**
      * The catalogue artist named [name] (case and punctuation aside), for a library artist the

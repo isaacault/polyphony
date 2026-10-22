@@ -3,6 +3,7 @@ package app.polyphony.inbox
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogAlbumDetail
 import app.polyphony.core.domain.model.CatalogArtist
+import app.polyphony.core.domain.model.CatalogArtistPage
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxNotification
@@ -42,6 +43,7 @@ class NewestNotificationsTest {
         override suspend fun artistAlbums(server: Server, artistMbid: String): List<CatalogAlbum> = error("unused")
         override suspend fun catalogAlbum(server: Server, releaseGroupId: String): CatalogAlbumDetail = error("unused")
         override suspend fun findArtist(server: Server, name: String): CatalogArtist? = error("unused")
+        override suspend fun catalogArtist(server: Server, artistMbid: String): CatalogArtistPage? = error("unused")
         override suspend fun requestAlbum(server: Server, releaseGroupId: String): RequestOutcome = error("unused")
         override suspend fun requests(server: Server, activeOnly: Boolean): List<MusicRequest> = error("unused")
         override fun events(server: Server): Flow<RequestEvent> = error("unused")

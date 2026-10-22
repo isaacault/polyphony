@@ -1,51 +1,75 @@
 package app.polyphony.ui.browse.catalog
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.Scaffold
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.R
+import app.polyphony.core.domain.model.Album
+import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.Availability
+import app.polyphony.core.domain.model.CatalogAlbum
+import app.polyphony.core.domain.model.CatalogArtist
+import app.polyphony.core.ui.components.AlbumCard
+import app.polyphony.core.ui.components.ArtistCard
+import app.polyphony.core.ui.components.ArtworkImage
 import app.polyphony.core.ui.components.ErrorState
-import app.polyphony.core.ui.components.MediaRow
+import app.polyphony.core.ui.components.HeroHeader
+import app.polyphony.core.ui.components.HeroScaffold
+import app.polyphony.core.ui.components.HorizontalCarousel
 import app.polyphony.core.ui.components.SectionHeader
-import app.polyphony.core.ui.components.listContentPadding
+import app.polyphony.core.ui.theme.ArtworkShapes
+import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.navigation.PolyphonyNavigator
 import app.polyphony.ui.shell.LocalSnackbarHostState
 
-/** An artist with nothing in the library (#144): their discography, grouped by release type, with Request. */
+/**
+ * Any artist's page from the catalogue (#144), laid out like a library artist's: picture,
+ * biography, top songs, the discography and similar artists. Nothing here is in the library, so
+ * it's dimmed; songs and albums open their album page, where they can be requested.
+ */
 @Composable
 fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
     val snackbar = LocalSnackbarHostState.current
     val context = LocalContext.current
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val listState = rememberLazyListState()
+    var bioExpanded by rememberSaveable { mutableStateOf(false) }
+    var showAllTop by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { m ->
@@ -53,56 +77,161 @@ fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
         }
     }
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            Column {
-                TopAppBar(
-                    title = { Text(state.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.back() }) {
-                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.browse_action_back))
-                        }
-                    },
-                    scrollBehavior = scrollBehavior,
-                )
-                if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
-            }
-        },
-    ) { padding ->
-        when {
-            state.failed -> Column(Modifier.fillMaxSize().padding(padding).padding(top = 96.dp)) {
+    HeroScaffold(title = state.name, listState = listState, onBack = { navigator.back() }) { padding ->
+        if (state.failed) {
+            Column(Modifier.fillMaxSize().padding(padding).padding(top = 96.dp)) {
                 ErrorState(message = stringResource(R.string.browse_catalog_failed), onRetry = viewModel::load)
             }
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = listContentPadding(top = 4.dp),
-            ) {
-                if (state.loading) item(key = "loading") { CatalogNote(R.string.browse_catalog_loading) }
-                if (state.isEmpty) item(key = "empty") { CatalogNote(R.string.browse_catalog_empty) }
-                // Releases continuo matched to the library under another artist name: yours, so first.
-                if (state.inLibrary.isNotEmpty()) {
-                    item(key = "h-library") { SectionHeader(title = stringResource(R.string.browse_catalog_in_library)) }
-                    items(state.inLibrary, key = { "l-" + it.key }, contentType = { "album" }) { album ->
-                        val libraryId = when (val a = album.availability) {
-                            is Availability.InLibrary -> a.libraryAlbumId
-                            is Availability.Partial -> a.libraryAlbumId
-                            else -> null
-                        }
-                        MediaRow(
-                            title = album.title,
-                            subtitle = album.year?.toString(),
-                            artworkUrl = album.artworkUrl,
-                            onClick = { libraryId?.let(navigator::openAlbum) },
-                            placeholder = Icons.Rounded.Album,
+            return@HeroScaffold
+        }
+        val shape = if (state.hasArtistPicture) CircleShape else ArtworkShapes.hero
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = padding) {
+            item(key = "hero", contentType = "hero") {
+                HeroHeader(
+                    artworkUrl = state.artworkUrl,
+                    title = state.name,
+                    artworkShape = shape,
+                    artwork = { mod ->
+                        ArtworkImage(url = state.artworkUrl, contentDescription = state.name, modifier = mod, shape = shape, placeholder = Icons.Rounded.Person)
+                    },
+                    meta = listOfNotNull(
+                        state.disambiguation,
+                        state.albumCount.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.browse_count_albums, it, it) },
+                        stringResource(R.string.browse_catalog_artist_subtitle),
+                    ).joinToString(" · "),
+                )
+            }
+            state.biography?.let { bio ->
+                item(key = "bio", contentType = "bio") {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Dimens.screenPadding, vertical = 8.dp)
+                            .clickable { bioExpanded = !bioExpanded }
+                            .animateContentSize(),
+                    ) {
+                        Text(
+                            text = bio,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = if (bioExpanded) Int.MAX_VALUE else 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = stringResource(if (bioExpanded) R.string.browse_action_show_less else R.string.browse_action_read_more),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 4.dp),
                         )
                     }
                 }
-                discographyItems(state.groups, state.requesting, onRequest = viewModel::request, onOpen = navigator::openCatalogAlbum) { type ->
-                    SectionHeader(title = stringResource(releaseTypeLabel(type)))
+            }
+            if (state.topTracks.isNotEmpty()) {
+                val visible = if (showAllTop) state.topTracks else state.topTracks.take(5)
+                item(key = "top-header") { SectionHeader(title = stringResource(R.string.browse_artist_top_songs)) }
+                items(visible, key = { "top-" + it.key }, contentType = { "catalog-track" }) { track ->
+                    val inLibrary = (track.availability as? Availability.InLibrary)?.libraryAlbumId
+                    CatalogRow(
+                        title = track.title,
+                        subtitle = track.albumTitle,
+                        artworkUrl = null,
+                        availability = track.availability,
+                        releaseGroupId = track.albumReleaseGroupId,
+                        busy = track.albumReleaseGroupId in state.requesting,
+                        requestLabel = stringResource(R.string.browse_action_request_album),
+                        onRequest = viewModel::request,
+                        onClick = when {
+                            inLibrary != null -> ({ navigator.openAlbum(inLibrary) })
+                            track.albumReleaseGroupId != null -> ({ navigator.openCatalogAlbum(track.albumReleaseGroupId!!, track.albumTitle ?: track.title) })
+                            else -> null
+                        },
+                    )
+                }
+                if (state.topTracks.size > 5) {
+                    item(key = "top-more") {
+                        TextButton(onClick = { showAllTop = !showAllTop }, modifier = Modifier.padding(start = 8.dp)) {
+                            Text(stringResource(if (showAllTop) R.string.browse_action_show_less else R.string.browse_action_show_more))
+                        }
+                    }
                 }
             }
+            if (state.loading) item(key = "loading") { CatalogNote(R.string.browse_catalog_loading) }
+            if (state.isEmpty) item(key = "empty") { CatalogNote(R.string.browse_catalog_empty) }
+            // Releases continuo matched to the library under another artist name: yours, so first and not dimmed.
+            if (state.inLibrary.isNotEmpty()) {
+                item(key = "h-library") { SectionHeader(title = stringResource(R.string.browse_catalog_in_library)) }
+                albumGrid("lib", state.inLibrary, dimmed = false, navigator)
+            }
+            state.groups.forEach { group ->
+                item(key = "h-" + group.type) { SectionHeader(title = stringResource(releaseTypeLabel(group.type))) }
+                albumGrid(group.type.name, group.albums, dimmed = true, navigator)
+            }
+            if (state.similarArtists.isNotEmpty()) {
+                item(key = "similar-header") { SectionHeader(title = stringResource(R.string.browse_artist_similar)) }
+                item(key = "similar") {
+                    HorizontalCarousel(items = state.similarArtists, key = { "s-" + it.key }) { similar ->
+                        val libraryId = state.libraryArtistIds[similar.key]
+                        ArtistCard(
+                            artist = similar.asArtist(),
+                            onClick = {
+                                when {
+                                    libraryId != null -> navigator.openArtist(libraryId)
+                                    similar.musicBrainzId != null -> navigator.openCatalogArtist(similar.musicBrainzId!!, similar.name)
+                                }
+                            },
+                            width = 120.dp,
+                            subtitle = "",
+                            modifier = if (libraryId != null) Modifier else Modifier.alpha(CATALOG_TEXT_ALPHA),
+                        )
+                    }
+                }
+            }
+            item(key = "footer") { Spacer(Modifier.height(Dimens.sectionSpacing)) }
         }
     }
 }
+
+/** Two-up album cards like a library artist's, opening the library album or the catalogue album page. */
+private fun LazyListScope.albumGrid(prefix: String, albums: List<CatalogAlbum>, dimmed: Boolean, navigator: PolyphonyNavigator) {
+    items(albums.chunked(2), key = { row -> "$prefix-" + row.joinToString(",") { it.key } }, contentType = { "album-row" }) { row ->
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            row.forEach { album ->
+                val libraryId = when (val a = album.availability) {
+                    is Availability.InLibrary -> a.libraryAlbumId
+                    is Availability.Partial -> a.libraryAlbumId
+                    else -> null
+                }
+                Box(Modifier.weight(1f).then(if (dimmed) Modifier.alpha(CATALOG_TEXT_ALPHA) else Modifier)) {
+                    AlbumCard(
+                        album = album.asAlbum(),
+                        onClick = {
+                            when {
+                                libraryId != null -> navigator.openAlbum(libraryId)
+                                album.releaseGroupId != null -> navigator.openCatalogAlbum(album.releaseGroupId!!, album.title)
+                            }
+                        },
+                        subtitle = albumSubtitle(album),
+                    )
+                }
+            }
+            if (row.size == 1) Spacer(Modifier.weight(1f))
+        }
+    }
+}
+
+/** The year, and where a request stands once there is one. */
+@Composable
+private fun albumSubtitle(album: CatalogAlbum): String = listOfNotNull(
+    album.year?.toString(),
+    availabilityLabel(album.availability)?.let { stringResource(it) },
+).joinToString(" · ")
+
+// The library's cards, fed catalogue items: their ids are catalogue keys, never library ids.
+private fun CatalogAlbum.asAlbum() = Album(id = key, serverId = "", name = title, artistName = artist, year = year, artworkUrl = artworkUrl)
+
+private fun CatalogArtist.asArtist() = Artist(id = key, serverId = "", name = name, artworkUrl = artworkUrl)

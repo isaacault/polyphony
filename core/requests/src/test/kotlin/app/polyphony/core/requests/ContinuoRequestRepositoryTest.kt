@@ -151,6 +151,35 @@ class ContinuoRequestRepositoryTest {
     }
 
     @Test
+    fun `an artist page maps picture, biography, top songs and similar artists`() = runTest {
+        val body = """{"kind":"artist","key":"mb:artist:boc","name":"Boards of Canada","disambiguation":"",
+          "artwork":{"url":"https://music-api.example.com/v1/artwork?src=p"},
+          "biography":{"text":"A Scottish duo.","source":"wikipedia","url":"https://en.wikipedia.org/wiki/Boards_of_Canada"},
+          "ids":{"musicBrainzArtistId":"boc"},"availability":{"state":"catalog"},
+          "topTracks":[{"kind":"track","key":"mb:rec:r1","title":"Dayvan Cowboy","durationMs":300000,
+            "album":{"title":"Trans Canada Highway","musicBrainzReleaseGroupId":"tch","navidromeAlbumId":null},
+            "availability":{"state":"requestable","via":"album"}}],
+          "similarArtists":[{"kind":"artist","key":"mb:artist:ae","name":"Aphex Twin","artwork":{"url":null},
+            "ids":{"musicBrainzArtistId":"ae"},"availability":{"state":"in_library"}}],
+          "sources":{"topTracks":"ok","similarArtists":"ok"}}"""
+        val fake = FakeContinuo().apply {
+            routes["GET /v1/catalog/artists/boc"] = { _, _ -> 200 to body }
+            routes["GET /v1/catalog/artists/gone"] = { _, _ -> 404 to """{"error":{"code":"not_found","message":"Artist not found in the catalogue."}}""" }
+        }
+        val repo = repo(fake, FakeServers(server))
+        val page = repo.catalogArtist(server, "boc")!!
+
+        assertEquals("Boards of Canada", page.artist.name)
+        assertEquals("https://music-api.example.com/v1/artwork?src=p", page.artist.artworkUrl)
+        assertNull(page.disambiguation)
+        assertEquals("A Scottish duo.", page.biography)
+        assertEquals("tch", page.topTracks.single().albumReleaseGroupId)
+        assertEquals(Availability.Requestable, page.topTracks.single().availability)
+        assertEquals(Availability.InLibrary(null), page.similarArtists.single().availability)
+        assertNull("an unknown artist (or an older continuo) is no page, not an error", repo.catalogArtist(server, "gone"))
+    }
+
+    @Test
     fun `an artist without an id is found by name in the catalogue`() = runTest {
         val fake = FakeContinuo().apply {
             routes["GET /v1/search"] = { _, _ ->

@@ -52,6 +52,20 @@ data class CatalogArtist(
     val availability: Availability,
 )
 
+/**
+ * A catalogue artist's own page (any artist, in the library or not): what a library artist page
+ * shows, from the catalogue. The discography comes separately (RequestRepository.artistAlbums).
+ */
+data class CatalogArtistPage(
+    val artist: CatalogArtist,
+    val disambiguation: String?,
+    val biography: String?,
+    /** Where [biography] came from, to credit it (Wikipedia), when it's a page. */
+    val biographyUrl: String?,
+    val topTracks: List<CatalogTrack>,
+    val similarArtists: List<CatalogArtist>,
+)
+
 /** A track from the catalogue; requesting it requests its album ([albumReleaseGroupId]). */
 data class CatalogTrack(
     val key: String,
