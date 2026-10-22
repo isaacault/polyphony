@@ -13,7 +13,8 @@
 
 - Never commit features or fixes directly to `main`. Each change goes on a branch
   (`feat/...`, `fix/...`, `chore/...`) and lands through a pull request; CI must be green.
-  CI is local: `scripts/ci.sh --status` posts the `local-ci` commit status for the pushed head.
+  CI is local: the pre-push hook (`scripts/install-hooks.sh`) runs the quick check
+  (`scripts/ci.sh --quick`) and `scripts/ci.sh --status` posts the full `local-ci` commit status.
   Merge with `scripts/merge_when_green.sh <pr>`, which merges only when `local-ci` is success on
   the current head (running CI itself if there is no status yet); never merge without it.
 - Do **not** tag a release per change. Releases are batched: several merged PRs, then one
