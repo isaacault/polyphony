@@ -6,6 +6,7 @@ import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.Genre
 import app.polyphony.core.domain.model.LyricLine
 import app.polyphony.core.domain.model.Lyrics
+import app.polyphony.core.domain.model.MusicBrainzIds
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.transcode.AudioCodec
@@ -39,7 +40,7 @@ internal class SubsonicMapper(
         artworkUrl = artworkUrl(dto.coverArt, DEFAULT_ART_SIZE) ?: dto.artistImageUrl?.takeIf { it.isNotBlank() },
         starred = dto.starred != null,
         rating = dto.userRating ?: 0,
-        musicBrainzId = dto.musicBrainzId,
+        musicBrainzId = MusicBrainzIds.first(dto.musicBrainzId),
     )
 
     fun album(dto: AlbumDto): Album = Album(
@@ -61,7 +62,7 @@ internal class SubsonicMapper(
         createdAt = parseIsoMillis(dto.created) ?: 0L,
         lastPlayedAt = parseIsoMillis(dto.played),
         isCompilation = dto.isCompilation ?: false,
-        musicBrainzId = dto.musicBrainzId,
+        musicBrainzId = MusicBrainzIds.first(dto.musicBrainzId),
     )
 
     fun track(dto: ChildDto): Track {
@@ -96,7 +97,7 @@ internal class SubsonicMapper(
             replayGainAlbumDb = dto.replayGain?.albumGain,
             replayGainTrackPeak = dto.replayGain?.trackPeak,
             replayGainAlbumPeak = dto.replayGain?.albumPeak,
-            musicBrainzId = dto.musicBrainzId,
+            musicBrainzId = MusicBrainzIds.first(dto.musicBrainzId),
             path = dto.path,
             createdAt = parseIsoMillis(dto.created) ?: 0L,
         )

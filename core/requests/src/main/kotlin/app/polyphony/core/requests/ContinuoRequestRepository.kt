@@ -3,6 +3,7 @@ package app.polyphony.core.requests
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogAlbumDetail
 import app.polyphony.core.domain.model.CatalogAlbumTrack
+import app.polyphony.core.domain.model.CatalogArtist
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxPage
@@ -43,6 +44,15 @@ class ContinuoRequestRepository internal constructor(
         val reply = client.get(server, "/v1/search?q=$q&types=album,artist,track&limit=$limit")
         if (reply.code !in 200..299) throw client.serverError(reply, "continuo search failed")
         return client.decode(SearchDto.serializer(), reply.body).toDomain(artworkHost = hostOf(server.baseUrl))
+    }
+
+    override suspend fun findArtist(server: Server, name: String): CatalogArtist? {
+        val q = URLEncoder.encode(name.trim(), "UTF-8")
+        val reply = client.get(server, "/v1/search?q=$q&types=artist&limit=10")
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo search failed")
+        val wanted = sameName(name)
+        return client.decode(SearchDto.serializer(), reply.body).toDomain(artworkHost = hostOf(server.baseUrl))
+            .artists.firstOrNull { it.musicBrainzId != null && sameName(it.name) == wanted }
     }
 
     override suspend fun artistAlbums(server: Server, artistMbid: String): List<CatalogAlbum> {
@@ -190,3 +200,6 @@ class ContinuoRequestRepository internal constructor(
         return client.decode(MarkReadDto.serializer(), reply.body).unreadCount
     }
 }
+
+/** An artist name compared loosely: case and punctuation don't make two artists. */
+internal fun sameName(name: String): String = name.lowercase().filter { it.isLetterOrDigit() }

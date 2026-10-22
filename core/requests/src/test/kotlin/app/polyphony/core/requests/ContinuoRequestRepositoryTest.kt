@@ -151,6 +151,25 @@ class ContinuoRequestRepositoryTest {
     }
 
     @Test
+    fun `an artist without an id is found by name in the catalogue`() = runTest {
+        val fake = FakeContinuo().apply {
+            routes["GET /v1/search"] = { _, _ ->
+                200 to """{"results":[
+                  {"kind":"artist","key":"mb:artist:x","name":"Boards of Canadaa","ids":{"musicBrainzArtistId":"x"},"availability":{"state":"catalog"}},
+                  {"kind":"artist","key":"nd:artist:ar-1","name":"Boards Of Canada","ids":{"navidromeArtistId":"ar-1"},"availability":{"state":"in_library"}},
+                  {"kind":"artist","key":"mb:artist:boc","name":"Boards of Canada","ids":{"musicBrainzArtistId":"boc"},"availability":{"state":"in_library"}}
+                ]}"""
+            }
+        }
+        val repo = repo(fake, FakeServers(server))
+
+        assertEquals("boc", repo.findArtist(server, "boards of canada")?.musicBrainzId)
+        val sent = fake.seen.last { it.first.url.encodedPath == "/v1/search" }.first.url
+        assertEquals("artist", sent.queryParameter("types"))
+        assertNull(repo.findArtist(server, "Autechre"))
+    }
+
+    @Test
     fun `an artist's discography maps each album's availability`() = runTest {
         val body = """[
           {"kind":"album","key":"mb:rg:geo","title":"Geogaddi","artist":"Boards of Canada","year":2002,"albumType":"Album",

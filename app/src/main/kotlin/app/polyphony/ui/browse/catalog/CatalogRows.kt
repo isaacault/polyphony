@@ -65,9 +65,9 @@ internal fun CatalogRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Dimmed: not in your library. The Request button keeps full contrast.
-        ArtworkImage(url = artworkUrl, contentDescription = null, modifier = Modifier.size(Dimens.listArtwork).alpha(CATALOG_ALPHA))
+        ArtworkImage(url = artworkUrl, contentDescription = null, modifier = Modifier.size(Dimens.listArtwork).alpha(CATALOG_ART_ALPHA))
         Spacer(Modifier.width(Dimens.itemSpacing))
-        Column(Modifier.weight(1f).alpha(CATALOG_ALPHA)) {
+        Column(Modifier.weight(1f).alpha(CATALOG_TEXT_ALPHA)) {
             Text(title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (subtitle != null) {
                 Text(
@@ -92,7 +92,9 @@ internal fun CatalogRow(
     }
 }
 
-private const val CATALOG_ALPHA = 0.6f
+// Not in the library: the artwork recedes, the text stays easy to read.
+private const val CATALOG_ART_ALPHA = 0.7f
+internal const val CATALOG_TEXT_ALPHA = 0.85f
 
 /** The tonal status chip for a hit that's already under way. */
 internal fun availabilityLabel(availability: Availability): Int? = when (availability) {
@@ -116,7 +118,7 @@ internal fun CatalogArtistRow(artist: CatalogArtist, onClick: () -> Unit) {
         onClick = onClick,
         shape = CircleShape,
         placeholder = Icons.Rounded.Person,
-        modifier = Modifier.alpha(CATALOG_ALPHA),
+        modifier = Modifier.alpha(CATALOG_TEXT_ALPHA),
     )
 }
 

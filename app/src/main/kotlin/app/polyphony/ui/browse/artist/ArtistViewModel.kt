@@ -10,6 +10,7 @@ import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.Feedback
 import app.polyphony.core.domain.model.ItemKind
+import app.polyphony.core.domain.model.MusicBrainzIds
 import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
@@ -143,13 +144,17 @@ class ArtistViewModel @Inject constructor(
         }
     }
 
-    /** On a continuo server, the artist's whole discography, so the page can offer what's missing. */
+    /**
+     * On a continuo server, the artist's whole discography, so the page can offer what's missing.
+     * Without a usable MusicBrainz id from the server (Navidrome sends "" for unmatched artists),
+     * the catalogue artist of the same name stands in; with neither, the page stays library-only.
+     */
     private suspend fun loadDiscography(artist: Artist) {
-        val mbid = artist.musicBrainzId ?: return
         val server = servers.getActive()?.takeIf { requests.supports(it) } ?: return
         catalog.value = CatalogLoad.Loading
         catalog.value = try {
-            CatalogLoad.Loaded(requests.artistAlbums(server, mbid))
+            val mbid = MusicBrainzIds.first(artist.musicBrainzId) ?: requests.findArtist(server, artist.name)?.musicBrainzId
+            if (mbid == null) CatalogLoad.None else CatalogLoad.Loaded(requests.artistAlbums(server, mbid))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
