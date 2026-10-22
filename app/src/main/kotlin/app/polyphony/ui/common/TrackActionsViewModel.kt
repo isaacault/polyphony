@@ -3,11 +3,13 @@ package app.polyphony.ui.common
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.polyphony.core.domain.model.Album
+import app.polyphony.core.domain.model.Feedback
 import app.polyphony.core.domain.model.ItemKind
 import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
@@ -29,7 +31,11 @@ import javax.inject.Inject
 class TrackActionsViewModel @Inject constructor(
     private val playback: PlaybackController,
     private val library: LibraryRepository,
+    feedbackRepository: FeedbackRepository,
 ) : ViewModel() {
+
+    /** Which of favourite / rating the sheets offer. */
+    val feedback: StateFlow<Feedback> = feedbackRepository.feedback
 
     val playlists: StateFlow<ImmutableList<Playlist>> = library.playlists()
         .map { it.toImmutableList() }

@@ -8,9 +8,11 @@ import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.Genre
 import app.polyphony.core.domain.model.Playlist
+import app.polyphony.core.domain.model.Feedback
 import app.polyphony.core.domain.repository.DownloadRepository
 import app.polyphony.core.domain.repository.DownloadRule
 import app.polyphony.core.domain.repository.DownloadRuleTarget
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.TranscodeProfileRepository
@@ -93,7 +95,11 @@ class DownloadRuleEditViewModel @Inject constructor(
     private val library: LibraryRepository,
     private val servers: ServerRepository,
     profileRepository: TranscodeProfileRepository,
+    feedbackRepository: FeedbackRepository,
 ) : ViewModel() {
+
+    /** The favourites rule reads as Top rated in Ratings mode. */
+    val feedback: StateFlow<Feedback> = feedbackRepository.feedback
 
     val ruleId: String? = savedStateHandle.toRoute<DownloadRuleEditRoute>().ruleId
     val isNew: Boolean get() = ruleId == null

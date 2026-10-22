@@ -328,7 +328,7 @@ class PlaybackControllerImpl @Inject constructor(
                 PlayContext.Kind.ARTIST -> libraryRepository.tracksForArtist(context.id).first()
                 PlayContext.Kind.PLAYLIST -> libraryRepository.tracksForPlaylist(context.id).first()
                 PlayContext.Kind.GENRE -> libraryRepository.tracksByGenre(context.id).first()
-                PlayContext.Kind.FAVORITES -> libraryRepository.starredTracks().first()
+                PlayContext.Kind.FAVORITES -> libraryRepository.likedTracks().first()
             }
         }.getOrDefault(emptyList())
         read().takeIf { it.isNotEmpty() }?.let { return it }

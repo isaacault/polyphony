@@ -78,13 +78,13 @@ import app.polyphony.ui.common.TrackOptionsSheet
 import app.polyphony.ui.common.rememberDownloadedIds
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
-import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
 
 // ---------------------------------------------------------------- Artists
 
 @Composable
 internal fun ArtistsTab(vm: LibraryViewModel) {
+    val feedback by vm.feedback.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
     val artists by vm.artists.collectAsStateWithLifecycle()
     val sort by vm.artistSort.collectAsStateWithLifecycle()
@@ -94,13 +94,13 @@ internal fun ArtistsTab(vm: LibraryViewModel) {
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
-    val sortOptions = remember {
-        persistentListOf(
+    val sortOptions = remember(feedback.usesRatings) {
+        listOfNotNull(
             SortOption(ArtistSort.NAME, "Name"),
             SortOption(ArtistSort.ALBUM_COUNT, "Albums"),
             SortOption(ArtistSort.RECENTLY_ADDED, "Recently added"),
-            SortOption(ArtistSort.STARRED, "Favourites"),
-        )
+            SortOption(ArtistSort.STARRED, "Favourites").takeUnless { feedback.usesRatings },
+        ).toImmutableList()
     }
     Column(Modifier.fillMaxSize()) {
         ListControlsRow(
@@ -108,7 +108,7 @@ internal fun ArtistsTab(vm: LibraryViewModel) {
             start = { SortMenu(sortOptions, sort, ascending = true, onChange = { s, _ -> vm.setArtistSort(s) }, showDirection = false) },
             end = { GridListToggle(isGrid = grid, onToggle = vm::setArtistsGrid) },
         )
-        LibraryFilterRow(filter, LibraryFilter.fieldsFor(ItemKind.ARTIST), vm::setArtistFilter)
+        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.ARTIST)), vm::setArtistFilter)
         ScrollToTopOnReorder(order = sort to filter, content = artists) { if (grid) gridState.scrollToItem(0) else listState.scrollToItem(0) }
         val list = artists
         when {
@@ -139,6 +139,7 @@ internal fun ArtistsTab(vm: LibraryViewModel) {
 
 @Composable
 internal fun AlbumsTab(vm: LibraryViewModel) {
+    val feedback by vm.feedback.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
     val albums by vm.albums.collectAsStateWithLifecycle()
     val sort by vm.albumSort.collectAsStateWithLifecycle()
@@ -152,17 +153,17 @@ internal fun AlbumsTab(vm: LibraryViewModel) {
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     var albumForOptions by remember { mutableStateOf<Album?>(null) }
-    val sortOptions = remember {
-        persistentListOf(
+    val sortOptions = remember(feedback.usesRatings) {
+        listOfNotNull(
             SortOption(AlbumSort.NAME, "Name"),
             SortOption(AlbumSort.ARTIST, "Artist"),
             SortOption(AlbumSort.YEAR, "Year"),
             SortOption(AlbumSort.RECENTLY_ADDED, "Recently added"),
             SortOption(AlbumSort.RECENTLY_PLAYED, "Recently played"),
             SortOption(AlbumSort.MOST_PLAYED, "Most played"),
-            SortOption(AlbumSort.RATING, "Rating"),
+            SortOption(AlbumSort.RATING, "Rating").takeIf { feedback.usesRatings },
             SortOption(AlbumSort.DURATION, "Duration"),
-        )
+        ).toImmutableList()
     }
     Column(Modifier.fillMaxSize()) {
         ListControlsRow(
@@ -170,7 +171,7 @@ internal fun AlbumsTab(vm: LibraryViewModel) {
             start = { SortMenu(sortOptions, sort, ascending, onChange = vm::setAlbumSort) },
             end = { GridListToggle(isGrid = grid, onToggle = vm::setAlbumsGrid) },
         )
-        LibraryFilterRow(filter, LibraryFilter.fieldsFor(ItemKind.ALBUM), vm::setAlbumFilter, genres = genres, years = years)
+        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.ALBUM)), vm::setAlbumFilter, genres = genres, years = years)
         ScrollToTopOnReorder(order = Triple(sort, ascending, filter), content = albums) { if (grid) gridState.scrollToItem(0) else listState.scrollToItem(0) }
         val list = albums
         when {
@@ -208,6 +209,7 @@ internal fun AlbumsTab(vm: LibraryViewModel) {
 
 @Composable
 internal fun SongsTab(vm: LibraryViewModel) {
+    val feedback by vm.feedback.collectAsStateWithLifecycle()
     val items = vm.pagedTracks.collectAsLazyPagingItems()
     val count by vm.trackCount.collectAsStateWithLifecycle()
     val letters by vm.trackLetters.collectAsStateWithLifecycle()
@@ -220,16 +222,16 @@ internal fun SongsTab(vm: LibraryViewModel) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var trackForOptions by remember { mutableStateOf<Track?>(null) }
-    val sortOptions = remember {
-        persistentListOf(
+    val sortOptions = remember(feedback.usesRatings) {
+        listOfNotNull(
             SortOption(TrackSort.TITLE, "Title"),
             SortOption(TrackSort.ARTIST, "Artist"),
             SortOption(TrackSort.ALBUM, "Album"),
             SortOption(TrackSort.DURATION, "Duration"),
             SortOption(TrackSort.RECENTLY_ADDED, "Recently added"),
             SortOption(TrackSort.MOST_PLAYED, "Most played"),
-            SortOption(TrackSort.RATING, "Rating"),
-        )
+            SortOption(TrackSort.RATING, "Rating").takeIf { feedback.usesRatings },
+        ).toImmutableList()
     }
     val currentId = playback.currentTrack?.id
     val downloadedIds by rememberDownloadedIds()
@@ -243,7 +245,7 @@ internal fun SongsTab(vm: LibraryViewModel) {
                 }
             },
         )
-        LibraryFilterRow(filter, LibraryFilter.fieldsFor(ItemKind.TRACK), vm::setTrackFilter, genres = genres, years = years)
+        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.TRACK)), vm::setTrackFilter, genres = genres, years = years)
         // The Play/Shuffle header is item 0 with a fixed key, so the top stays put as the new order loads.
         ScrollToTopOnReorder(order = Triple(sort, ascending, filter), content = null) { listState.scrollToItem(0) }
         val loading = items.loadState.refresh is LoadState.Loading
@@ -311,6 +313,7 @@ internal fun SongsTab(vm: LibraryViewModel) {
 
 @Composable
 internal fun PlaylistsTab(vm: LibraryViewModel) {
+    val feedback by vm.feedback.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val grid by vm.playlistsGrid.collectAsStateWithLifecycle()
@@ -323,7 +326,7 @@ internal fun PlaylistsTab(vm: LibraryViewModel) {
                 countLabel = playlists?.let { pluralStringResource(R.plurals.browse_count_playlists, it.size, it.size) },
                 end = { GridListToggle(isGrid = grid, onToggle = vm::setPlaylistsGrid) },
             )
-            LibraryFilterRow(filter, LibraryFilter.fieldsFor(ItemKind.PLAYLIST), vm::setPlaylistFilter)
+            LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.PLAYLIST)), vm::setPlaylistFilter)
             val list = playlists
             when {
                 list == null -> LoadingPlaceholder(PlaceholderStyle.LIST)

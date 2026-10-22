@@ -10,6 +10,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
@@ -39,6 +40,7 @@ import app.polyphony.core.domain.model.ItemKind
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.repository.DownloadRepository
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.TrackSwipeAction
@@ -50,8 +52,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -62,6 +64,8 @@ data class TrackSwipeConfig(
     val leftToRight: TrackSwipeAction = TrackSwipeAction.ADD_TO_QUEUE,
     val rightToLeft: TrackSwipeAction = TrackSwipeAction.NONE,
     val haptics: Boolean = true,
+    /** Ratings mode: the favourite action rates instead (it opens the 1–5 picker). */
+    val usesRatings: Boolean = false,
 )
 
 @HiltViewModel
@@ -70,10 +74,12 @@ class TrackSwipeViewModel @Inject constructor(
     private val library: LibraryRepository,
     private val downloads: DownloadRepository,
     settings: SettingsRepository,
+    feedback: FeedbackRepository,
 ) : ViewModel() {
 
-    val config: StateFlow<TrackSwipeConfig> = settings.settings
-        .map { TrackSwipeConfig(it.appearance.swipeLeftToRight, it.appearance.swipeRightToLeft, it.playback.hapticFeedback) }
+    val config: StateFlow<TrackSwipeConfig> = combine(settings.settings, feedback.feedback) { s, f ->
+        TrackSwipeConfig(s.appearance.swipeLeftToRight, s.appearance.swipeRightToLeft, s.playback.hapticFeedback, f.usesRatings)
+    }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TrackSwipeConfig())
 
@@ -96,6 +102,10 @@ class TrackSwipeViewModel @Inject constructor(
     fun removeLastCopy(track: Track) {
         val index = playback.state.value.queue.indexOfLast { it.id == track.id }
         if (index >= 0) playback.removeFromQueue(index)
+    }
+
+    fun rate(track: Track, stars: Int) {
+        viewModelScope.launch { runCatching { library.setRating(track.id, ItemKind.TRACK, stars) } }
     }
 
     fun setStarred(track: Track, starred: Boolean) {
@@ -146,6 +156,7 @@ fun TrackSwipeScope(
     val resources = LocalResources.current
     var playlistTrack by remember { mutableStateOf<Track?>(null) }
     var infoTrack by remember { mutableStateOf<Track?>(null) }
+    var rateTrack by remember { mutableStateOf<Track?>(null) }
 
     fun snack(messageRes: Int, undo: (() -> Unit)? = null) {
         scope.launch {
@@ -171,7 +182,9 @@ fun TrackSwipeScope(
                 snack(R.string.browse_snack_playing_next) { viewModel.removeNextCopy(track) }
             }
             TrackSwipeAction.ADD_TO_PLAYLIST -> { playlistTrack = track }
-            TrackSwipeAction.TOGGLE_FAVORITE -> {
+            TrackSwipeAction.TOGGLE_FAVORITE -> if (config.value.usesRatings) {
+                rateTrack = track
+            } else {
                 val starred = !track.starred
                 viewModel.setStarred(track, starred)
                 snack(if (starred) R.string.browse_snack_added_favorite else R.string.browse_snack_removed_favorite) {
@@ -194,6 +207,9 @@ fun TrackSwipeScope(
 
     playlistTrack?.let { AddToPlaylistSheet(trackIds = listOf(it.id), onDismiss = { playlistTrack = null }) }
     infoTrack?.let { SongInfoDialog(track = it, onDismiss = { infoTrack = null }) }
+    rateTrack?.let { track ->
+        RatingDialog(title = track.title, rating = track.rating, onRate = { viewModel.rate(track, it) }, onDismiss = { rateTrack = null })
+    }
 }
 
 /**
@@ -214,8 +230,8 @@ fun TrackSwipeRow(
     }
     val config = host.config.value
     val downloaded = track.id in host.downloadedIds.value
-    val leftToRight = swipeSpec(config.leftToRight, track, downloaded)
-    val rightToLeft = swipeSpec(config.rightToLeft, track, downloaded)
+    val leftToRight = swipeSpec(config.leftToRight, track, downloaded, config.usesRatings)
+    val rightToLeft = swipeSpec(config.rightToLeft, track, downloaded, config.usesRatings)
     SwipeActionRow(
         leftToRight = leftToRight,
         rightToLeft = rightToLeft,
@@ -229,7 +245,7 @@ fun TrackSwipeRow(
 }
 
 @Composable
-private fun swipeSpec(action: TrackSwipeAction, track: Track, downloaded: Boolean): SwipeActionSpec? {
+private fun swipeSpec(action: TrackSwipeAction, track: Track, downloaded: Boolean, usesRatings: Boolean): SwipeActionSpec? {
     val scheme = MaterialTheme.colorScheme
     return when (action) {
         TrackSwipeAction.NONE -> null
@@ -245,7 +261,10 @@ private fun swipeSpec(action: TrackSwipeAction, track: Track, downloaded: Boolea
             Icons.AutoMirrored.Rounded.PlaylistAdd, stringResource(R.string.browse_action_add_to_playlist),
             scheme.secondaryContainer, scheme.onSecondaryContainer,
         )
-        TrackSwipeAction.TOGGLE_FAVORITE -> if (track.starred) spec(
+        TrackSwipeAction.TOGGLE_FAVORITE -> if (usesRatings) spec(
+            Icons.Rounded.Star, stringResource(R.string.feedback_swipe_rate),
+            scheme.tertiaryContainer, scheme.onTertiaryContainer,
+        ) else if (track.starred) spec(
             Icons.Rounded.FavoriteBorder, stringResource(R.string.browse_swipe_unfavorite),
             scheme.tertiaryContainer, scheme.onTertiaryContainer,
         ) else spec(

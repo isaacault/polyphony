@@ -170,6 +170,7 @@ fun FavoriteButton(
     isFavorite: Boolean,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
+    idleTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     val scale = remember { Animatable(1f) }
     LaunchedEffect(isFavorite) {
@@ -182,7 +183,7 @@ fun FavoriteButton(
         Icon(
             imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
             contentDescription = stringResource(if (isFavorite) R.string.player_favorite_remove else R.string.player_favorite_add),
-            tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (isFavorite) MaterialTheme.colorScheme.primary else idleTint,
             modifier = Modifier.graphicsLayer {
                 scaleX = scale.value
                 scaleY = scale.value

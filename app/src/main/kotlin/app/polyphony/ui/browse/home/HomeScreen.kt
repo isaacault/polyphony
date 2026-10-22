@@ -89,7 +89,8 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
     val greeting = rememberGreeting()
     val titleRecentlyAdded = stringResource(R.string.browse_home_recently_added)
     val titleMostPlayed = stringResource(R.string.browse_home_most_played)
-    val titleFavorites = stringResource(R.string.browse_home_favorites)
+    val feedback by viewModel.feedback.collectAsStateWithLifecycle()
+    val titleFavorites = stringResource(if (feedback.usesRatings) R.string.feedback_top_rated else R.string.browse_home_favorites)
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),

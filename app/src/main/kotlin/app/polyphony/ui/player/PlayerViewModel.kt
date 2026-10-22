@@ -2,6 +2,7 @@ package app.polyphony.ui.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.polyphony.core.domain.model.Feedback
 import app.polyphony.core.domain.model.ItemKind
 import app.polyphony.core.domain.model.Lyrics
 import app.polyphony.core.domain.model.Playlist
@@ -14,6 +15,7 @@ import app.polyphony.core.domain.playback.PlaybackState
 import app.polyphony.core.domain.playback.RepeatMode
 import app.polyphony.core.domain.provider.MediaProvider
 import app.polyphony.core.domain.repository.AppearanceSettings
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.ProviderRegistry
 import app.polyphony.core.domain.repository.ServerRepository
@@ -54,6 +56,7 @@ class PlayerViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val serverRepository: ServerRepository,
     private val providerRegistry: ProviderRegistry,
+    feedbackRepository: FeedbackRepository,
 ) : ViewModel() {
 
     private fun <T> Flow<T>.asState(initial: T): StateFlow<T> =
@@ -79,6 +82,12 @@ class PlayerViewModel @Inject constructor(
     val isFavorite: StateFlow<Boolean> = combine(currentTrackLive, playback) { live, state ->
         live?.starred ?: (state.currentTrack?.starred ?: false)
     }.distinctUntilChanged().asState(false)
+
+    val rating: StateFlow<Int> = combine(currentTrackLive, playback) { live, state ->
+        live?.rating ?: (state.currentTrack?.rating ?: 0)
+    }.distinctUntilChanged().asState(0)
+
+    val feedback: StateFlow<Feedback> = feedbackRepository.feedback
 
     val playlists: StateFlow<List<Playlist>> = libraryRepository.playlists().asState(emptyList())
 
@@ -180,6 +189,19 @@ class PlayerViewModel @Inject constructor(
     }
 
     // ---- Library actions ----
+    fun rate(stars: Int) {
+        val track = playback.value.currentTrack ?: return
+        viewModelScope.launch {
+            try {
+                libraryRepository.setRating(track.id, ItemKind.TRACK, stars)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _messages.tryEmit(e.message ?: "Couldn't save the rating")
+            }
+        }
+    }
+
     fun toggleFavorite() {
         val track = playback.value.currentTrack ?: return
         val starred = isFavorite.value

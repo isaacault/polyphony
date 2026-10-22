@@ -3,10 +3,12 @@ package app.polyphony.ui.downloads
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.polyphony.core.domain.model.Track
+import app.polyphony.core.domain.model.Feedback
 import app.polyphony.core.domain.repository.DownloadRepository
 import app.polyphony.core.domain.repository.DownloadRule
 import app.polyphony.core.domain.repository.DownloadStatus
 import app.polyphony.core.domain.repository.DownloadedTrack
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.StorageUsage
 import app.polyphony.core.domain.repository.SyncState
@@ -63,7 +65,11 @@ class DownloadsViewModel @Inject constructor(
     private val downloads: DownloadRepository,
     private val library: LibraryRepository,
     profiles: TranscodeProfileRepository,
+    feedbackRepository: FeedbackRepository,
 ) : ViewModel() {
+
+    /** The favourites rule reads as Top rated in Ratings mode. */
+    val feedback: StateFlow<Feedback> = feedbackRepository.feedback
 
     private val allDownloads: StateFlow<List<DownloadedTrack>> = downloads.downloads
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

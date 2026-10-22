@@ -3,12 +3,14 @@ package app.polyphony.ui.browse.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.polyphony.core.domain.model.Album
+import app.polyphony.core.domain.model.Feedback
 import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.RecentContext
 import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.repository.DownloadRepository
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.LibrarySyncManager
 import app.polyphony.core.domain.repository.ListeningHistoryRepository
@@ -75,8 +77,12 @@ class HomeViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val playback: PlaybackController,
     private val history: ListeningHistoryRepository,
+    feedbackRepository: FeedbackRepository,
     downloads: DownloadRepository,
 ) : ViewModel() {
+
+    /** The liked shelf reads "Top rated" in Ratings mode. */
+    val feedback: StateFlow<Feedback> = feedbackRepository.feedback
 
     private val refreshing = MutableStateFlow(false)
     private val downloadSummary = combine(downloads.downloadedTrackIds(), downloads.storageUsage) { ids, usage -> ids.size to usage.usedBytes }
@@ -92,7 +98,7 @@ class HomeViewModel @Inject constructor(
         library.recentlyAddedAlbums(20),
         library.mostPlayedAlbums(20),
         randomPicks,
-        library.starredAlbums(),
+        library.likedAlbums(),
     ) { recent, added, played, random, starred -> Shelves(recent, added, played, random, starred.take(20)) }
 
     private val meta = combine(
@@ -152,9 +158,9 @@ class HomeViewModel @Inject constructor(
 
     fun shuffleFavorites() {
         viewModelScope.launch {
-            val tracks = library.starredTracks().first()
+            val tracks = library.likedTracks().first()
             val context = tracks.firstOrNull()?.let { PlayContext.favorites(it.serverId, artworkUrl = tracks.firstNotNullOfOrNull { t -> t.artworkUrl }) }
-            if (tracks.isNotEmpty()) playback.playTracks(tracks, 0, shuffle = true, queueTitle = "Favourites", context = context)
+            if (tracks.isNotEmpty()) playback.playTracks(tracks, 0, shuffle = true, queueTitle = if (feedback.value.usesRatings) "Top rated" else "Favourites", context = context)
         }
     }
 }

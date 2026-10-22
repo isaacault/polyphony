@@ -5,10 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import app.polyphony.core.domain.model.Album
+import app.polyphony.core.domain.model.Feedback
 import app.polyphony.core.domain.model.ItemKind
 import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.navigation.AlbumRoute
@@ -43,9 +45,13 @@ data class AlbumUiState(
 class AlbumViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val library: LibraryRepository,
+    feedbackRepository: FeedbackRepository,
     private val playback: PlaybackController,
     settings: SettingsRepository,
 ) : ViewModel() {
+
+    /** Heart or star in the header. */
+    val feedback: StateFlow<Feedback> = feedbackRepository.feedback
 
     val albumId: String = savedStateHandle.toRoute<AlbumRoute>().albumId
     private val refreshFailed = MutableStateFlow(false)
@@ -89,6 +95,11 @@ class AlbumViewModel @Inject constructor(
 
     fun playNext() = state.value.tracks.takeIf { it.isNotEmpty() }?.let(playback::playNext)
     fun addToQueue() = state.value.tracks.takeIf { it.isNotEmpty() }?.let(playback::addToQueue)
+
+    fun rate(stars: Int) {
+        val album = state.value.album ?: return
+        viewModelScope.launch { runCatching { library.setRating(album.id, ItemKind.ALBUM, stars) } }
+    }
 
     fun toggleFavorite() {
         val album = state.value.album ?: return

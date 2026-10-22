@@ -9,6 +9,7 @@ import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.AlbumSort
 import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.ArtistSort
+import app.polyphony.core.domain.model.Feedback
 import app.polyphony.core.domain.model.Genre
 import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.model.Playlist
@@ -16,6 +17,7 @@ import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.model.TrackSort
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.playback.PlaybackState
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.LibrarySyncManager
 import app.polyphony.core.domain.repository.SettingsRepository
@@ -55,19 +57,34 @@ class LibraryViewModel @Inject constructor(
     private val syncManager: LibrarySyncManager,
     private val settings: SettingsRepository,
     private val playback: PlaybackController,
+    feedbackRepository: FeedbackRepository,
 ) : ViewModel() {
+
+    /** Favourites or Ratings: each hides the other's sort and filter, here and in the tabs. */
+    val feedback: StateFlow<Feedback> = feedbackRepository.feedback
 
     // ---- persisted view options (settings, not saved state: they must survive a cold start and an update) ----
     private val appearance = settings.settings.map { it.appearance }
-    val artistSort: StateFlow<ArtistSort> = appearance.map { it.artistSort }.distinctUntilChanged().asState(ArtistSort.NAME)
-    val albumSort: StateFlow<AlbumSort> = appearance.map { it.albumSort }.distinctUntilChanged().asState(AlbumSort.NAME)
+    // Sorts and filters as they apply: a saved choice that belongs to the other system falls back.
+    val artistSort: StateFlow<ArtistSort> = combine(appearance.map { it.artistSort }, feedback) { s, f ->
+        if (f.usesRatings && s == ArtistSort.STARRED) ArtistSort.NAME else s
+    }.distinctUntilChanged().asState(ArtistSort.NAME)
+    val albumSort: StateFlow<AlbumSort> = combine(appearance.map { it.albumSort }, feedback) { s, f ->
+        if (!f.usesRatings && s == AlbumSort.RATING) AlbumSort.NAME else s
+    }.distinctUntilChanged().asState(AlbumSort.NAME)
     val albumAscending: StateFlow<Boolean> = appearance.map { it.albumAscending }.distinctUntilChanged().asState(true)
-    val trackSort: StateFlow<TrackSort> = appearance.map { it.trackSort }.distinctUntilChanged().asState(TrackSort.TITLE)
+    val trackSort: StateFlow<TrackSort> = combine(appearance.map { it.trackSort }, feedback) { s, f ->
+        if (!f.usesRatings && s == TrackSort.RATING) TrackSort.TITLE else s
+    }.distinctUntilChanged().asState(TrackSort.TITLE)
     val trackAscending: StateFlow<Boolean> = appearance.map { it.trackAscending }.distinctUntilChanged().asState(true)
-    val artistFilter: StateFlow<LibraryFilter> = appearance.map { it.artistFilter }.distinctUntilChanged().asState(LibraryFilter.NONE)
-    val albumFilter: StateFlow<LibraryFilter> = appearance.map { it.albumFilter }.distinctUntilChanged().asState(LibraryFilter.NONE)
-    val trackFilter: StateFlow<LibraryFilter> = appearance.map { it.trackFilter }.distinctUntilChanged().asState(LibraryFilter.NONE)
-    val playlistFilter: StateFlow<LibraryFilter> = appearance.map { it.playlistFilter }.distinctUntilChanged().asState(LibraryFilter.NONE)
+    val artistFilter: StateFlow<LibraryFilter> = combine(appearance.map { it.artistFilter }, feedback) { v, f -> f.applyTo(v) }
+        .distinctUntilChanged().asState(LibraryFilter.NONE)
+    val albumFilter: StateFlow<LibraryFilter> = combine(appearance.map { it.albumFilter }, feedback) { v, f -> f.applyTo(v) }
+        .distinctUntilChanged().asState(LibraryFilter.NONE)
+    val trackFilter: StateFlow<LibraryFilter> = combine(appearance.map { it.trackFilter }, feedback) { v, f -> f.applyTo(v) }
+        .distinctUntilChanged().asState(LibraryFilter.NONE)
+    val playlistFilter: StateFlow<LibraryFilter> = combine(appearance.map { it.playlistFilter }, feedback) { v, f -> f.applyTo(v) }
+        .distinctUntilChanged().asState(LibraryFilter.NONE)
     /** Enabled Library tabs in the user's order (Appearance → Library tabs). */
     val libraryTabs: StateFlow<ImmutableList<LibraryTab>> = settings.settings
         .map { s -> s.appearance.libraryTabs.ifEmpty { LibrarySection.entries }.map { LibraryTab.valueOf(it.name) }.toImmutableList() }

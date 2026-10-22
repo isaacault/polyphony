@@ -41,6 +41,7 @@ import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.provider.MediaProvider
 import app.polyphony.core.domain.provider.ProviderException
 import app.polyphony.core.domain.repository.DownloadRepository
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.ProviderRegistry
 import app.polyphony.core.domain.repository.ServerRepository
@@ -79,6 +80,7 @@ class LibraryRepositoryImpl @Inject constructor(
     private val providerRegistry: ProviderRegistry,
     private val generations: SyncGenerationTracker,
     private val settingsRepository: SettingsRepository,
+    private val feedbackRepository: FeedbackRepository,
     /** Lazy: the downloads engine depends on this repository, so the graph has a cycle to break. */
     private val downloadRepository: Lazy<DownloadRepository>,
     @IoDispatcher private val io: CoroutineDispatcher,
@@ -210,8 +212,11 @@ class LibraryRepositoryImpl @Inject constructor(
     override fun artist(id: String): Flow<Artist?> =
         scopedItem { sid -> artistDao.observe(sid, id).map { it?.toDomain() } }
 
-    override fun starredArtists(): Flow<List<Artist>> =
-        scopedList { sid -> artistDao.observeStarred(sid).mapEach(ArtistEntity::toDomain) }.offline(OfflineIndex::artistIds, Artist::id)
+    override fun likedArtists(): Flow<List<Artist>> =
+        feedbackRepository.feedback.flatMapLatest { f ->
+            if (f.usesRatings) artists(ArtistSort.NAME, f.liked)
+            else scopedList { sid -> artistDao.observeStarred(sid).mapEach(ArtistEntity::toDomain) }.offline(OfflineIndex::artistIds, Artist::id)
+        }
 
     // ---------------------------------------------------------------- albums
 
@@ -230,8 +235,11 @@ class LibraryRepositoryImpl @Inject constructor(
     override fun albumsByGenre(genre: String): Flow<List<Album>> =
         scopedList { sid -> albumDao.observeByGenre(sid, genre).mapEach(AlbumEntity::toDomain) }.offline(OfflineIndex::albumIds, Album::id)
 
-    override fun starredAlbums(): Flow<List<Album>> =
-        scopedList { sid -> albumDao.observeStarred(sid).mapEach(AlbumEntity::toDomain) }.offline(OfflineIndex::albumIds, Album::id)
+    override fun likedAlbums(): Flow<List<Album>> =
+        feedbackRepository.feedback.flatMapLatest { f ->
+            if (f.usesRatings) albums(AlbumSort.RATING, ascending = true, filter = f.liked)
+            else scopedList { sid -> albumDao.observeStarred(sid).mapEach(AlbumEntity::toDomain) }.offline(OfflineIndex::albumIds, Album::id)
+        }
 
     override fun recentlyAddedAlbums(limit: Int): Flow<List<Album>> =
         scopedList { sid -> albumDao.observeRecentlyAdded(sid, limit).mapEach(AlbumEntity::toDomain) }.offline(OfflineIndex::albumIds, Album::id)
@@ -247,8 +255,11 @@ class LibraryRepositoryImpl @Inject constructor(
 
     // ---------------------------------------------------------------- tracks
 
-    override fun tracks(sort: TrackSort, ascending: Boolean): Flow<List<Track>> =
-        scopedList { sid -> trackDao.observeSorted(SortQueries.tracks(sid, sort, ascending)).mapEach(TrackEntity::toDomain) }.offline(OfflineIndex::trackIds, Track::id)
+    override fun tracks(sort: TrackSort, ascending: Boolean, filter: LibraryFilter): Flow<List<Track>> {
+        val f = filter.restrictedTo(ItemKind.TRACK)
+        return scopedList { sid -> trackDao.observeSorted(SortQueries.tracks(sid, sort, ascending, f)).mapEach(TrackEntity::toDomain) }
+            .offline(OfflineIndex::trackIds, Track::id, indexFor(f))
+    }
 
     override fun pagedTracks(sort: TrackSort, ascending: Boolean, filter: LibraryFilter): Flow<PagingData<Track>> {
         val f = filter.restrictedTo(ItemKind.TRACK)
@@ -357,8 +368,11 @@ class LibraryRepositoryImpl @Inject constructor(
     override fun tracksByGenre(genre: String): Flow<List<Track>> =
         scopedList { sid -> trackDao.observeByGenre(sid, genre).mapEach(TrackEntity::toDomain) }.offline(OfflineIndex::trackIds, Track::id)
 
-    override fun starredTracks(): Flow<List<Track>> =
-        scopedList { sid -> trackDao.observeStarred(sid).mapEach(TrackEntity::toDomain) }.offline(OfflineIndex::trackIds, Track::id)
+    override fun likedTracks(): Flow<List<Track>> =
+        feedbackRepository.feedback.flatMapLatest { f ->
+            if (f.usesRatings) tracks(TrackSort.RATING, ascending = true, filter = f.liked)
+            else scopedList { sid -> trackDao.observeStarred(sid).mapEach(TrackEntity::toDomain) }.offline(OfflineIndex::trackIds, Track::id)
+        }
 
     override fun recentlyPlayedTracks(limit: Int): Flow<List<Track>> =
         scopedList { sid -> trackDao.observeRecentlyPlayed(sid, limit).mapEach(TrackEntity::toDomain) }.offline(OfflineIndex::trackIds, Track::id)

@@ -68,6 +68,7 @@ fun TrackOptionsSheet(
     extraItems: (@Composable (dismiss: () -> Unit) -> Unit)? = null,
 ) {
     val vm: TrackActionsViewModel = hiltViewModel()
+    val feedback by vm.feedback.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
     val haptics = LocalHapticFeedback.current
     var showAddToPlaylist by remember { mutableStateOf(false) }
@@ -98,15 +99,19 @@ fun TrackOptionsSheet(
         SheetItem(Icons.AutoMirrored.Rounded.PlaylistAdd, stringResource(R.string.browse_action_add_to_playlist)) {
             showAddToPlaylist = true
         }
-        SheetItem(
-            if (track.starred) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-            stringResource(if (track.starred) R.string.browse_action_remove_favorite else R.string.browse_action_add_favorite),
-            tint = if (track.starred) MaterialTheme.colorScheme.primary else null,
-        ) {
-            haptics.performHapticFeedback(if (track.starred) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
-            vm.toggleStarred(track); onDismiss()
+        // One system at a time: the other is left as it is on the server.
+        if (feedback.usesRatings) {
+            RatingRow(initial = track.rating, onRate = { vm.rate(track, it) })
+        } else {
+            SheetItem(
+                if (track.starred) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                stringResource(if (track.starred) R.string.browse_action_remove_favorite else R.string.browse_action_add_favorite),
+                tint = if (track.starred) MaterialTheme.colorScheme.primary else null,
+            ) {
+                haptics.performHapticFeedback(if (track.starred) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
+                vm.toggleStarred(track); onDismiss()
+            }
         }
-        RatingRow(initial = track.rating, onRate = { vm.rate(track, it) })
         HorizontalDivider(Modifier.padding(vertical = 4.dp))
         if (track.albumId != null) {
             SheetItem(Icons.Rounded.Album, stringResource(R.string.browse_action_go_to_album)) {
@@ -132,6 +137,7 @@ fun AlbumOptionsSheet(
     modifier: Modifier = Modifier,
 ) {
     val vm: TrackActionsViewModel = hiltViewModel()
+    val feedback by vm.feedback.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
     val haptics = LocalHapticFeedback.current
     var addToPlaylistIds by remember { mutableStateOf<List<String>?>(null) }
@@ -161,15 +167,19 @@ fun AlbumOptionsSheet(
         SheetItem(Icons.AutoMirrored.Rounded.PlaylistAdd, stringResource(R.string.browse_action_add_to_playlist)) {
             vm.withAlbumTracks(album.id) { tracks -> addToPlaylistIds = tracks.map { it.id } }
         }
-        SheetItem(
-            if (album.starred) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-            stringResource(if (album.starred) R.string.browse_action_remove_favorite else R.string.browse_action_add_favorite),
-            tint = if (album.starred) MaterialTheme.colorScheme.primary else null,
-        ) {
-            haptics.performHapticFeedback(if (album.starred) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
-            vm.toggleStarred(album); onDismiss()
+        // One system at a time: the other is left as it is on the server.
+        if (feedback.usesRatings) {
+            RatingRow(initial = album.rating, onRate = { vm.rate(album, it) })
+        } else {
+            SheetItem(
+                if (album.starred) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                stringResource(if (album.starred) R.string.browse_action_remove_favorite else R.string.browse_action_add_favorite),
+                tint = if (album.starred) MaterialTheme.colorScheme.primary else null,
+            ) {
+                haptics.performHapticFeedback(if (album.starred) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
+                vm.toggleStarred(album); onDismiss()
+            }
         }
-        RatingRow(initial = album.rating, onRate = { vm.rate(album, it) })
         if (album.artistId != null) {
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
             SheetItem(Icons.Rounded.Person, stringResource(R.string.browse_action_go_to_artist)) {

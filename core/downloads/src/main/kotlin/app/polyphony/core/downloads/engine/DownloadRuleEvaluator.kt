@@ -86,7 +86,7 @@ class DownloadRuleEvaluator @Inject constructor(
 
     private suspend fun tracksFor(rule: DownloadRule): List<Track> {
         val tracks = when (val t = rule.target) {
-            DownloadRuleTarget.Favorites -> library.starredTracks().first()
+            DownloadRuleTarget.Favorites -> library.likedTracks().first()
             is DownloadRuleTarget.Playlist -> library.tracksForPlaylist(t.playlistId).first()
             is DownloadRuleTarget.Album -> library.tracksForAlbum(t.albumId).first()
             is DownloadRuleTarget.Artist -> library.tracksForArtist(t.artistId).first()

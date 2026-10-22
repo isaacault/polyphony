@@ -1,6 +1,7 @@
 package app.polyphony.core.data.di
 
 import app.polyphony.core.data.network.NetworkMonitorImpl
+import app.polyphony.core.data.repository.FeedbackRepositoryImpl
 import app.polyphony.core.data.repository.LibraryRepositoryImpl
 import app.polyphony.core.data.repository.ListeningHistoryRepositoryImpl
 import app.polyphony.core.data.repository.ProviderRegistryImpl
@@ -9,6 +10,7 @@ import app.polyphony.core.data.repository.SettingsRepositoryImpl
 import app.polyphony.core.data.repository.TranscodeProfileRepositoryImpl
 import app.polyphony.core.data.sync.LibrarySyncManagerImpl
 import app.polyphony.core.domain.provider.MediaProviderFactory
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.LibrarySyncManager
 import app.polyphony.core.domain.repository.ListeningHistoryRepository
@@ -34,6 +36,7 @@ abstract class DataModule {
     @Binds abstract fun bindServerRepository(impl: ServerRepositoryImpl): ServerRepository
     @Binds abstract fun bindProviderRegistry(impl: ProviderRegistryImpl): ProviderRegistry
     @Binds abstract fun bindLibraryRepository(impl: LibraryRepositoryImpl): LibraryRepository
+    @Binds abstract fun bindFeedbackRepository(impl: FeedbackRepositoryImpl): FeedbackRepository
     @Binds abstract fun bindLibrarySyncManager(impl: LibrarySyncManagerImpl): LibrarySyncManager
     @Binds abstract fun bindSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository
     @Binds abstract fun bindTranscodeProfileRepository(impl: TranscodeProfileRepositoryImpl): TranscodeProfileRepository

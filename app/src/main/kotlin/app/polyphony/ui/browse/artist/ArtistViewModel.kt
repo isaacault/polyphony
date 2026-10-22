@@ -6,10 +6,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Artist
+import app.polyphony.core.domain.model.Feedback
 import app.polyphony.core.domain.model.ItemKind
 import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.navigation.ArtistRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -43,8 +45,12 @@ data class ArtistUiState(
 class ArtistViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val library: LibraryRepository,
+    feedbackRepository: FeedbackRepository,
     private val playback: PlaybackController,
 ) : ViewModel() {
+
+    /** Heart or star in the header. */
+    val feedback: StateFlow<Feedback> = feedbackRepository.feedback
 
     val artistId: String = savedStateHandle.toRoute<ArtistRoute>().artistId
     private val refreshFailed = MutableStateFlow(false)
@@ -106,6 +112,11 @@ class ArtistViewModel @Inject constructor(
             val artist = state.value.artist
             if (tracks.isNotEmpty()) playback.playTracks(tracks, 0, shuffle, artist?.name, artist?.let(PlayContext::artist))
         }
+    }
+
+    fun rate(stars: Int) {
+        val artist = state.value.artist ?: return
+        viewModelScope.launch { runCatching { library.setRating(artist.id, ItemKind.ARTIST, stars) } }
     }
 
     fun toggleFavorite() {

@@ -38,6 +38,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.polyphony.ui.common.FilledStar
+import app.polyphony.ui.common.RatingMenu
 import app.polyphony.R
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Track
@@ -77,6 +79,8 @@ fun ArtistScreen(viewModel: ArtistViewModel = hiltViewModel()) {
     val downloadedIds by rememberDownloadedIds()
     val trackIds by viewModel.trackIds.collectAsStateWithLifecycle()
 
+    val feedback by viewModel.feedback.collectAsStateWithLifecycle()
+    var rateOpen by remember { mutableStateOf(false) }
     HeroScaffold(
         title = artist?.name ?: "",
         listState = listState,
@@ -84,15 +88,28 @@ fun ArtistScreen(viewModel: ArtistViewModel = hiltViewModel()) {
         actions = {
             if (artist != null) {
                 CollectionDownloadButton(trackIds = trackIds, tracks = { viewModel.allTracks() })
-                OverlayIconButton(onClick = {
-                    haptics.performHapticFeedback(if (artist.starred) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
-                    viewModel.toggleFavorite()
-                }) {
-                    Icon(
-                        if (artist.starred) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        contentDescription = stringResource(R.string.browse_action_add_favorite),
-                        tint = if (artist.starred) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    )
+                if (feedback.usesRatings) {
+                    Box {
+                        OverlayIconButton(onClick = { rateOpen = true }) {
+                            FilledStar(
+                                rating = artist.rating,
+                                idleTint = MaterialTheme.colorScheme.onSurface,
+                                contentDescription = stringResource(R.string.feedback_rate),
+                            )
+                        }
+                        RatingMenu(expanded = rateOpen, rating = artist.rating, onRate = viewModel::rate, onDismiss = { rateOpen = false })
+                    }
+                } else {
+                    OverlayIconButton(onClick = {
+                        haptics.performHapticFeedback(if (artist.starred) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
+                        viewModel.toggleFavorite()
+                    }) {
+                        Icon(
+                            if (artist.starred) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                            contentDescription = stringResource(R.string.browse_action_add_favorite),
+                            tint = if (artist.starred) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
         },
