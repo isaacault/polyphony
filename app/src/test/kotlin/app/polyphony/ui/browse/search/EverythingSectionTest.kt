@@ -2,6 +2,7 @@ package app.polyphony.ui.browse.search
 
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
+import app.polyphony.core.domain.model.CatalogArtist
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.CatalogTrack
 import org.junit.Assert.assertEquals
@@ -75,5 +76,17 @@ class EverythingSectionTest {
         assertTrue(SearchKind.ALBUMS.shows(SearchKind.ALBUMS))
         assertFalse(SearchKind.ALBUMS.shows(SearchKind.SONGS))
         assertTrue(SearchKind.SONGS.localLimit > SearchKind.ALL.localLimit)
+    }
+
+    @Test
+    fun `only catalogue artists with an MBID join the Artists section`() {
+        val artists = CatalogResults(
+            artists = listOf(
+                CatalogArtist("mb:artist:boc", "boc", "Boards of Canada", null, Availability.InLibrary(null)),
+                CatalogArtist("mb:artist:ae", "ae", "Autechre", null, Availability.CatalogOnly),
+                CatalogArtist("cat:x", null, "No Id", null, Availability.CatalogOnly),
+            ),
+        )
+        assertEquals(listOf("Autechre"), EverythingSection.artists(artists).map { it.name })
     }
 }

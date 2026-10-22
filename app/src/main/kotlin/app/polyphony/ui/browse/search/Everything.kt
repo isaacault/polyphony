@@ -2,8 +2,10 @@ package app.polyphony.ui.browse.search
 
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
+import app.polyphony.core.domain.model.CatalogArtist
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.CatalogTrack
+import app.polyphony.ui.browse.catalog.Discography
 
 /**
  * Search scopes (#50), offered only for a continuo-linked server. ALL blends catalogue hits into
@@ -31,6 +33,10 @@ enum class SearchKind {
  */
 object EverythingSection {
 
+    /** Catalogue artists with nothing in the library (the Artists section already lists those). */
+    fun artists(results: CatalogResults?): List<CatalogArtist> =
+        results?.artists.orEmpty().filter { it.availability == Availability.CatalogOnly && it.musicBrainzId != null }
+
     fun albums(results: CatalogResults?, requested: Map<String, Availability>): List<CatalogAlbum> =
         results?.albums.orEmpty()
             .map { a -> a.releaseGroupId?.let(requested::get)?.let { a.copy(availability = it) } ?: a }
@@ -45,10 +51,7 @@ object EverythingSection {
      * Library albums the catalogue only partly matches, by library album id: their library row
      * says how many of the release's tracks you have instead of the catalogue repeating the album.
      */
-    fun partials(results: CatalogResults?): Map<String, Availability.Partial> =
-        results?.albums.orEmpty()
-            .mapNotNull { a -> (a.availability as? Availability.Partial)?.let { p -> p.libraryAlbumId?.let { it to p } } }
-            .toMap()
+    fun partials(results: CatalogResults?): Map<String, Availability.Partial> = Discography.partials(results?.albums.orEmpty())
 
     /** True when there's something to request: a release group and nothing under way or owned. */
     fun canRequest(availability: Availability, releaseGroupId: String?): Boolean =

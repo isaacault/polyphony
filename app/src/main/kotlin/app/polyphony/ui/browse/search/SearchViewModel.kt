@@ -7,6 +7,7 @@ import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
+import app.polyphony.core.domain.model.CatalogArtist
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.CatalogTrack
 import app.polyphony.core.domain.model.Feedback
@@ -14,7 +15,6 @@ import app.polyphony.core.domain.model.FilterField
 import app.polyphony.core.domain.model.ItemKind
 import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.model.Playlist
-import app.polyphony.core.domain.model.RequestOutcome
 import app.polyphony.core.domain.model.SearchResults
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
@@ -23,6 +23,7 @@ import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
+import app.polyphony.ui.browse.catalog.CatalogRequester
 import app.polyphony.ui.common.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
@@ -49,12 +50,12 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /** The Everything tier of a search (continuo-linked servers, ALL scope). */
 data class EverythingUi(
+    val artists: ImmutableList<CatalogArtist> = persistentListOf(),
     val albums: ImmutableList<CatalogAlbum> = persistentListOf(),
     val tracks: ImmutableList<CatalogTrack> = persistentListOf(),
     val searching: Boolean = false,
@@ -67,7 +68,7 @@ data class EverythingUi(
     /** Library albums the catalogue only partly matches ([EverythingSection.partials]). */
     val partials: ImmutableMap<String, Availability.Partial> = persistentMapOf(),
 ) {
-    val isEmpty: Boolean get() = albums.isEmpty() && tracks.isEmpty()
+    val isEmpty: Boolean get() = artists.isEmpty() && albums.isEmpty() && tracks.isEmpty()
 }
 
 data class SearchUiState(
@@ -139,8 +140,6 @@ class SearchViewModel @Inject constructor(
     private val chosenScope = MutableStateFlow(SearchScope.ALL)
     private val kind = MutableStateFlow(SearchKind.ALL)
     private val filter = MutableStateFlow(LibraryFilter.NONE)
-    private val requested = MutableStateFlow<Map<String, Availability>>(emptyMap())
-    private val requesting = MutableStateFlow<Set<String>>(emptySet())
     private var remoteJob: Job? = null
     private var catalogJob: Job? = null
 
@@ -148,6 +147,7 @@ class SearchViewModel @Inject constructor(
     private var submitted: String? = null
 
     private val messages = Channel<UiMessage>(Channel.BUFFERED)
+    private val requester = CatalogRequester(viewModelScope, servers, requests, messages)
     val events: Flow<UiMessage> = messages.receiveAsFlow()
 
     private val linked: StateFlow<Boolean> = servers.activeServer
@@ -199,7 +199,7 @@ class SearchViewModel @Inject constructor(
     }
 
     private val everythingState: Flow<Triple<Boolean, SearchScope, EverythingUi>> = combine(
-        linked, scope, query, catalog, combine(requested, requesting) { r, busy -> r to busy },
+        linked, scope, query, catalog, combine(requester.requested, requester.requesting) { r, busy -> r to busy },
     ) { isLinked, s, q, cat, (req, busy) ->
         val current = cat.forQuery == q.trim()
         val results = cat.results?.takeIf { current }
@@ -207,6 +207,7 @@ class SearchViewModel @Inject constructor(
             isLinked,
             s,
             EverythingUi(
+                artists = EverythingSection.artists(results).toImmutableList(),
                 albums = EverythingSection.albums(results, req).toImmutableList(),
                 tracks = EverythingSection.tracks(results, req).toImmutableList(),
                 searching = cat.loading && current,
@@ -231,6 +232,7 @@ class SearchViewModel @Inject constructor(
             tracks = if (k.shows(SearchKind.SONGS)) s.tracks else persistentListOf(),
             playlists = if (k.shows(SearchKind.PLAYLISTS)) s.playlists else persistentListOf(),
             everything = shown.copy(
+                artists = if (k.shows(SearchKind.ARTISTS)) shown.artists else persistentListOf(),
                 albums = if (k.shows(SearchKind.ALBUMS)) shown.albums else persistentListOf(),
                 tracks = if (k.shows(SearchKind.SONGS)) shown.tracks else persistentListOf(),
             ),
@@ -354,37 +356,7 @@ class SearchViewModel @Inject constructor(
     }
 
     /** Request the album with this MusicBrainz release group (an album row, or a track's album). */
-    fun request(releaseGroupId: String) {
-        if (releaseGroupId in requesting.value) return
-        requesting.update { it + releaseGroupId }
-        viewModelScope.launch {
-            try {
-                val server = servers.getActive()?.takeIf { requests.supports(it) } ?: return@launch
-                when (val outcome = requests.requestAlbum(server, releaseGroupId)) {
-                    is RequestOutcome.Requested -> {
-                        requested.update { it + (releaseGroupId to Availability.Requested(outcome.requestId, "requested")) }
-                        messages.send(UiMessage(R.string.browse_request_sent))
-                    }
-                    is RequestOutcome.AlreadyRequested -> {
-                        requested.update { it + (releaseGroupId to Availability.Requested(outcome.requestId, "requested")) }
-                        messages.send(UiMessage(R.string.browse_request_already))
-                    }
-                    is RequestOutcome.InLibrary -> {
-                        requested.update { it + (releaseGroupId to Availability.InLibrary(outcome.libraryAlbumId)) }
-                        messages.send(UiMessage(R.string.browse_request_in_library))
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: ProviderException.Unauthorized) {
-                messages.send(UiMessage(R.string.browse_request_sign_in))
-            } catch (e: Exception) {
-                messages.send(UiMessage(R.string.browse_request_failed, e.message ?: e.javaClass.simpleName))
-            } finally {
-                requesting.update { it - releaseGroupId }
-            }
-        }
-    }
+    fun request(releaseGroupId: String) = requester.request(releaseGroupId)
 
     fun rememberSearch(term: String) {
         val t = term.trim()

@@ -104,14 +104,15 @@ class ContinuoRequestRepositoryTest {
       {"kind":"album","key":"mb:rg:mhtrtc","title":"Music Has the Right to Children","artist":"Boards of Canada",
        "ids":{"musicBrainzReleaseGroupId":"mhtrtc"},"availability":{"state":"downloading","requestId":17,"percent":42.0,"source":"soulseek"}},
       {"kind":"album","key":"mb:rg:x","title":"Future Thing","availability":{"state":"teleporting","requestId":3}},
-      {"kind":"artist","key":"mb:artist:boc","name":"Boards of Canada","availability":{"state":"in_library"}},
+      {"kind":"artist","key":"mb:artist:boc","name":"Boards of Canada","ids":{"musicBrainzArtistId":"boc","navidromeArtistId":"ar-1"},"availability":{"state":"in_library"}},
+      {"kind":"artist","key":"mb:artist:ae","name":"Autechre","artwork":{"url":"https://music-api.example.com/v1/artwork?src=x"},"ids":{"musicBrainzArtistId":"ae"},"availability":{"state":"catalog"}},
       {"kind":"track","key":"mb:rec:1","title":"Dayvan Cowboy","artist":"Boards of Canada","durationMs":300000,
        "album":{"title":"Trans Canada Highway","musicBrainzReleaseGroupId":"tch","navidromeAlbumId":null},
        "availability":{"state":"requestable","via":"album"}}
     ]}"""
 
     @Test
-    fun `search maps availability and drops third-party artwork and artists`() = runTest {
+    fun `search maps availability and drops third-party artwork`() = runTest {
         val fake = FakeContinuo().apply { routes["GET /v1/search"] = { _, _ -> 200 to searchBody } }
         val results = repo(fake, FakeServers(server)).search(server, "geogaddi")
 
@@ -123,11 +124,33 @@ class ContinuoRequestRepositoryTest {
         assertEquals(Availability.Requested(17, "downloading", false), results.albums[2].availability)
         assertEquals(Availability.Requested(3, "teleporting", false), results.albums[3].availability)
         assertEquals("tch", results.tracks.single().albumReleaseGroupId)
+        assertEquals(listOf("boc", "ae"), results.artists.map { it.musicBrainzId })
+        assertEquals(Availability.CatalogOnly, results.artists[1].availability)
+        assertEquals("https://music-api.example.com/v1/artwork?src=x", results.artists[1].artworkUrl)
         assertTrue(results.catalogAvailable)
 
         val sent = fake.seen.last { it.first.url.encodedPath == "/v1/search" }.first.url
         assertEquals("geogaddi", sent.queryParameter("q"))
-        assertEquals("album,track", sent.queryParameter("types"))
+        assertEquals("album,artist,track", sent.queryParameter("types"))
+    }
+
+    @Test
+    fun `an artist's discography maps each album's availability`() = runTest {
+        val body = """[
+          {"kind":"album","key":"mb:rg:geo","title":"Geogaddi","artist":"Boards of Canada","year":2002,"albumType":"Album",
+           "ids":{"musicBrainzReleaseGroupId":"geo","navidromeAlbumId":"nd-1"},"availability":{"state":"in_library","navidromeAlbumId":"nd-1"}},
+          {"kind":"album","key":"mb:rg:in","title":"In a Beautiful Place Out in the Country","year":2000,"albumType":"EP",
+           "artwork":{"url":"https://music-api.example.com/v1/artwork?src=y"},
+           "ids":{"musicBrainzReleaseGroupId":"in"},"availability":{"state":"requestable"}}
+        ]"""
+        val fake = FakeContinuo().apply { routes["GET /v1/catalog/artists/boc/albums"] = { _, _ -> 200 to body } }
+        val albums = repo(fake, FakeServers(server)).artistAlbums(server, "boc")
+
+        assertEquals(listOf("geo", "in"), albums.map { it.releaseGroupId })
+        assertEquals(Availability.InLibrary("nd-1"), albums[0].availability)
+        assertEquals("EP", albums[1].albumType)
+        assertEquals(Availability.Requestable, albums[1].availability)
+        assertEquals("https://music-api.example.com/v1/artwork?src=y", albums[1].artworkUrl)
     }
 
     @Test

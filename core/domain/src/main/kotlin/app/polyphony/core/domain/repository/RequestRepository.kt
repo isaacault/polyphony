@@ -1,5 +1,6 @@
 package app.polyphony.core.domain.repository
 
+import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxPage
@@ -21,6 +22,12 @@ interface RequestRepository {
 
     /** Library and catalogue hits merged by the server, each with its availability. */
     suspend fun search(server: Server, query: String, limit: Int = 25): CatalogResults
+
+    /**
+     * The artist's albums, EPs and singles (MusicBrainz artist [artistMbid]), newest first, each
+     * with its availability: library albums are in it too, marked in_library or partial.
+     */
+    suspend fun artistAlbums(server: Server, artistMbid: String): List<CatalogAlbum>
 
     /** Request the album (MusicBrainz release group). */
     suspend fun requestAlbum(server: Server, releaseGroupId: String): RequestOutcome

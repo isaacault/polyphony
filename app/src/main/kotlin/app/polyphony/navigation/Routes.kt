@@ -14,6 +14,9 @@ sealed interface Route
 // ---- Browse details ----
 @Serializable data class AlbumRoute(val albumId: String) : Route
 @Serializable data class ArtistRoute(val artistId: String) : Route
+
+/** An artist with nothing in the library: their discography from a continuo server's catalogue. */
+@Serializable data class CatalogArtistRoute(val musicBrainzId: String, val name: String) : Route
 @Serializable data class PlaylistRoute(val playlistId: String) : Route
 @Serializable data class GenreRoute(val genre: String) : Route
 @Serializable data object FavoritesRoute : Route

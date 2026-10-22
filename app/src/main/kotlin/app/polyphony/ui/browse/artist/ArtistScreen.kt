@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -59,7 +61,11 @@ import app.polyphony.core.ui.components.TrackRow
 import app.polyphony.core.ui.theme.ArtworkShapes
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.browse.catalog.CatalogNote
+import app.polyphony.ui.browse.catalog.ReleaseTypeLabel
+import app.polyphony.ui.browse.catalog.discographyItems
 import app.polyphony.ui.common.TrackSwipeRow
+import app.polyphony.ui.shell.LocalSnackbarHostState
 import app.polyphony.ui.common.AlbumOptionsSheet
 import app.polyphony.ui.common.CollectionDownloadButton
 import app.polyphony.ui.common.rememberDownloadedIds
@@ -81,6 +87,13 @@ fun ArtistScreen(viewModel: ArtistViewModel = hiltViewModel()) {
 
     val feedback by viewModel.feedback.collectAsStateWithLifecycle()
     var rateOpen by remember { mutableStateOf(false) }
+    val snackbar = LocalSnackbarHostState.current
+    val context = LocalContext.current
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { m ->
+            snackbar.showSnackbar(if (m.arg == null) context.getString(m.text) else context.getString(m.text, m.arg))
+        }
+    }
     HeroScaffold(
         title = artist?.name ?: "",
         listState = listState,
@@ -217,11 +230,15 @@ fun ArtistScreen(viewModel: ArtistViewModel = hiltViewModel()) {
                             ) {
                                 row.forEach { album ->
                                     Box(Modifier.weight(1f)) {
+                                        val partial = state.partials[album.id]
                                         AlbumCard(
                                             album = album,
                                             onClick = { navigator.openAlbum(album.id) },
                                             onLongClick = { albumForOptions = album },
-                                            subtitle = album.year?.toString() ?: "",
+                                            subtitle = listOfNotNull(
+                                                album.year?.toString(),
+                                                partial?.let { stringResource(R.string.browse_availability_partial, it.have, it.expected) },
+                                            ).joinToString(" · "),
                                         )
                                     }
                                 }
@@ -229,6 +246,18 @@ fun ArtistScreen(viewModel: ArtistViewModel = hiltViewModel()) {
                             }
                         }
                     }
+                    // continuo: the rest of the discography, after the albums you have.
+                    if (state.catalogGroups.isNotEmpty()) {
+                        item(key = "catalog-header") {
+                            SectionHeader(
+                                title = stringResource(R.string.browse_catalog_not_in_library),
+                                subtitle = stringResource(R.string.browse_catalog_not_in_library_subtitle),
+                            )
+                        }
+                        discographyItems(state.catalogGroups, state.requesting, onRequest = viewModel::request) { ReleaseTypeLabel(it) }
+                    }
+                    if (state.catalogLoading) item(key = "catalog-loading") { CatalogNote(R.string.browse_catalog_loading) }
+                    if (state.catalogFailed) item(key = "catalog-failed") { CatalogNote(R.string.browse_catalog_failed, isError = true) }
                     if (state.similarArtists.isNotEmpty()) {
                         item(key = "similar-header") { SectionHeader(title = stringResource(R.string.browse_artist_similar)) }
                         item(key = "similar") {
