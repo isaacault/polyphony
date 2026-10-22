@@ -90,6 +90,14 @@ data class SearchUiState(
     val isEmpty: Boolean get() = isLibraryEmpty && everything.isEmpty
     val showsEverything: Boolean get() = scopesAvailable && scope == SearchScope.ALL && !filter.isActive
 
+    /**
+     * A search the user can still start for this term: the server, and the Everything tier where
+     * it shows. Downloaded results are all local, so there is nothing further to search for them.
+     */
+    val canSearchFurther: Boolean
+        get() = !filter.downloadedOnly &&
+            (!remoteSearched || (showsEverything && !everything.searched && !everything.searching))
+
     /** Downloaded is a scope chip on continuo servers, so the filter row leaves it out there. */
     val filterFields: Set<FilterField>
         get() = feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.TRACK)).let { if (scopesAvailable) it - FilterField.DOWNLOADED else it }
@@ -232,7 +240,7 @@ class SearchViewModel @Inject constructor(
 
     fun clear() = onQueryChange("")
 
-    /** Called on IME search / explicit submit: remember the term and also hit the server(s). */
+    /** Called on IME search, the search button or a recent pick: remember the term and hit the server(s). */
     fun submit() {
         val q = query.value.trim()
         if (q.isBlank()) return
