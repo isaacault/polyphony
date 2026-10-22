@@ -18,7 +18,7 @@
   Merge with `scripts/merge_when_green.sh <pr>`, which merges only when `local-ci` is success on
   the current head (running CI itself if there is no status yet); never merge without it.
 - Do **not** tag a release per change. Releases are batched: several merged PRs, then one
-  `scripts/bump_version.sh <version>` + tag push, when the user asks for a release or a
-  milestone chunk is complete.
+  `scripts/release.sh <version>` (it bumps, builds, signs, verifies and publishes from this
+  machine), when the user asks for a release or a milestone chunk is complete.
 - Keep PRs focused and reviewable: one concern each, with a short description of what and why,
   and how it was verified (unit tests, emulator run, device report).

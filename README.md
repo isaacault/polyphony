@@ -110,18 +110,29 @@ docker run --rm -v "$PWD":/src -v polyphony-gradle:/root/.gradle polyphony-build
 
 ## Releases
 
-Signed builds are produced by the `Release` workflow whenever a `v*` tag is pushed:
+Releases are built, signed and published from the development machine:
 
 ```sh
-scripts/bump_version.sh 0.2.0        # bumps version.properties, commits, tags v0.2.0
-git push origin main v0.2.0          # CI builds, signs, verifies and publishes the GitHub Release
+scripts/release.sh 0.2.0 --dry-run   # build and verify the signed APK/AAB; nothing committed or pushed
+scripts/release.sh 0.2.0             # bump, build, sign, verify, push main + v0.2.0, publish the GitHub Release
 ```
 
+Run it on a clean `main` that matches GitHub; it runs the full local CI first if the commit has no
+green `local-ci` status. It bumps `version.properties`, commits and tags locally, builds in the
+`polyphony-build` image, checks that the APK is signed with the Polyphony release key (SHA-256
+`169d5d82…5b8f6dca`) and carries the new version, and only then pushes and publishes. If any step
+before the push fails, the local commit and tag are undone.
+
+Signing needs no typing: the script reads `~/.config/polyphony/release.jks` and
+`keystore.properties` (`storePassword`, `keyAlias`, `keyPassword`; mode 600, outside the repo;
+override the folder with `POLYPHONY_SIGNING_DIR`) inside the build container. Keep a backup of both
+files: Android only installs an update over an app signed with the same key.
+
 Tags containing a dash (`v0.2.0-beta.1`) are published as pre-releases. Each release carries the
-universal APK, the Play bundle, the R8 mapping file and a `.sha256` checksum list. Release
-signing uses a keystore stored in repository secrets; `scripts/create_keystore.sh` creates one
-and uploads the secrets. Locally, `assembleRelease` signs with the debug key when no keystore is
-configured, so the R8 build can always be tested.
+universal APK, the Play bundle, the R8 mapping file and a `.sha256` checksum list. The `Release`
+workflow remains as a manual fallback (run it from the Actions tab with a tag; it signs with the
+repository secrets that `scripts/create_keystore.sh` uploads). Locally, `assembleRelease` signs
+with the debug key when no keystore is configured, so the R8 build can always be tested.
 
 ## Architecture
 
