@@ -220,7 +220,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             trailing = state.everything.partials[album.id]?.let { partial -> @Composable { PartialBadge(partial) } },
                         )
                     }
-                    catalogAlbums(state.everything, onRequest = viewModel::request)
+                    catalogAlbums(state.everything, onRequest = viewModel::request, onOpen = navigator::openCatalogAlbum)
                 }
                 if (state.playlists.isNotEmpty()) {
                     item(key = "h-playlists") { SectionHeader(title = stringResource(R.string.browse_tab_playlists)) }
@@ -243,7 +243,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             )
                         }
                     }
-                    catalogTracks(state.everything, onRequest = viewModel::request)
+                    catalogTracks(state.everything, onRequest = viewModel::request, onOpen = navigator::openCatalogAlbum)
                 }
                 if (state.showsEverything) everythingStatus(state.everything)
                 item(key = "remote") {
@@ -380,7 +380,7 @@ private fun searchFurtherLabel(state: SearchUiState): Int =
     if (state.showsEverything) R.string.browse_action_search_everything else R.string.browse_action_search_server
 
 /** Catalogue albums that aren't in the library, after the library's own albums. */
-private fun LazyListScope.catalogAlbums(everything: EverythingUi, onRequest: (String) -> Unit) {
+private fun LazyListScope.catalogAlbums(everything: EverythingUi, onRequest: (String) -> Unit, onOpen: (String, String) -> Unit) {
     items(everything.albums, key = { "e-al-" + it.key }, contentType = { "everything" }) { album ->
         CatalogRow(
             title = album.title,
@@ -391,12 +391,13 @@ private fun LazyListScope.catalogAlbums(everything: EverythingUi, onRequest: (St
             busy = album.releaseGroupId in everything.requesting,
             requestLabel = stringResource(R.string.browse_action_request),
             onRequest = onRequest,
+            onClick = album.releaseGroupId?.let { rg -> { onOpen(rg, album.title) } },
         )
     }
 }
 
 /** Catalogue songs that aren't in the library; Request asks for the song's album. */
-private fun LazyListScope.catalogTracks(everything: EverythingUi, onRequest: (String) -> Unit) {
+private fun LazyListScope.catalogTracks(everything: EverythingUi, onRequest: (String) -> Unit, onOpen: (String, String) -> Unit) {
     items(everything.tracks, key = { "e-t-" + it.key }, contentType = { "everything" }) { track ->
         CatalogRow(
             title = track.title,
@@ -407,6 +408,8 @@ private fun LazyListScope.catalogTracks(everything: EverythingUi, onRequest: (St
             busy = track.albumReleaseGroupId in everything.requesting,
             requestLabel = stringResource(R.string.browse_action_request_album),
             onRequest = onRequest,
+            // A song opens its album: that's what can be requested.
+            onClick = track.albumReleaseGroupId?.let { rg -> { onOpen(rg, track.albumTitle ?: track.title) } },
         )
     }
 }

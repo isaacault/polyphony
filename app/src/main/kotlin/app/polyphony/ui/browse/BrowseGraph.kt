@@ -6,6 +6,7 @@ import androidx.navigation.toRoute
 import app.polyphony.navigation.AlbumListRoute
 import app.polyphony.navigation.AlbumRoute
 import app.polyphony.navigation.ArtistRoute
+import app.polyphony.navigation.CatalogAlbumRoute
 import app.polyphony.navigation.CatalogArtistRoute
 import app.polyphony.navigation.DownloadsRoute
 import app.polyphony.navigation.FavoritesRoute
@@ -20,6 +21,7 @@ import app.polyphony.navigation.SearchRoute
 import app.polyphony.ui.browse.album.AlbumScreen
 import app.polyphony.ui.browse.albumlist.AlbumListScreen
 import app.polyphony.ui.browse.artist.ArtistScreen
+import app.polyphony.ui.browse.catalog.CatalogAlbumScreen
 import app.polyphony.ui.browse.catalog.CatalogArtistScreen
 import app.polyphony.ui.browse.favorites.FavoritesScreen
 import app.polyphony.ui.browse.genre.GenreScreen
@@ -39,6 +41,7 @@ fun NavGraphBuilder.browseGraph(navigator: PolyphonyNavigator) {
     composable<AlbumRoute> { AlbumScreen() }
     composable<ArtistRoute> { ArtistScreen() }
     composable<CatalogArtistRoute> { CatalogArtistScreen() }
+    composable<CatalogAlbumRoute> { CatalogAlbumScreen() }
     composable<PlaylistRoute> { PlaylistScreen() }
     composable<GenreRoute> { GenreScreen() }
     composable<FavoritesRoute> { FavoritesScreen() }

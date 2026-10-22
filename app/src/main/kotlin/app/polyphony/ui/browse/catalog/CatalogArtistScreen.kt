@@ -99,7 +99,7 @@ fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
                         )
                     }
                 }
-                discographyItems(state.groups, state.requesting, onRequest = viewModel::request) { type ->
+                discographyItems(state.groups, state.requesting, onRequest = viewModel::request, onOpen = navigator::openCatalogAlbum) { type ->
                     SectionHeader(title = stringResource(releaseTypeLabel(type)))
                 }
             }

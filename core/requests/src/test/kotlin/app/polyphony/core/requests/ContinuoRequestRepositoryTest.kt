@@ -135,6 +135,22 @@ class ContinuoRequestRepositoryTest {
     }
 
     @Test
+    fun `a catalogue album comes with its tracklist`() = runTest {
+        val body = """{"kind":"album","key":"mb:rg:th","title":"Tomorrow's Harvest","artist":"Boards of Canada","year":2013,"albumType":"Album",
+          "ids":{"musicBrainzReleaseGroupId":"th"},"availability":{"state":"requestable"},
+          "tracks":[{"position":1,"title":"Gemini","durationMs":172000,"discNumber":1,"musicBrainzRecordingId":"r1"},
+                    {"position":2,"title":"Reach for the Dead","durationMs":null,"discNumber":1}]}"""
+        val fake = FakeContinuo().apply { routes["GET /v1/catalog/albums/th"] = { _, _ -> 200 to body } }
+        val detail = repo(fake, FakeServers(server)).catalogAlbum(server, "th")
+
+        assertEquals("Tomorrow's Harvest", detail.album.title)
+        assertEquals(Availability.Requestable, detail.album.availability)
+        assertEquals(listOf("Gemini", "Reach for the Dead"), detail.tracks.map { it.title })
+        assertEquals(172000L, detail.tracks[0].durationMs)
+        assertNull(detail.tracks[1].durationMs)
+    }
+
+    @Test
     fun `an artist's discography maps each album's availability`() = runTest {
         val body = """[
           {"kind":"album","key":"mb:rg:geo","title":"Geogaddi","artist":"Boards of Canada","year":2002,"albumType":"Album",
