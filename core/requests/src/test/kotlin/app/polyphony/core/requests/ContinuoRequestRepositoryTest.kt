@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
@@ -275,6 +276,111 @@ class ContinuoRequestRepositoryTest {
         assertEquals(RequestEvent.Resync, events[1])
         val auth = fake.seen.filter { it.first.url.encodedPath == "/v1/events" }.map { it.first.header("Authorization") }
         assertTrue(auth.size >= 2 && auth.all { it == "Bearer at_1" })
+    }
+
+    // ---- devices (#119) and sign-out (#120) ----
+
+    private val devicesBody = """[
+      {"id":"dev_old","name":"Pixel 8","platform":"android","createdAt":"2026-03-01T10:00:00+00:00",
+       "lastSeenAt":"2026-04-02T11:00:00+00:00","current":false},
+      {"id":"dev_now","name":"Pixel 8","platform":"android","createdAt":"2026-10-20T09:00:00+00:00",
+       "lastSeenAt":"2026-10-21T08:00:00+00:00","current":true},
+      {"id":"dev_bare","name":"","platform":null,"createdAt":"garbage","lastSeenAt":null}
+    ]"""
+
+    @Test
+    fun `devices are listed with this one marked`() = runTest {
+        val fake = FakeContinuo().apply { routes["GET /v1/devices"] = { _, _ -> 200 to devicesBody } }
+        val devices = repo(fake, FakeServers(server)).devices(server)
+
+        assertEquals(listOf("dev_old", "dev_now", "dev_bare"), devices.map { it.id })
+        assertEquals(listOf(false, true, false), devices.map { it.current })
+        assertEquals("Pixel 8", devices[0].name)
+        assertEquals("android", devices[0].platform)
+        assertEquals(java.time.Instant.parse("2026-04-02T11:00:00Z").toEpochMilli(), devices[0].lastSeenAtMillis)
+        assertEquals(java.time.Instant.parse("2026-03-01T10:00:00Z").toEpochMilli(), devices[0].createdAtMillis)
+        // A device without a name is shown by its id; unparseable or missing times are left out.
+        assertEquals("dev_bare", devices[2].name)
+        assertNull(devices[2].platform)
+        assertNull(devices[2].createdAtMillis)
+        assertNull(devices[2].lastSeenAtMillis)
+    }
+
+    @Test
+    fun `revoking a device and the others hit the right endpoints`() = runTest {
+        val fake = FakeContinuo().apply {
+            routes["DELETE /v1/devices/dev_old"] = { _, _ -> 200 to """{"ok":true}""" }
+            routes["POST /v1/devices/revoke-others"] = { _, _ -> 200 to """{"ok":true,"revoked":2}""" }
+        }
+        val repo = repo(fake, FakeServers(server))
+        repo.revokeDevice(server, "dev_old")
+        assertEquals(2, repo.revokeOtherDevices(server))
+        val paths = fake.seen.map { "${it.first.method} ${it.first.url.encodedPath}" }
+        assertTrue("DELETE /v1/devices/dev_old" in paths && "POST /v1/devices/revoke-others" in paths)
+        try {
+            repo.revokeDevice(server, "dev_gone"); fail("expected NotFound")
+        } catch (e: ProviderException.NotFound) {
+        }
+    }
+
+    @Test
+    fun `sign out uses the session already open`() = runBlocking {
+        val servers = FakeServers(server)
+        val fake = FakeContinuo().apply {
+            routes["GET /v1/devices"] = { _, _ -> 200 to "[]" }
+            routes["POST /v1/auth/logout"] = { _, _ -> 200 to """{"ok":true}""" }
+        }
+        val repo = repo(fake, servers)
+        repo.devices(server)
+        repo.signOut(server)
+        val logout = fake.seen.single { it.first.url.encodedPath == "/v1/auth/logout" }.first
+        assertEquals("Bearer at_1", logout.header("Authorization"))
+        assertEquals(1, fake.refreshes.get())
+    }
+
+    @Test
+    fun `sign out refreshes once and doesn't store the rotated token`() = runBlocking {
+        val servers = FakeServers(server)
+        val fake = FakeContinuo().apply { routes["POST /v1/auth/logout"] = { _, _ -> 200 to """{"ok":true}""" } }
+        val repo = repo(fake, servers)
+        // The server is removed while the sign-out runs: it must not come back.
+        servers.remove(server.id)
+        repo.signOut(server)
+        assertEquals(1, fake.refreshes.get())
+        assertEquals("Bearer at_1", fake.seen.single { it.first.url.encodedPath == "/v1/auth/logout" }.first.header("Authorization"))
+        assertTrue(servers.state.value.isEmpty())
+    }
+
+    @Test
+    fun `sign out skips a server without a session and swallows failures`() = runBlocking {
+        val fake = FakeContinuo().apply { routes["POST /v1/auth/logout"] = { _, _ -> 500 to "{}" } }
+        val restored = server.withoutContinuoSession()
+        repo(fake, FakeServers(restored)).signOut(restored)
+        assertTrue(fake.seen.isEmpty())
+
+        val plain = server.copy(options = emptyMap())
+        repo(fake, FakeServers(plain)).signOut(plain)
+        assertTrue(fake.seen.isEmpty())
+
+        // Refused refresh (already revoked) and a failing logout both end quietly.
+        val revoked = server.copy(options = server.options + (ServerOptions.CONTINUO_REFRESH_TOKEN to "crt_9"))
+        repo(fake, FakeServers(revoked)).signOut(revoked)
+        repo(fake, FakeServers(server)).signOut(server)
+        assertEquals(1, fake.seen.count { it.first.url.encodedPath == "/v1/auth/logout" })
+    }
+
+    @Test
+    fun `sign out gives up after its timeout`() = runBlocking {
+        val release = java.util.concurrent.CountDownLatch(1)
+        val fake = FakeContinuo().apply {
+            routes["POST /v1/auth/logout"] = { _, _ -> release.await(10, java.util.concurrent.TimeUnit.SECONDS); 200 to "{}" }
+        }
+        val repo = ContinuoRequestRepository(ContinuoClient({ fake.client }, json, FakeServers(server)), signOutTimeoutMs = 200)
+        val started = System.nanoTime()
+        repo.signOut(server)
+        val tookMs = (System.nanoTime() - started) / 1_000_000
+        release.countDown()
+        assertTrue("sign out took $tookMs ms", tookMs < 5_000)
     }
 
     private val notificationsBody = """{"items":[

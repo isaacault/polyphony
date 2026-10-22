@@ -232,6 +232,30 @@ internal fun RequestUpdateDto.toDomain() = app.polyphony.core.domain.model.Reque
     libraryAlbumId = play?.navidromeAlbumId,
 )
 
+// ---- devices (continuo PLAN.md §3.1) ----
+
+@Serializable
+internal data class DeviceDto(
+    val id: String,
+    val name: String? = null,
+    val platform: String? = null,
+    val createdAt: String? = null,
+    val lastSeenAt: String? = null,
+    val current: Boolean = false,
+)
+
+@Serializable
+internal data class RevokedDto(val ok: Boolean = true, val revoked: Int = 0)
+
+internal fun DeviceDto.toDomain() = app.polyphony.core.domain.model.ContinuoDevice(
+    id = id,
+    name = name?.takeIf { it.isNotBlank() } ?: id,
+    platform = platform?.takeIf { it.isNotBlank() },
+    createdAtMillis = parseTimestamp(createdAt),
+    lastSeenAtMillis = parseTimestamp(lastSeenAt),
+    current = current,
+)
+
 // ---- notifications (continuo PLAN.md §3.4) ----
 
 @Serializable

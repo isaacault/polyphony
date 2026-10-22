@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.MoreVert
@@ -35,9 +36,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.polyphony.R
+import app.polyphony.core.data.di.ApplicationScope
 import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.model.ServerType
 import app.polyphony.core.domain.repository.ProviderRegistry
+import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.navigation.LocalNavigator
@@ -50,6 +53,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -76,6 +80,8 @@ class ServersViewModel @Inject constructor(
     private val serverRepository: ServerRepository,
     private val providerRegistry: ProviderRegistry,
     private val settingsRepository: SettingsRepository,
+    private val requests: RequestRepository,
+    @ApplicationScope private val appScope: CoroutineScope,
 ) : ViewModel() {
 
     private val _events = Channel<ServersEvent>(Channel.BUFFERED)
@@ -94,6 +100,11 @@ class ServersViewModel @Inject constructor(
 
     fun remove(id: String) {
         viewModelScope.launch {
+            // #120: sign this phone's continuo device out too, best-effort and on the side, so
+            // the removal never waits for continuo or fails because of it.
+            serverRepository.get(id)?.takeIf { it.isContinuo && !it.needsContinuoSignIn }?.let { server ->
+                appScope.launch { requests.signOut(server) }
+            }
             val wasActive = serverRepository.getActive()?.id == id
             serverRepository.remove(id)
             providerRegistry.invalidate(id)
@@ -147,6 +158,7 @@ fun ServersSettingsScreen(viewModel: ServersViewModel = hiltViewModel()) {
                             isActive = server.id == state.activeId,
                             onSelect = { viewModel.setActive(server.id) },
                             onEdit = { navigator.openServerEdit(server.id) },
+                            onDevices = { navigator.openContinuoDevices(server.id) },
                             onRemove = { pendingRemove = server },
                         )
                         if (index < state.servers.lastIndex) {
@@ -171,7 +183,10 @@ fun ServersSettingsScreen(viewModel: ServersViewModel = hiltViewModel()) {
     pendingRemove?.let { server ->
         ConfirmDialog(
             title = stringResource(R.string.settings_servers_remove_title, server.name),
-            text = stringResource(R.string.settings_servers_remove_text),
+            text = stringResource(
+                if (server.isContinuo && !server.needsContinuoSignIn) R.string.continuo_server_remove_text
+                else R.string.settings_servers_remove_text,
+            ),
             confirmLabel = stringResource(R.string.settings_remove),
             onConfirm = {
                 viewModel.remove(server.id)
@@ -188,6 +203,7 @@ private fun ServerRow(
     isActive: Boolean,
     onSelect: () -> Unit,
     onEdit: () -> Unit,
+    onDevices: () -> Unit,
     onRemove: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -219,6 +235,16 @@ private fun ServerRow(
                                 onEdit()
                             },
                         )
+                        if (server.isContinuo && !server.needsContinuoSignIn) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.continuo_account_title)) },
+                                leadingIcon = { Icon(Icons.Rounded.Devices, contentDescription = null) },
+                                onClick = {
+                                    menuOpen = false
+                                    onDevices()
+                                },
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.settings_remove)) },
                             leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null) },

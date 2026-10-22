@@ -1,6 +1,7 @@
 package app.polyphony.core.requests
 
 import app.polyphony.core.domain.model.CatalogResults
+import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxPage
 import app.polyphony.core.domain.model.MusicRequest
 import app.polyphony.core.domain.model.RequestAction
@@ -17,6 +18,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.net.URLEncoder
 import javax.inject.Inject
@@ -25,6 +28,7 @@ import javax.inject.Singleton
 @Singleton
 class ContinuoRequestRepository internal constructor(
     private val client: ContinuoClient,
+    private val signOutTimeoutMs: Long = SIGN_OUT_TIMEOUT_MS,
 ) : RequestRepository {
 
     @Inject
@@ -110,6 +114,39 @@ class ContinuoRequestRepository internal constructor(
         }
         if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't do that")
         return runCatching { client.decode(ActionResultDto.serializer(), reply.body).message }.getOrNull().orEmpty()
+    }
+
+    override suspend fun devices(server: Server): List<ContinuoDevice> {
+        val reply = client.get(server, "/v1/devices")
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't list devices")
+        return client.decode(ListSerializer(DeviceDto.serializer()), reply.body).map { it.toDomain() }
+    }
+
+    override suspend fun revokeDevice(server: Server, deviceId: String) {
+        val reply = client.delete(server, "/v1/devices/" + URLEncoder.encode(deviceId, "UTF-8"))
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't sign that device out")
+    }
+
+    override suspend fun revokeOtherDevices(server: Server): Int {
+        val reply = client.post(server, "/v1/devices/revoke-others", "{}")
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't sign the other devices out")
+        return runCatching { client.decode(RevokedDto.serializer(), reply.body).revoked }.getOrDefault(0)
+    }
+
+    override suspend fun signOut(server: Server) {
+        if (!server.isContinuo || server.needsContinuoSignIn) return
+        try {
+            withTimeoutOrNull(signOutTimeoutMs) { client.logout(server) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Best-effort: the device stays listed until it's revoked from another one.
+        }
+    }
+
+    private companion object {
+        /** Removing a server never waits longer than this for continuo (#120). */
+        const val SIGN_OUT_TIMEOUT_MS = 5_000L
     }
 
     override suspend fun notifications(server: Server, since: Long, unreadOnly: Boolean, limit: Int, newestFirst: Boolean): InboxPage {

@@ -1,6 +1,7 @@
 package app.polyphony.inbox
 
 import app.polyphony.core.domain.model.CatalogResults
+import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxNotification
 import app.polyphony.core.domain.model.InboxPage
 import app.polyphony.core.domain.model.MusicRequest
@@ -41,6 +42,10 @@ class NewestNotificationsTest {
         override suspend fun perform(server: Server, requestId: Long, action: RequestAction): String = error("unused")
         override suspend fun markRead(server: Server, ids: List<Long>): Int = error("unused")
         override suspend fun markAllRead(server: Server): Int = error("unused")
+        override suspend fun devices(server: Server): List<ContinuoDevice> = error("unused")
+        override suspend fun revokeDevice(server: Server, deviceId: String): Unit = error("unused")
+        override suspend fun revokeOtherDevices(server: Server): Int = error("unused")
+        override suspend fun signOut(server: Server): Unit = error("unused")
     }
 
     @Test

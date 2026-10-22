@@ -5,6 +5,7 @@ import androidx.navigation.compose.composable
 import app.polyphony.navigation.AboutRoute
 import app.polyphony.navigation.AppearanceSettingsRoute
 import app.polyphony.navigation.BackupSettingsRoute
+import app.polyphony.navigation.ContinuoDevicesRoute
 import app.polyphony.navigation.DownloadRuleEditRoute
 import app.polyphony.navigation.DownloadsSettingsRoute
 import app.polyphony.navigation.LibrarySettingsRoute
@@ -23,6 +24,7 @@ import app.polyphony.ui.settings.downloads.DownloadsSettingsScreen
 import app.polyphony.ui.downloads.DownloadRuleEditScreen
 import app.polyphony.ui.settings.library.LibrarySettingsScreen
 import app.polyphony.ui.settings.playback.PlaybackSettingsScreen
+import app.polyphony.ui.settings.servers.ContinuoDevicesScreen
 import app.polyphony.ui.settings.servers.ServerEditScreen
 import app.polyphony.ui.settings.servers.ServersSettingsScreen
 import app.polyphony.ui.settings.streaming.RemoteDevicesSettingsScreen
@@ -35,6 +37,7 @@ fun NavGraphBuilder.settingsGraph(navigator: PolyphonyNavigator) {
     composable<SettingsRoute> { SettingsScreen() }
     composable<ServersSettingsRoute> { ServersSettingsScreen() }
     composable<ServerEditRoute> { ServerEditScreen() }
+    composable<ContinuoDevicesRoute> { ContinuoDevicesScreen() }
     composable<AppearanceSettingsRoute> { AppearanceSettingsScreen() }
     composable<PlaybackSettingsRoute> { PlaybackSettingsScreen() }
     composable<StreamingSettingsRoute> { StreamingSettingsScreen() }

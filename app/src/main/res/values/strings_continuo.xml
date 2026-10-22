@@ -7,4 +7,35 @@
         <item quantity="one">Enter the continuo password for %1$d server in Settings → Servers</item>
         <item quantity="other">Enter the continuo password for %1$d servers in Settings → Servers</item>
     </plurals>
+
+    <!-- Removing a continuo server (#120) -->
+    <string name="continuo_server_remove_text">The cached library for this server will be deleted from this device, and this phone is signed out of continuo. Your other devices keep working.</string>
+
+    <!-- continuo account: signed-in devices (#119) -->
+    <string name="continuo_account_title">continuo account</string>
+    <string name="continuo_account_summary">Signed-in devices and sign out</string>
+    <string name="continuo_devices_title">Signed-in devices</string>
+    <string name="continuo_devices_note">Each phone signs in as its own device, and so does a reinstall or a restored backup. Sign out the ones you no longer use. To sign this phone out, remove the server.</string>
+    <string name="continuo_devices_loading">Loading devices…</string>
+    <string name="continuo_devices_failed">Couldn\'t load devices: %1$s</string>
+    <string name="continuo_devices_retry">Try again</string>
+    <string name="continuo_devices_sign_in">This phone was signed out of continuo. Enter your continuo password in Edit server to sign in again.</string>
+    <string name="continuo_devices_missing">This server was removed.</string>
+    <string name="continuo_device_this">This phone</string>
+    <string name="continuo_device_last_seen">Last seen %1$s</string>
+    <string name="continuo_device_signed_in">signed in %1$s</string>
+    <string name="continuo_device_earlier_install">Same name as this phone: probably an earlier install or a restored backup</string>
+    <string name="continuo_device_sign_out">Sign out</string>
+    <string name="continuo_device_sign_out_title">Sign out %1$s?</string>
+    <string name="continuo_device_sign_out_text">%1$s loses access to requests and playback straight away. Signing in on it again adds it as a new device.</string>
+    <string name="continuo_device_signed_out">Signed out %1$s</string>
+    <string name="continuo_devices_sign_out_others">Sign out everywhere else</string>
+    <string name="continuo_devices_sign_out_others_title">Sign out everywhere else?</string>
+    <string name="continuo_devices_sign_out_others_summary">Every device but this phone</string>
+    <string name="continuo_devices_sign_out_others_text">Every other device on this account loses access to requests and playback straight away. This phone stays signed in.</string>
+    <plurals name="continuo_devices_signed_out_others">
+        <item quantity="one">Signed out %1$d other device</item>
+        <item quantity="other">Signed out %1$d other devices</item>
+    </plurals>
+    <string name="continuo_devices_sign_out_failed">Couldn\'t sign out: %1$s</string>
 </resources>
