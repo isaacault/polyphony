@@ -3,6 +3,7 @@ package app.polyphony.core.requests
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogArtist
+import app.polyphony.core.domain.model.CatalogArtistPage
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.CatalogTrack
 import kotlinx.serialization.Serializable
@@ -109,35 +110,66 @@ internal fun AvailabilityDto.toDomain(fallbackAlbumId: String?): Availability = 
     else -> Availability.Requested(requestId, state, stillLooking)
 }
 
+@Serializable
+internal data class BiographyDto(val text: String = "", val source: String? = null, val url: String? = null)
+
+/** `GET /v1/catalog/artists/{mbid}`: an artist's page. */
+@Serializable
+internal data class CatalogArtistDto(
+    val key: String,
+    val name: String = "",
+    val disambiguation: String? = null,
+    val artwork: ArtworkDto? = null,
+    val biography: BiographyDto? = null,
+    val ids: IdsDto? = null,
+    val availability: AvailabilityDto = AvailabilityDto(state = "catalog"),
+    val topTracks: List<HitDto> = emptyList(),
+    val similarArtists: List<HitDto> = emptyList(),
+)
+
+internal fun CatalogArtistDto.toDomain(artworkHost: String?) = CatalogArtistPage(
+    artist = CatalogArtist(
+        key = key,
+        musicBrainzId = ids?.musicBrainzArtistId,
+        name = name,
+        artworkUrl = ownArtworkUrl(artwork?.url, artworkHost),
+        availability = availability.toDomain(null),
+    ),
+    disambiguation = disambiguation?.takeIf { it.isNotBlank() },
+    biography = biography?.text?.takeIf { it.isNotBlank() },
+    biographyUrl = biography?.url,
+    topTracks = topTracks.filter { it.kind == "track" }.map { it.toCatalogTrack() },
+    similarArtists = similarArtists.filter { it.kind == "artist" }.map { it.toCatalogArtist(artworkHost) },
+)
+
 /**
  * The hits a phone can act on. Artwork not on [artworkHost] is dropped: third-party image hosts
  * would break "your traffic goes only to your own server" (continuo proxies catalogue art itself).
  */
 internal fun SearchDto.toDomain(artworkHost: String?): CatalogResults {
-    fun ownArtwork(url: String?): String? = ownArtworkUrl(url, artworkHost)
-    val artists = results.filter { it.kind == "artist" }.map { h ->
-        CatalogArtist(
-            key = h.key,
-            musicBrainzId = h.ids?.musicBrainzArtistId,
-            name = h.name ?: h.title.orEmpty(),
-            artworkUrl = ownArtwork(h.artwork?.url),
-            availability = h.availability.toDomain(null),
-        )
-    }
+    val artists = results.filter { it.kind == "artist" }.map { it.toCatalogArtist(artworkHost) }
     val albums = results.filter { it.kind == "album" }.map { it.toCatalogAlbum(artworkHost) }
-    val tracks = results.filter { it.kind == "track" }.map { h ->
-        CatalogTrack(
-            key = h.key,
-            title = h.title.orEmpty(),
-            artist = h.artist,
-            durationMs = h.durationMs,
-            albumTitle = h.album?.title,
-            albumReleaseGroupId = h.album?.musicBrainzReleaseGroupId,
-            availability = h.availability.toDomain(h.album?.navidromeAlbumId),
-        )
-    }
+    val tracks = results.filter { it.kind == "track" }.map { it.toCatalogTrack() }
     return CatalogResults(artists = artists, albums = albums, tracks = tracks, catalogAvailable = sources.catalog != "unavailable")
 }
+
+internal fun HitDto.toCatalogArtist(artworkHost: String?) = CatalogArtist(
+    key = key,
+    musicBrainzId = ids?.musicBrainzArtistId,
+    name = name ?: title.orEmpty(),
+    artworkUrl = ownArtworkUrl(artwork?.url, artworkHost),
+    availability = availability.toDomain(null),
+)
+
+internal fun HitDto.toCatalogTrack() = CatalogTrack(
+    key = key,
+    title = title.orEmpty(),
+    artist = artist,
+    durationMs = durationMs,
+    albumTitle = album?.title,
+    albumReleaseGroupId = album?.musicBrainzReleaseGroupId,
+    availability = availability.toDomain(album?.navidromeAlbumId),
+)
 
 internal fun HitDto.toCatalogAlbum(artworkHost: String?) = CatalogAlbum(
     key = key,

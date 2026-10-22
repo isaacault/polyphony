@@ -4,6 +4,7 @@ import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogAlbumDetail
 import app.polyphony.core.domain.model.CatalogAlbumTrack
 import app.polyphony.core.domain.model.CatalogArtist
+import app.polyphony.core.domain.model.CatalogArtistPage
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxPage
@@ -44,6 +45,14 @@ class ContinuoRequestRepository internal constructor(
         val reply = client.get(server, "/v1/search?q=$q&types=album,artist,track&limit=$limit")
         if (reply.code !in 200..299) throw client.serverError(reply, "continuo search failed")
         return client.decode(SearchDto.serializer(), reply.body).toDomain(artworkHost = hostOf(server.baseUrl))
+    }
+
+    override suspend fun catalogArtist(server: Server, artistMbid: String): CatalogArtistPage? {
+        val reply = client.get(server, "/v1/catalog/artists/${URLEncoder.encode(artistMbid, "UTF-8")}")
+        // 404: an artist the catalogue doesn't know, or a continuo from before artist pages.
+        if (reply.code == 404) return null
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo artist failed")
+        return client.decode(CatalogArtistDto.serializer(), reply.body).toDomain(artworkHost = hostOf(server.baseUrl))
     }
 
     override suspend fun findArtist(server: Server, name: String): CatalogArtist? {
