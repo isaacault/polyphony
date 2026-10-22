@@ -31,6 +31,8 @@ enum class AlbumListKind { RECENTLY_ADDED, RECENTLY_PLAYED, MOST_PLAYED, RANDOM,
 @Serializable data object SettingsRoute : Route
 @Serializable data object ServersSettingsRoute : Route
 @Serializable data class ServerEditRoute(val serverId: String? = null) : Route
+/** A continuo-linked server's account (#119): its signed-in devices. */
+@Serializable data class ContinuoDevicesRoute(val serverId: String) : Route
 @Serializable data object AppearanceSettingsRoute : Route
 @Serializable data object PlaybackSettingsRoute : Route
 @Serializable data object StreamingSettingsRoute : Route

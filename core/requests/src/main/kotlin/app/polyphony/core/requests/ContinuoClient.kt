@@ -135,6 +135,39 @@ internal class ContinuoClient(
         }
     }
 
+    /**
+     * Sign this install's device out (`POST /v1/auth/logout`, #120) with the cached access token,
+     * or else one refresh. The rotated refresh token is deliberately not stored: the session ends
+     * here, and the server is usually being removed (storing it would bring the server back).
+     * Returns whether continuo confirmed; failures come back as false or a [ProviderException].
+     */
+    suspend fun logout(server: Server): Boolean {
+        val lock = locks.getOrPut(server.id) { Mutex() }
+        return lock.withLock {
+            val cached = access.remove(server.id)?.takeIf { it.expiresAtMillis - EXPIRY_MARGIN_MS > clock() }
+            if (cached != null) {
+                val code = postLogout(server, cached.token)
+                if (code != 401) return@withLock code in 200..299
+            }
+            val current = servers.get(server.id) ?: server
+            val refresh = current.options[ServerOptions.CONTINUO_REFRESH_TOKEN] ?: return@withLock false
+            val body = json.encodeToString(RefreshBody.serializer(), RefreshBody(refresh))
+            val reply = execute(current, Request.Builder()
+                .url(current.baseUrl.trimEnd('/') + "/v1/auth/refresh")
+                .post(body.toRequestBody(JSON))
+                .build())
+            // 401: continuo already signed this device out.
+            if (reply.code !in 200..299) return@withLock reply.code == 401
+            postLogout(current, decode(SessionDto.serializer(), reply.body).accessToken) in 200..299
+        }
+    }
+
+    private suspend fun postLogout(server: Server, token: String): Int = execute(server, Request.Builder()
+        .url(server.baseUrl.trimEnd('/') + "/v1/auth/logout")
+        .post("{}".toRequestBody(JSON))
+        .header("Authorization", "Bearer $token")
+        .build()).code
+
     fun <T> decode(serializer: kotlinx.serialization.KSerializer<T>, body: String): T = try {
         json.decodeFromString(serializer, body)
     } catch (e: SerializationException) {

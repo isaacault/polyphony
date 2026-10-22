@@ -321,7 +321,7 @@
     <string name="settings_swipe_action_info">Song info</string>
 
     <!-- Backup &amp; restore -->
-    <string name="settings_backup_note">The backup is a single JSON file that holds your app settings and every configured server, including server passwords and access tokens. Keep it somewhere private — anyone with the file can sign in to your servers.</string>
+    <string name="settings_backup_note">The backup is a single JSON file that holds your app settings and every configured server, including server passwords and access tokens. continuo servers are the exception: their sign-in belongs to this phone, so after a restore they ask for your continuo password again. Keep the file somewhere private — anyone with it can sign in to your other servers.</string>
     <string name="settings_backup_export">Export backup</string>
     <string name="settings_backup_export_summary">Write settings and %1$d server(s) to a file you choose</string>
     <string name="settings_backup_restore">Restore backup</string>

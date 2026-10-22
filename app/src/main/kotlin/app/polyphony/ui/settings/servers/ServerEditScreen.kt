@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -102,6 +103,8 @@ data class ServerEditUiState(
     val password: String = "",
     /** A continuo server with no device session here (e.g. restored from a backup). */
     val needsContinuoSignIn: Boolean = false,
+    /** The server's id when it's continuo-linked and signed in here: its account screen is offered. */
+    val continuoAccountId: String? = null,
     val legacyAuth: Boolean = false,
     val trustSelfSigned: Boolean = false,
     val remoteBaseUrl: String = "",
@@ -154,6 +157,7 @@ class ServerEditViewModel @Inject constructor(
                         baseUrl = server.baseUrl,
                         username = server.username,
                         needsContinuoSignIn = server.needsContinuoSignIn,
+                        continuoAccountId = server.id.takeIf { server.isContinuo && !server.needsContinuoSignIn },
                         legacyAuth = server.options[ServerOptions.LEGACY_AUTH] == "true",
                         trustSelfSigned = server.options[ServerOptions.TRUST_SELF_SIGNED] == "true",
                         remoteBaseUrl = server.options[ServerOptions.REMOTE_BASE_URL].orEmpty(),
@@ -382,6 +386,19 @@ fun ServerEditScreen(viewModel: ServerEditViewModel = hiltViewModel()) {
                             if (state.needsContinuoSignIn) R.string.continuo_server_password_sign_in
                             else R.string.settings_server_password_keep,
                         ),
+                    )
+                }
+            }
+        }
+
+        state.continuoAccountId?.let { serverId ->
+            item(key = "continuo") {
+                PreferenceCategory(title = null) {
+                    ActionPreference(
+                        title = stringResource(R.string.continuo_account_title),
+                        summary = stringResource(R.string.continuo_account_summary),
+                        icon = Icons.Rounded.Devices,
+                        onClick = { navigator.openContinuoDevices(serverId) },
                     )
                 }
             }

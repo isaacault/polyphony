@@ -1,6 +1,7 @@
 package app.polyphony.core.domain.repository
 
 import app.polyphony.core.domain.model.CatalogResults
+import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxPage
 import app.polyphony.core.domain.model.MusicRequest
 import app.polyphony.core.domain.model.RequestAction
@@ -32,6 +33,22 @@ interface RequestRepository {
 
     /** Run [action] on a request; returns continuo's one-line confirmation. */
     suspend fun perform(server: Server, requestId: Long, action: RequestAction): String
+
+    /** Devices signed in to the server's continuo account; [ContinuoDevice.current] is this install. */
+    suspend fun devices(server: Server): List<ContinuoDevice>
+
+    /** Sign [deviceId] out of continuo: its requests and its playback stop working. */
+    suspend fun revokeDevice(server: Server, deviceId: String)
+
+    /** Sign out every device on the account except this one; returns how many were signed out. */
+    suspend fun revokeOtherDevices(server: Server): Int
+
+    /**
+     * Sign this install's continuo device out (`POST /v1/auth/logout`), e.g. because its server is
+     * being removed (#120). Best-effort: bounded by a short timeout, never throws (other than
+     * cancellation), and does nothing for a server without a session here.
+     */
+    suspend fun signOut(server: Server)
 
     /**
      * The account's notifications with an id above [since], at most [limit] (continuo caps it at
