@@ -1,11 +1,19 @@
 name: Release
 
+# Releases are built and published locally with scripts/release.sh. This workflow stays as a manual
+# fallback (Actions tab → Release → Run workflow, with the tag), e.g. from a machine without the key.
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and publish, e.g. v0.2.0"
+        required: true
 
 permissions:
   contents: write
+
+env:
+  RELEASE_TAG: ${{ inputs.tag }}
 
 jobs:
   release:
@@ -13,10 +21,12 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
 
       - name: Check tag matches version.properties
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${RELEASE_TAG#v}"
           VERSION="$(grep '^VERSION_NAME=' version.properties | cut -d= -f2)"
           if [ "$TAG" != "$VERSION" ]; then
             echo "Tag v$TAG does not match VERSION_NAME=$VERSION in version.properties" >&2
@@ -73,11 +83,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           PRE=""; [ "$PRERELEASE" = "true" ] && PRE="--prerelease"
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             # Release already exists (e.g. published manually while CI was queued): refresh assets.
-            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+            gh release upload "$RELEASE_TAG" dist/* --clobber
           else
-            gh release create "$GITHUB_REF_NAME" dist/* \
+            gh release create "$RELEASE_TAG" dist/* \
               --title "Polyphony $VERSION" \
               --generate-notes \
               $PRE \
