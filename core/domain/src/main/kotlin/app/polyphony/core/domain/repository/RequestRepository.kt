@@ -34,10 +34,18 @@ interface RequestRepository {
     suspend fun perform(server: Server, requestId: Long, action: RequestAction): String
 
     /**
-     * The account's notifications with an id above [since], oldest first, at most [limit]
-     * (continuo caps it at 500). Page with [InboxPage.cursor] until a page comes back short.
+     * The account's notifications with an id above [since], at most [limit] (continuo caps it at
+     * 500): the oldest ones, oldest first; page with [InboxPage.cursor] until a page comes back
+     * short. With [newestFirst], the newest ones, newest first (`order=desc`), skipping any older
+     * ones beyond [limit]; a server too old to know `order` ignores it and answers oldest first.
      */
-    suspend fun notifications(server: Server, since: Long = 0, unreadOnly: Boolean = false, limit: Int = 100): InboxPage
+    suspend fun notifications(
+        server: Server,
+        since: Long = 0,
+        unreadOnly: Boolean = false,
+        limit: Int = 100,
+        newestFirst: Boolean = false,
+    ): InboxPage
 
     /** Mark these notifications read; returns the inbox's unread count afterwards. */
     suspend fun markRead(server: Server, ids: List<Long>): Int

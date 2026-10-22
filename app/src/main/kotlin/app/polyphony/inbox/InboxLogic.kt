@@ -42,14 +42,25 @@ object InboxLogic {
      * the very first poll of a server ([lastSeen] null): that only sets the baseline, so linking an
      * account doesn't replay its history. Read ones are skipped, a request with several new
      * notifications posts only its newest (they would replace each other anyway), newest first.
+     * Nor anything Home Assistant already put on the phone (continuo#16): those are still seen
+     * (the poll moves the cursor past them) and still listed in the inbox, just not posted twice;
+     * and an older item of the same request isn't posted in its place, since it's out of date.
      */
     fun toPost(fresh: List<InboxNotification>, lastSeen: Long?, max: Int = MAX_POSTS_PER_POLL): List<InboxNotification> {
         if (lastSeen == null) return emptyList()
         return newestFirst(fresh)
             .filter { it.id > lastSeen && !it.read }
             .distinctBy { it.requestId ?: -it.id }
+            .filterNot { it.deliveredByHomeAssistant }
             .take(max)
     }
+
+    /**
+     * Whether a page asked for newest first (`order=desc`) came back that way. A server too old to
+     * know `order` answers oldest first; a page of one or none reads the same either way.
+     */
+    fun isNewestFirst(items: List<InboxNotification>): Boolean =
+        items.zipWithNext().all { (a, b) -> a.id > b.id }
 
     /** The tag a system notification is posted under: one per request, so a newer one replaces it. */
     fun tag(serverId: String, item: InboxNotification): String =

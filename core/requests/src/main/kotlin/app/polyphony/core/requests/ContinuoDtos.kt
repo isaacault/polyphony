@@ -5,6 +5,9 @@ import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.CatalogTrack
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 
 // Wire shapes of continuo's /v1 API (continuo PLAN.md §3). Unknown keys are ignored (the app's
 // Json has ignoreUnknownKeys), and every field the app can live without is optional, so a newer
@@ -249,6 +252,8 @@ internal data class NotificationDto(
     val readAt: String? = null,
     val action: NotificationActionDto? = null,
     val requestId: Long? = null,
+    /** A set of "homeassistant" / "sse" (continuo#16); kept loose so an odd shape can't fail the page. */
+    val deliveredVia: JsonElement? = null,
 )
 
 @Serializable
@@ -282,10 +287,23 @@ internal fun NotificationDto.toDomain() = app.polyphony.core.domain.model.InboxN
     deepLink = action?.deepLink?.takeIf { it.isNotBlank() },
     libraryAlbumId = action?.navidromeAlbumId,
     requestId = action?.requestId ?: requestId,
+    deliveredVia = deliveryChannels(deliveredVia),
 )
 
+/** `deliveredVia` as a lower-cased set: an array of strings (or, leniently, one string); anything else is none. */
+internal fun deliveryChannels(value: JsonElement?): Set<String> {
+    fun JsonElement.name(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+    return when (value) {
+        is JsonArray -> value.mapNotNull { it.name() }.toSet()
+        is JsonPrimitive -> setOfNotNull(value.name())
+        else -> emptySet()
+    }
+}
+
+// The cursor is the highest id returned in either order (continuo sends it; older servers didn't
+// always), or the `since` asked for when nothing was newer.
 internal fun NotificationListDto.toDomain(since: Long) = app.polyphony.core.domain.model.InboxPage(
     items = items.map { it.toDomain() },
-    cursor = cursor ?: items.lastOrNull()?.id ?: since,
+    cursor = cursor ?: items.maxOfOrNull { it.id } ?: since,
     unreadCount = unreadCount,
 )

@@ -112,9 +112,10 @@ class ContinuoRequestRepository internal constructor(
         return runCatching { client.decode(ActionResultDto.serializer(), reply.body).message }.getOrNull().orEmpty()
     }
 
-    override suspend fun notifications(server: Server, since: Long, unreadOnly: Boolean, limit: Int): InboxPage {
+    override suspend fun notifications(server: Server, since: Long, unreadOnly: Boolean, limit: Int, newestFirst: Boolean): InboxPage {
         val from = since.coerceAtLeast(0)
-        val reply = client.get(server, "/v1/notifications?since=$from&unread=$unreadOnly&limit=${limit.coerceIn(1, 500)}")
+        val order = if (newestFirst) "&order=desc" else ""
+        val reply = client.get(server, "/v1/notifications?since=$from&unread=$unreadOnly&limit=${limit.coerceIn(1, 500)}$order")
         if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't list notifications")
         return client.decode(NotificationListDto.serializer(), reply.body).toDomain(from)
     }
