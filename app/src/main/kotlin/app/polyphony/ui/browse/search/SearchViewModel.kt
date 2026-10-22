@@ -26,10 +26,13 @@ import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.ui.common.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -61,6 +64,8 @@ data class EverythingUi(
     val catalogDown: Boolean = false,
     /** Release groups with a request in flight from this screen. */
     val requesting: ImmutableSet<String> = persistentSetOf(),
+    /** Library albums the catalogue only partly matches ([EverythingSection.partials]). */
+    val partials: ImmutableMap<String, Availability.Partial> = persistentMapOf(),
 ) {
     val isEmpty: Boolean get() = albums.isEmpty() && tracks.isEmpty()
 }
@@ -80,6 +85,7 @@ data class SearchUiState(
     /** True when the active server is continuo-linked: the scope chips and Everything show. */
     val scopesAvailable: Boolean = false,
     val scope: SearchScope = SearchScope.LIBRARY,
+    val kind: SearchKind = SearchKind.ALL,
     val everything: EverythingUi = EverythingUi(),
     /** Narrows the library sections; starts empty every time Search opens. */
     val filter: LibraryFilter = LibraryFilter.NONE,
@@ -131,6 +137,7 @@ class SearchViewModel @Inject constructor(
     private val remote = MutableStateFlow(RemoteState())
     private val catalog = MutableStateFlow(CatalogState())
     private val chosenScope = MutableStateFlow(SearchScope.ALL)
+    private val kind = MutableStateFlow(SearchKind.ALL)
     private val filter = MutableStateFlow(LibraryFilter.NONE)
     private val requested = MutableStateFlow<Map<String, Availability>>(emptyMap())
     private val requesting = MutableStateFlow<Set<String>>(emptySet())
@@ -157,9 +164,10 @@ class SearchViewModel @Inject constructor(
         fb.applyTo(if (s == SearchScope.DOWNLOADED) f.copy(downloadedOnly = true) else f)
     }.distinctUntilChanged()
 
-    private val localResults = combine(query.map { it.trim() }.debounce(150).distinctUntilChanged(), effectiveFilter) { q, f -> q to f }
-        .flatMapLatest { (q, f) ->
-            if (q.isBlank()) flowOf(SearchResults()) else library.searchLocal(q, 30, f)
+    private val localResults = combine(query.map { it.trim() }.debounce(150).distinctUntilChanged(), effectiveFilter, kind) { q, f, k -> Triple(q, f, k.localLimit) }
+        .distinctUntilChanged()
+        .flatMapLatest { (q, f, limit) ->
+            if (q.isBlank()) flowOf(SearchResults()) else library.searchLocal(q, limit, f)
         }
 
     private val matchingPlaylists = combine(
@@ -167,8 +175,9 @@ class SearchViewModel @Inject constructor(
         effectiveFilter.flatMapLatest { f ->
             if (f.excludesAll(ItemKind.PLAYLIST)) flowOf(emptyList()) else library.playlists(f.restrictedTo(ItemKind.PLAYLIST))
         },
-    ) { q, playlists ->
-        if (q.isBlank()) emptyList() else playlists.filter { it.name.contains(q, ignoreCase = true) }.take(10)
+        kind,
+    ) { q, playlists, k ->
+        if (q.isBlank()) emptyList() else playlists.filter { it.name.contains(q, ignoreCase = true) }.take(if (k == SearchKind.ALL) 10 else k.localLimit)
     }
 
     private val libraryState: Flow<SearchUiState> = combine(
@@ -205,16 +214,26 @@ class SearchViewModel @Inject constructor(
                 failed = cat.failed && current,
                 catalogDown = results?.catalogAvailable == false,
                 requesting = busy.toImmutableSet(),
+                partials = EverythingSection.partials(results).toImmutableMap(),
             ),
         )
     }
 
-    val state: StateFlow<SearchUiState> = combine(libraryState, everythingState, playback.state, feedbackRepository.feedback) { s, (isLinked, sc, every), pb, fb ->
+    val state: StateFlow<SearchUiState> = combine(libraryState, everythingState, playback.state, feedbackRepository.feedback, kind) { s, (isLinked, sc, every), pb, fb, k ->
+        val shown = if (isLinked && sc == SearchScope.ALL && !s.filter.isActive) every else EverythingUi()
         s.copy(
             feedback = fb,
             scopesAvailable = isLinked,
             scope = sc,
-            everything = if (isLinked && sc == SearchScope.ALL && !s.filter.isActive) every else EverythingUi(),
+            kind = k,
+            artists = if (k.shows(SearchKind.ARTISTS)) s.artists else persistentListOf(),
+            albums = if (k.shows(SearchKind.ALBUMS)) s.albums else persistentListOf(),
+            tracks = if (k.shows(SearchKind.SONGS)) s.tracks else persistentListOf(),
+            playlists = if (k.shows(SearchKind.PLAYLISTS)) s.playlists else persistentListOf(),
+            everything = shown.copy(
+                albums = if (k.shows(SearchKind.ALBUMS)) shown.albums else persistentListOf(),
+                tracks = if (k.shows(SearchKind.SONGS)) shown.tracks else persistentListOf(),
+            ),
             currentTrackId = pb.currentTrack?.id,
             isPlaying = pb.isPlaying,
         )
@@ -259,6 +278,10 @@ class SearchViewModel @Inject constructor(
             catalog.value = CatalogState()
         }
         runScopeSearches(force = false)
+    }
+
+    fun setKind(value: SearchKind) {
+        kind.value = value
     }
 
     fun setFilter(value: LibraryFilter) {

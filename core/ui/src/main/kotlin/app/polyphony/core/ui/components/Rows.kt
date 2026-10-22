@@ -53,6 +53,8 @@ fun MediaRow(
     placeholder: ImageVector = Icons.Rounded.Person,
     showChevron: Boolean = false,
     artworkSize: Dp = Dimens.listArtwork,
+    /** Shown after the text, e.g. a badge. */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -76,6 +78,7 @@ fun MediaRow(
                 )
             }
         }
+        trailing?.invoke()
         when {
             showChevron -> Icon(
                 Icons.Rounded.ChevronRight,
@@ -89,7 +92,14 @@ fun MediaRow(
 }
 
 @Composable
-fun AlbumRow(album: Album, onClick: () -> Unit, modifier: Modifier = Modifier, onLongClick: (() -> Unit)? = null, onMoreClick: (() -> Unit)? = null) {
+fun AlbumRow(
+    album: Album,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    onMoreClick: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+) {
     MediaRow(
         title = album.name,
         subtitle = albumSubtitle(album),
@@ -98,6 +108,7 @@ fun AlbumRow(album: Album, onClick: () -> Unit, modifier: Modifier = Modifier, o
         onLongClick = onLongClick,
         onMoreClick = onMoreClick,
         modifier = modifier,
+        trailing = trailing,
     )
 }
 

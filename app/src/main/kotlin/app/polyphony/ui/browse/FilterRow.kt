@@ -61,6 +61,8 @@ fun LibraryFilterRow(
     modifier: Modifier = Modifier,
     genres: ImmutableList<String> = persistentListOf(),
     years: IntRange? = null,
+    /** Chips before the filters (Search puts its Source chip here). */
+    leading: @Composable () -> Unit = {},
 ) {
     var picker by remember { mutableStateOf<FilterField?>(null) }
     Row(
@@ -72,6 +74,7 @@ fun LibraryFilterRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        leading()
         if (FilterField.FAVOURITES in fields) {
             FilterChip(
                 selected = filter.favouritesOnly,
