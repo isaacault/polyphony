@@ -9,6 +9,7 @@ import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.CatalogTrack
+import app.polyphony.core.domain.model.Feedback
 import app.polyphony.core.domain.model.FilterField
 import app.polyphony.core.domain.model.ItemKind
 import app.polyphony.core.domain.model.LibraryFilter
@@ -18,6 +19,7 @@ import app.polyphony.core.domain.model.SearchResults
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.provider.ProviderException
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
@@ -81,6 +83,7 @@ data class SearchUiState(
     val everything: EverythingUi = EverythingUi(),
     /** Narrows the library sections; starts empty every time Search opens. */
     val filter: LibraryFilter = LibraryFilter.NONE,
+    val feedback: Feedback = Feedback(),
 ) {
     val hasQuery: Boolean get() = query.isNotBlank()
     val isLibraryEmpty: Boolean get() = artists.isEmpty() && albums.isEmpty() && tracks.isEmpty() && playlists.isEmpty()
@@ -89,7 +92,7 @@ data class SearchUiState(
 
     /** Downloaded is a scope chip on continuo servers, so the filter row leaves it out there. */
     val filterFields: Set<FilterField>
-        get() = LibraryFilter.fieldsFor(ItemKind.TRACK).let { if (scopesAvailable) it - FilterField.DOWNLOADED else it }
+        get() = feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.TRACK)).let { if (scopesAvailable) it - FilterField.DOWNLOADED else it }
 }
 
 private data class RemoteState(
@@ -112,6 +115,7 @@ class SearchViewModel @Inject constructor(
     private val playback: PlaybackController,
     private val servers: ServerRepository,
     private val requests: RequestRepository,
+    private val feedbackRepository: FeedbackRepository,
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
@@ -141,8 +145,8 @@ class SearchViewModel @Inject constructor(
         .distinctUntilChanged()
 
     /** The chips plus the Downloaded scope, which is the same narrowing. */
-    private val effectiveFilter: Flow<LibraryFilter> = combine(filter, scope) { f, s ->
-        if (s == SearchScope.DOWNLOADED) f.copy(downloadedOnly = true) else f
+    private val effectiveFilter: Flow<LibraryFilter> = combine(filter, scope, feedbackRepository.feedback) { f, s, fb ->
+        fb.applyTo(if (s == SearchScope.DOWNLOADED) f.copy(downloadedOnly = true) else f)
     }.distinctUntilChanged()
 
     private val localResults = combine(query.map { it.trim() }.debounce(150).distinctUntilChanged(), effectiveFilter) { q, f -> q to f }
@@ -197,8 +201,9 @@ class SearchViewModel @Inject constructor(
         )
     }
 
-    val state: StateFlow<SearchUiState> = combine(libraryState, everythingState, playback.state) { s, (isLinked, sc, every), pb ->
+    val state: StateFlow<SearchUiState> = combine(libraryState, everythingState, playback.state, feedbackRepository.feedback) { s, (isLinked, sc, every), pb, fb ->
         s.copy(
+            feedback = fb,
             scopesAvailable = isLinked,
             scope = sc,
             everything = if (isLinked && sc == SearchScope.ALL && !s.filter.isActive) every else EverythingUi(),

@@ -32,6 +32,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.polyphony.R
+import app.polyphony.core.domain.model.FeedbackMode
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibrarySettings
 import app.polyphony.core.domain.repository.LibrarySyncManager
 import app.polyphony.core.domain.repository.SettingsRepository
@@ -41,6 +43,7 @@ import app.polyphony.navigation.LocalNavigator
 import app.polyphony.ui.settings.components.ActionPreference
 import app.polyphony.ui.settings.components.ListOption
 import app.polyphony.ui.settings.components.ListPreference
+import app.polyphony.ui.settings.components.SegmentedPreference
 import app.polyphony.ui.settings.components.SettingsScaffold
 import app.polyphony.ui.settings.components.SwitchPreference
 import app.polyphony.ui.settings.components.preferenceCategory
@@ -64,6 +67,8 @@ import javax.inject.Inject
 data class LibrarySettingsUiState(
     val settings: LibrarySettings,
     val sync: SyncState,
+    /** False on a server with likes but no star ratings (Jellyfin): Ratings mode is greyed out. */
+    val ratingsSupported: Boolean = true,
 )
 
 sealed interface LibrarySettingsMessage {
@@ -76,6 +81,7 @@ class LibrarySettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
     private val syncManager: LibrarySyncManager,
+    feedbackRepository: FeedbackRepository,
 ) : ViewModel() {
 
     private val _messages = Channel<LibrarySettingsMessage>(Channel.BUFFERED)
@@ -84,7 +90,8 @@ class LibrarySettingsViewModel @Inject constructor(
     val uiState: StateFlow<LibrarySettingsUiState?> = combine(
         settingsRepository.settings.map { it.library },
         syncManager.state,
-    ) { library, sync -> LibrarySettingsUiState(library, sync) }
+        feedbackRepository.feedback,
+    ) { library, sync, feedback -> LibrarySettingsUiState(library, sync, feedback.ratingsSupported) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun syncNow() {
@@ -180,6 +187,34 @@ fun LibrarySettingsScreen(viewModel: LibrarySettingsViewModel = hiltViewModel())
                 checked = s.showCompilationsUnderArtists,
                 onCheckedChange = { on -> viewModel.update { it.copy(showCompilationsUnderArtists = on) } },
             )
+        }
+
+        preferenceCategory(key = "likes", titleRes = R.string.feedback_settings_title) {
+            // On a server without star ratings the choice is kept but has no effect: favourites apply.
+            val ratings = s.feedbackMode == FeedbackMode.RATINGS && ui.ratingsSupported
+            SegmentedPreference(
+                title = stringResource(R.string.feedback_settings_mode),
+                options = listOf(
+                    ListOption(FeedbackMode.FAVOURITES, stringResource(R.string.feedback_mode_favourites)),
+                    ListOption(FeedbackMode.RATINGS, stringResource(R.string.feedback_mode_ratings)),
+                ),
+                selected = if (ratings) FeedbackMode.RATINGS else FeedbackMode.FAVOURITES,
+                onSelected = { mode -> viewModel.update { it.copy(feedbackMode = mode) } },
+                summary = when {
+                    !ui.ratingsSupported -> stringResource(R.string.feedback_settings_unsupported)
+                    ratings -> stringResource(R.string.feedback_settings_ratings_summary)
+                    else -> stringResource(R.string.feedback_settings_favourites_summary)
+                },
+                enabled = ui.ratingsSupported,
+            )
+            if (ratings) {
+                ListPreference(
+                    title = stringResource(R.string.feedback_settings_top_rated),
+                    options = (1..5).map { ListOption(it, stringResource(R.string.feedback_settings_top_rated_value, it)) },
+                    selected = s.topRatedMinimum,
+                    onSelected = { n -> viewModel.update { it.copy(topRatedMinimum = n) } },
+                )
+            }
         }
 
         preferenceCategory(key = "cache", titleRes = R.string.settings_library_artwork) {

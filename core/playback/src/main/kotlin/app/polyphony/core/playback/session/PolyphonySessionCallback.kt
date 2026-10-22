@@ -45,6 +45,8 @@ class PolyphonySessionCallback(
     private val queueStore: QueueStore,
     private val libraryRepository: LibraryRepository,
     private val actions: SessionActions,
+    /** Ratings mode: the liked-tracks folder is "Top rated" rather than "Favourites". */
+    private val usesRatings: () -> Boolean = { false },
 ) : MediaLibrarySession.Callback {
 
     override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
@@ -157,11 +159,11 @@ class PolyphonySessionCallback(
             when {
                 parentId == ROOT -> listOf(
                     folder(FOLDER_RECENT, "Recently added", MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS),
-                    folder(FOLDER_FAVORITES, "Favourites", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED),
+                    folder(FOLDER_FAVORITES, if (usesRatings()) "Top rated" else "Favourites", MediaMetadata.MEDIA_TYPE_FOLDER_MIXED),
                     folder(FOLDER_PLAYLISTS, "Playlists", MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS),
                 )
                 parentId == FOLDER_RECENT -> libraryRepository.recentlyAddedAlbums(50).first().map(::albumItem)
-                parentId == FOLDER_FAVORITES -> libraryRepository.starredTracks().first().also(queueStore::putAll).map { MediaItemFactory.fromTrack(it) }
+                parentId == FOLDER_FAVORITES -> libraryRepository.likedTracks().first().also(queueStore::putAll).map { MediaItemFactory.fromTrack(it) }
                 parentId == FOLDER_PLAYLISTS -> libraryRepository.playlists().first().map(::playlistItem)
                 parentId.startsWith(PREFIX_ALBUM) -> libraryRepository.tracksForAlbum(parentId.removePrefix(PREFIX_ALBUM)).first()
                     .also(queueStore::putAll).map { MediaItemFactory.fromTrack(it) }

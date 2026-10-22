@@ -26,21 +26,25 @@ interface LibraryRepository {
     // ---- Artists ----
     fun artists(sort: ArtistSort = ArtistSort.NAME, filter: LibraryFilter = LibraryFilter.NONE): Flow<List<Artist>>
     fun artist(id: String): Flow<Artist?>
-    fun starredArtists(): Flow<List<Artist>>
+    /**
+     * What you like, per the [FeedbackRepository] mode in effect: favourites, or in Ratings mode
+     * everything rated at least `Feedback.topRatedMinimum` (best first). Same for albums and tracks.
+     */
+    fun likedArtists(): Flow<List<Artist>>
 
     // ---- Albums ----
     fun albums(sort: AlbumSort = AlbumSort.NAME, ascending: Boolean = true, filter: LibraryFilter = LibraryFilter.NONE): Flow<List<Album>>
     fun album(id: String): Flow<Album?>
     fun albumsByArtist(artistId: String): Flow<List<Album>>
     fun albumsByGenre(genre: String): Flow<List<Album>>
-    fun starredAlbums(): Flow<List<Album>>
+    fun likedAlbums(): Flow<List<Album>>
     fun recentlyAddedAlbums(limit: Int = 20): Flow<List<Album>>
     fun recentlyPlayedAlbums(limit: Int = 20): Flow<List<Album>>
     fun mostPlayedAlbums(limit: Int = 20): Flow<List<Album>>
     fun randomAlbums(limit: Int = 20, seed: Long): Flow<List<Album>>
 
     // ---- Tracks ----
-    fun tracks(sort: TrackSort = TrackSort.TITLE, ascending: Boolean = true): Flow<List<Track>>
+    fun tracks(sort: TrackSort = TrackSort.TITLE, ascending: Boolean = true, filter: LibraryFilter = LibraryFilter.NONE): Flow<List<Track>>
 
     /**
      * Every track on the active server, paged straight out of the cache. Use this for the Songs tab
@@ -78,7 +82,7 @@ interface LibraryRepository {
     fun tracksForAlbum(albumId: String): Flow<List<Track>>
     fun tracksForArtist(artistId: String): Flow<List<Track>>
     fun tracksByGenre(genre: String): Flow<List<Track>>
-    fun starredTracks(): Flow<List<Track>>
+    fun likedTracks(): Flow<List<Track>>
     fun recentlyPlayedTracks(limit: Int = 50): Flow<List<Track>>
     suspend fun getTrack(id: String): Track?
     suspend fun getTracks(ids: List<String>): List<Track>

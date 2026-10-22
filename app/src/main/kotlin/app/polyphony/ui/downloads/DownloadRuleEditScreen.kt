@@ -60,6 +60,8 @@ fun DownloadRuleEditScreen(viewModel: DownloadRuleEditViewModel = hiltViewModel(
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val loaded by viewModel.loaded.collectAsStateWithLifecycle()
     val profiles by viewModel.profiles.collectAsStateWithLifecycle()
+    val feedback by viewModel.feedback.collectAsStateWithLifecycle()
+    val likedLabel = if (feedback.usesRatings) stringResource(R.string.feedback_rule_top_rated, feedback.topRatedMinimum) else "Favourite songs"
     val snackbar = remember { SnackbarHostState() }
     var showPicker by rememberSaveable { mutableStateOf(false) }
     var showDelete by rememberSaveable { mutableStateOf(false) }
@@ -74,9 +76,9 @@ fun DownloadRuleEditScreen(viewModel: DownloadRuleEditViewModel = hiltViewModel(
         }
     }
 
-    val typeOptions = remember {
+    val typeOptions = remember(likedLabel) {
         listOf(
-            ListOption(RuleTargetType.FAVORITES, "Favourite songs"),
+            ListOption(RuleTargetType.FAVORITES, likedLabel),
             ListOption(RuleTargetType.PLAYLIST, "Playlist"),
             ListOption(RuleTargetType.ALBUM, "Album"),
             ListOption(RuleTargetType.ARTIST, "Artist"),

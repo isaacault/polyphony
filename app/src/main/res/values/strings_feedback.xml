@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Favourites / Ratings mode -->
+    <string name="feedback_rate">Rate</string>
+    <string name="feedback_rated">Rated %1$d of 5</string>
+    <string name="feedback_unrated">Not rated</string>
+    <string name="feedback_clear_hint">Tap the current rating again to clear it</string>
+    <string name="feedback_rate_title">Rate “%1$s”</string>
+    <string name="feedback_swipe_rate">Rate</string>
+    <string name="feedback_top_rated">Top rated</string>
+    <string name="feedback_empty_top_rated">Nothing rated %1$d★ or more yet</string>
+    <string name="feedback_empty_top_rated_hint">Tap the star on songs, albums and artists to rate them.</string>
+    <string name="feedback_rule_top_rated">Songs rated %1$d★ and up</string>
+    <!-- Library settings -->
+    <string name="feedback_settings_title">Likes</string>
+    <string name="feedback_settings_mode">How you mark what you like</string>
+    <string name="feedback_mode_favourites">Favourites</string>
+    <string name="feedback_mode_ratings">Star ratings</string>
+    <string name="feedback_settings_favourites_summary">A heart on songs, albums and artists. Ratings are ignored.</string>
+    <string name="feedback_settings_ratings_summary">A 1–5 star rating; the star fills with the rating. Favourites are ignored. Nothing on the server is changed.</string>
+    <string name="feedback_settings_unsupported">This server has likes, not star ratings, so it uses favourites.</string>
+    <string name="feedback_settings_top_rated">Top rated means</string>
+    <string name="feedback_settings_top_rated_value">%1$d★ and up</string>
+</resources>

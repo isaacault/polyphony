@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.R
+import app.polyphony.core.domain.repository.DownloadRuleTarget
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.repository.DownloadStatus
 import app.polyphony.core.domain.repository.StorageUsage
@@ -442,6 +443,7 @@ private fun DownloadedTab(state: DownloadsUiState, vm: DownloadsViewModel, onTra
 
 @Composable
 private fun RulesTab(state: DownloadsUiState, vm: DownloadsViewModel) {
+    val feedback by vm.feedback.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
     var ruleToDelete by remember { mutableStateOf<String?>(null) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = listContentPadding(top = 4.dp, extraBottom = 96.dp)) {
@@ -487,7 +489,14 @@ private fun RulesTab(state: DownloadsUiState, vm: DownloadsViewModel) {
                 var menuOpen by remember { mutableStateOf(false) }
                 val rule = item.rule
                 ListItem(
-                    headlineContent = { Text(rule.target.label, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                    headlineContent = {
+                        val label = if (rule.target == DownloadRuleTarget.Favorites && feedback.usesRatings) {
+                            stringResource(R.string.feedback_rule_top_rated, feedback.topRatedMinimum)
+                        } else {
+                            rule.target.label
+                        }
+                        Text(label, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    },
                     supportingContent = {
                         Text(
                             listOfNotNull(

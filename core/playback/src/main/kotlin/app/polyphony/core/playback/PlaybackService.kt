@@ -33,6 +33,7 @@ import app.polyphony.core.domain.model.RecentContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.DlnaRenderer
 import app.polyphony.core.domain.repository.AppSettings
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.ListeningHistoryRepository
 import app.polyphony.core.domain.repository.NetworkMonitor
@@ -96,6 +97,7 @@ class PlaybackService : MediaLibraryService() {
     @Inject lateinit var okHttpClient: OkHttpClient
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var libraryRepository: LibraryRepository
+    @Inject lateinit var feedbackRepository: FeedbackRepository
     @Inject lateinit var listeningHistory: ListeningHistoryRepository
     @Inject lateinit var networkMonitor: NetworkMonitor
     @Inject lateinit var queueStore: QueueStore
@@ -287,7 +289,7 @@ class PlaybackService : MediaLibraryService() {
                 /* maximumOutputDimension= */ 1024,
             ),
         )
-        val callback = PolyphonySessionCallback(scope, queueStore, libraryRepository, sessionActions)
+        val callback = PolyphonySessionCallback(scope, queueStore, libraryRepository, sessionActions) { feedbackRepository.feedback.value.usesRatings }
         return MediaLibrarySession.Builder(this, player, callback)
             .setId(SESSION_ID)
             .setBitmapLoader(bitmapLoader)
@@ -318,6 +320,7 @@ class PlaybackService : MediaLibraryService() {
         }
         scope.launch { latencyMonitor.degraded.collect { publishExtras() } }
         scope.launch { sleepTimer.endsAtEpochMs.collect { publishExtras() } }
+        scope.launch { feedbackRepository.feedback.collect { updateButtons() } }
         historyJob = scope.launch(Dispatchers.IO) {
             for (entry in historyWrites) runCatching { listeningHistory.record(entry) }.onFailure { Log.w(TAG, "History write failed: ${it.message}") }
         }
@@ -772,7 +775,8 @@ class PlaybackService : MediaLibraryService() {
                 .setDisplayName(getString(R.string.action_repeat))
                 .setSessionCommand(CustomCommands.of(CustomCommands.CYCLE_REPEAT))
                 .build()
-            return listOf(favorite, shuffle, repeat)
+            // A notification cannot host the 1–5 picker, so Ratings mode leaves the heart out.
+            return if (feedbackRepository.feedback.value.usesRatings) listOf(shuffle, repeat) else listOf(favorite, shuffle, repeat)
         }
     }
 

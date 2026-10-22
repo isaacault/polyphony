@@ -37,7 +37,7 @@ class AlbumListViewModel @Inject constructor(
         AlbumListKind.RECENTLY_ADDED -> library.recentlyAddedAlbums(200)
         AlbumListKind.RECENTLY_PLAYED -> library.recentlyPlayedAlbums(200)
         AlbumListKind.MOST_PLAYED -> library.mostPlayedAlbums(200)
-        AlbumListKind.STARRED -> library.starredAlbums()
+        AlbumListKind.STARRED -> library.likedAlbums()
         AlbumListKind.RANDOM -> settings.settings.map { it.library.randomAlbumSeed }.distinctUntilChanged()
             .flatMapLatest { seed -> library.randomAlbums(100, seed) }
     }.map { it.toImmutableList() }

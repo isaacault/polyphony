@@ -38,6 +38,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.polyphony.ui.common.FilledStar
+import app.polyphony.ui.common.RatingMenu
+import androidx.compose.foundation.layout.Box
 import app.polyphony.R
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.ui.components.EmptyState
@@ -71,6 +74,8 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
     val downloadedIds by rememberDownloadedIds()
     val trackIds = remember(state.tracks) { state.tracks.map { it.id } }
 
+    val feedback by viewModel.feedback.collectAsStateWithLifecycle()
+    var rateOpen by remember { mutableStateOf(false) }
     HeroScaffold(
         title = album?.name ?: "",
         listState = listState,
@@ -78,15 +83,28 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
         actions = {
             if (album != null) {
                 CollectionDownloadButton(trackIds = trackIds, tracks = { viewModel.state.value.tracks })
-                OverlayIconButton(onClick = {
-                    haptics.performHapticFeedback(if (album.starred) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
-                    viewModel.toggleFavorite()
-                }) {
-                    Icon(
-                        if (album.starred) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        contentDescription = stringResource(R.string.browse_action_add_favorite),
-                        tint = if (album.starred) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    )
+                if (feedback.usesRatings) {
+                    Box {
+                        OverlayIconButton(onClick = { rateOpen = true }) {
+                            FilledStar(
+                                rating = album.rating,
+                                idleTint = MaterialTheme.colorScheme.onSurface,
+                                contentDescription = stringResource(R.string.feedback_rate),
+                            )
+                        }
+                        RatingMenu(expanded = rateOpen, rating = album.rating, onRate = viewModel::rate, onDismiss = { rateOpen = false })
+                    }
+                } else {
+                    OverlayIconButton(onClick = {
+                        haptics.performHapticFeedback(if (album.starred) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
+                        viewModel.toggleFavorite()
+                    }) {
+                        Icon(
+                            if (album.starred) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                            contentDescription = stringResource(R.string.browse_action_add_favorite),
+                            tint = if (album.starred) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
                 OverlayIconButton(onClick = { menuOpen = true }) {
                     Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(R.string.browse_action_more))

@@ -2,6 +2,8 @@ package app.polyphony.core.domain.repository
 
 import app.polyphony.core.domain.model.AlbumSort
 import app.polyphony.core.domain.model.ArtistSort
+import app.polyphony.core.domain.model.Feedback
+import app.polyphony.core.domain.model.FeedbackMode
 import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.model.TrackSort
 import app.polyphony.core.domain.transcode.TranscodePolicy
@@ -119,4 +121,8 @@ data class LibrarySettings(
     val showCompilationsUnderArtists: Boolean = false,
     val artworkCacheSizeMb: Int = 512,
     val randomAlbumSeed: Long = 0L,
+    /** Favourites (hearts) or Ratings (stars); see [FeedbackRepository] for the mode in effect. */
+    val feedbackMode: FeedbackMode = FeedbackMode.FAVOURITES,
+    /** Ratings mode: the least a song needs to be Top rated. */
+    val topRatedMinimum: Int = Feedback.DEFAULT_TOP_RATED,
 )

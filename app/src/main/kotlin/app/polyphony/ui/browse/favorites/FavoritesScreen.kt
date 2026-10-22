@@ -11,6 +11,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.PrimaryTabRow
@@ -56,6 +57,11 @@ fun FavoritesScreen(viewModel: FavoritesViewModel = hiltViewModel()) {
     val columns by viewModel.gridColumns.collectAsStateWithLifecycle()
     val grid by viewModel.albumsGrid.collectAsStateWithLifecycle()
     val playback by viewModel.playbackState.collectAsStateWithLifecycle()
+    val feedback by viewModel.feedback.collectAsStateWithLifecycle()
+    // Ratings mode turns this screen into Top rated: the same lists, chosen by rating.
+    val emptyTitle = if (feedback.usesRatings) stringResource(R.string.feedback_empty_top_rated, feedback.topRatedMinimum) else stringResource(R.string.browse_empty_favorites)
+    val emptyBody = stringResource(if (feedback.usesRatings) R.string.feedback_empty_top_rated_hint else R.string.browse_empty_favorites_hint)
+    val emptyIcon = if (feedback.usesRatings) Icons.Rounded.StarBorder else Icons.Rounded.FavoriteBorder
     val pagerState = rememberPagerState { 3 }
     val scope = rememberCoroutineScope()
     var albumForOptions by remember { mutableStateOf<Album?>(null) }
@@ -67,7 +73,7 @@ fun FavoritesScreen(viewModel: FavoritesViewModel = hiltViewModel()) {
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.browse_home_favorites)) },
+                    title = { Text(stringResource(if (feedback.usesRatings) R.string.feedback_top_rated else R.string.browse_home_favorites)) },
                     navigationIcon = {
                         IconButton(onClick = { navigator.back() }) {
                             Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.browse_action_back))
@@ -92,7 +98,7 @@ fun FavoritesScreen(viewModel: FavoritesViewModel = hiltViewModel()) {
                     val list = tracks
                     when {
                         list == null -> LoadingPlaceholder(PlaceholderStyle.LIST)
-                        list.isEmpty() -> EmptyState(title = stringResource(R.string.browse_empty_favorites), body = stringResource(R.string.browse_empty_favorites_hint), icon = Icons.Rounded.FavoriteBorder)
+                        list.isEmpty() -> EmptyState(title = emptyTitle, body = emptyBody, icon = emptyIcon)
                         else -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = listContentPadding(top = 4.dp)) {
                             item(key = "header") {
                                 PlayShuffleButtons(
@@ -122,7 +128,7 @@ fun FavoritesScreen(viewModel: FavoritesViewModel = hiltViewModel()) {
                     val list = albums
                     when {
                         list == null -> LoadingPlaceholder(PlaceholderStyle.GRID)
-                        list.isEmpty() -> EmptyState(title = stringResource(R.string.browse_empty_favorites), body = stringResource(R.string.browse_empty_favorites_hint), icon = Icons.Rounded.FavoriteBorder)
+                        list.isEmpty() -> EmptyState(title = emptyTitle, body = emptyBody, icon = emptyIcon)
                         grid -> AlbumGrid(list, columns, onAlbum = { navigator.openAlbum(it.id) }, onAlbumLong = { albumForOptions = it })
                         else -> AlbumList(list, onAlbum = { navigator.openAlbum(it.id) }, onAlbumLong = { albumForOptions = it })
                     }
@@ -131,7 +137,7 @@ fun FavoritesScreen(viewModel: FavoritesViewModel = hiltViewModel()) {
                     val list = artists
                     when {
                         list == null -> LoadingPlaceholder(PlaceholderStyle.GRID)
-                        list.isEmpty() -> EmptyState(title = stringResource(R.string.browse_empty_favorites), body = stringResource(R.string.browse_empty_favorites_hint), icon = Icons.Rounded.FavoriteBorder)
+                        list.isEmpty() -> EmptyState(title = emptyTitle, body = emptyBody, icon = emptyIcon)
                         else -> ArtistGrid(list, columns, onArtist = { navigator.openArtist(it.id) })
                     }
                 }

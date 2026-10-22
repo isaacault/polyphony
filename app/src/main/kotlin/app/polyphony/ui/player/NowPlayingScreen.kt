@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.R
+import app.polyphony.ui.common.LikeButton
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.CastState
 import app.polyphony.core.domain.repository.PlayerArtworkStyle
@@ -107,6 +108,8 @@ fun NowPlayingScreen(
     val appearance by viewModel.appearance.collectAsStateWithLifecycle()
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsStateWithLifecycle()
     val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
+    val rating by viewModel.rating.collectAsStateWithLifecycle()
+    val feedback by viewModel.feedback.collectAsStateWithLifecycle()
     val lyricsState by viewModel.lyrics.collectAsStateWithLifecycle()
     val showLyrics by viewModel.showLyrics.collectAsStateWithLifecycle()
     val providers by viewModel.providers.collectAsStateWithLifecycle()
@@ -221,6 +224,9 @@ fun NowPlayingScreen(
                         PlayerTrackInfo(
                             track = track,
                             isFavorite = isFavorite,
+                            usesRatings = feedback.usesRatings,
+                            rating = rating,
+                            onRate = viewModel::rate,
                             onArtist = {
                                 track.artistId?.let {
                                     navigator.openArtist(it)
@@ -622,6 +628,9 @@ private fun PlayerTopBar(
 private fun PlayerTrackInfo(
     track: Track,
     isFavorite: Boolean,
+    usesRatings: Boolean,
+    rating: Int,
+    onRate: (Int) -> Unit,
     onArtist: () -> Unit,
     onToggleFavorite: () -> Unit,
 ) {
@@ -655,7 +664,13 @@ private fun PlayerTrackInfo(
                     ),
             )
         }
-        FavoriteButton(isFavorite = isFavorite, onToggle = onToggleFavorite)
+        LikeButton(
+            usesRatings = usesRatings,
+            starred = isFavorite,
+            rating = rating,
+            onToggleFavourite = onToggleFavorite,
+            onRate = onRate,
+        )
     }
 }
 
