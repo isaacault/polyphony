@@ -164,17 +164,27 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
         when {
             !state.hasQuery -> RecentSearches(
                 state = state,
-                onPick = { viewModel.onQueryChange(it); viewModel.searchRemote() },
+                onPick = { viewModel.onQueryChange(it); viewModel.submit() },
                 onRemove = viewModel::removeRecent,
                 modifier = Modifier.padding(padding),
             )
             state.isEmpty && !state.isSearchingRemote && !state.everything.searching -> Column(Modifier.padding(padding)) {
+                val everything = state.showsEverything
                 EmptyState(
                     title = stringResource(R.string.browse_search_no_results),
-                    body = if (state.remoteSearched) stringResource(R.string.browse_search_no_results_remote) else stringResource(R.string.browse_search_try_server),
-                    icon = if (state.remoteFailed) Icons.Rounded.CloudOff else Icons.Rounded.SearchOff,
-                    actionLabel = if (!state.remoteSearched) stringResource(R.string.browse_action_search_server) else null,
-                    onAction = { viewModel.searchRemote(); keyboard?.hide() },
+                    body = stringResource(
+                        when {
+                            everything && state.everything.failed -> R.string.browse_search_everything_failed_empty
+                            everything && state.everything.catalogDown -> R.string.browse_search_everything_offline
+                            state.canSearchFurther && everything -> R.string.browse_search_try_everything
+                            state.canSearchFurther -> R.string.browse_search_try_server
+                            everything -> R.string.browse_search_no_results_everything
+                            else -> R.string.browse_search_no_results_remote
+                        },
+                    ),
+                    icon = if (state.remoteFailed || (everything && state.everything.failed)) Icons.Rounded.CloudOff else Icons.Rounded.SearchOff,
+                    actionLabel = if (state.canSearchFurther) stringResource(searchFurtherLabel(state)) else null,
+                    onAction = { viewModel.submit(); keyboard?.hide() },
                 )
             }
             else -> LazyColumn(
@@ -239,14 +249,14 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.error,
                             )
+                            state.canSearchFurther -> FilledTonalButton(onClick = { viewModel.submit(); keyboard?.hide() }) {
+                                Text(stringResource(searchFurtherLabel(state)))
+                            }
                             state.remoteSearched -> Text(
                                 stringResource(R.string.browse_search_includes_server),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            else -> FilledTonalButton(onClick = { viewModel.searchRemote(); keyboard?.hide() }) {
-                                Text(stringResource(R.string.browse_action_search_server))
-                            }
                         }
                     }
                 }
@@ -321,6 +331,10 @@ private fun ScopeChips(selected: SearchScope, onSelect: (SearchScope) -> Unit) {
         }
     }
 }
+
+/** The search button runs the server search and, on a continuo server, the Everything tier too. */
+private fun searchFurtherLabel(state: SearchUiState): Int =
+    if (state.showsEverything) R.string.browse_action_search_everything else R.string.browse_action_search_server
 
 /** The Everything tier: catalogue albums and tracks that aren't in the library, with Request. */
 private fun LazyListScope.everythingSection(

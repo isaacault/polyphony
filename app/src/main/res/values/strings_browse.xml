@@ -116,6 +116,7 @@
     <string name="browse_action_show_more">Show more</string>
     <string name="browse_action_show_less">Show less</string>
     <string name="browse_action_search_server">Search on server</string>
+    <string name="browse_action_search_everything">Search everything</string>
 
     <!-- dialogs -->
     <string name="browse_title_new_playlist">New playlist</string>
@@ -171,6 +172,9 @@
     <string name="browse_search_everything_searching">Searching everything…</string>
     <string name="browse_search_everything_failed">Couldn\'t reach the catalogue. Library results are still shown.</string>
     <string name="browse_search_everything_offline">The catalogue is unavailable right now.</string>
+    <string name="browse_search_everything_failed_empty">Couldn\'t reach the catalogue. Check your connection and try again.</string>
+    <string name="browse_search_try_everything">Nothing in your synced library. Search everything to find it and request it.</string>
+    <string name="browse_search_no_results_everything">Nothing matched on the server or in the catalogue.</string>
     <string name="browse_action_request">Request</string>
     <string name="browse_action_request_album">Request album</string>
     <string name="browse_request_sent">Requested. You\'ll be notified when it\'s ready to play.</string>
