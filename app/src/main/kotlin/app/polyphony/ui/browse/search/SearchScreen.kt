@@ -1,6 +1,8 @@
 package app.polyphony.ui.browse.search
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -17,25 +19,31 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -48,6 +56,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -144,15 +153,14 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             .focusRequester(focusRequester),
                     )
                 }
-                if (state.scopesAvailable) {
-                    ScopeChips(selected = state.scope, onSelect = viewModel::setScope)
-                }
+                KindChips(selected = state.kind, onSelect = viewModel::setKind)
                 LibraryFilterRow(
                     filter = state.filter,
                     fields = state.filterFields,
                     onChange = viewModel::setFilter,
                     genres = genres,
                     years = years,
+                    leading = { if (state.scopesAvailable) SourceChip(selected = state.scope, onSelect = viewModel::setScope) },
                 )
                 OfflineModeBanner()
                 if (state.isSearchingRemote || state.everything.searching) {
@@ -199,7 +207,8 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                         ArtistRow(artist, onClick = { viewModel.rememberSearch(state.query); navigator.openArtist(artist.id) })
                     }
                 }
-                if (state.albums.isNotEmpty()) {
+                // Each section lists what you have first, then catalogue items (dimmed, with Request).
+                if (state.albums.isNotEmpty() || state.everything.albums.isNotEmpty()) {
                     item(key = "h-albums") { SectionHeader(title = stringResource(R.string.browse_tab_albums)) }
                     items(state.albums, key = { "al-" + it.id }, contentType = { "album" }) { album ->
                         AlbumRow(
@@ -207,8 +216,10 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             onClick = { viewModel.rememberSearch(state.query); navigator.openAlbum(album.id) },
                             onLongClick = { albumForOptions = album },
                             onMoreClick = { albumForOptions = album },
+                            trailing = state.everything.partials[album.id]?.let { partial -> @Composable { PartialBadge(partial) } },
                         )
                     }
+                    catalogAlbums(state.everything, onRequest = viewModel::request)
                 }
                 if (state.playlists.isNotEmpty()) {
                     item(key = "h-playlists") { SectionHeader(title = stringResource(R.string.browse_tab_playlists)) }
@@ -216,7 +227,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                         PlaylistRow(playlist, onClick = { viewModel.rememberSearch(state.query); navigator.openPlaylist(playlist.id) })
                     }
                 }
-                if (state.tracks.isNotEmpty()) {
+                if (state.tracks.isNotEmpty() || state.everything.tracks.isNotEmpty()) {
                     item(key = "h-tracks") { SectionHeader(title = stringResource(R.string.browse_tab_songs)) }
                     items(state.tracks, key = { "t-" + it.id }, contentType = { "track" }) { track ->
                         TrackSwipeRow(track = track) {
@@ -231,10 +242,9 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             )
                         }
                     }
+                    catalogTracks(state.everything, onRequest = viewModel::request)
                 }
-                if (state.showsEverything) {
-                    everythingSection(state.everything, onRequest = viewModel::request, onOpenRequests = { navigator.openRequests() })
-                }
+                if (state.showsEverything) everythingStatus(state.everything)
                 item(key = "remote") {
                     Column(Modifier.fillMaxWidth().padding(Dimens.screenPadding), horizontalAlignment = Alignment.CenterHorizontally) {
                         when {
@@ -303,26 +313,29 @@ private fun RecentSearches(
     }
 }
 
+/** Row 1 under the search field: which kinds of result to show. */
 @Composable
-private fun ScopeChips(selected: SearchScope, onSelect: (SearchScope) -> Unit) {
+private fun KindChips(selected: SearchKind, onSelect: (SearchKind) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = Dimens.screenPadding)
-            .padding(bottom = 4.dp),
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = Dimens.screenPadding),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        SearchScope.entries.forEach { scope ->
+        SearchKind.entries.forEach { kind ->
             FilterChip(
-                selected = scope == selected,
-                onClick = { onSelect(scope) },
+                selected = kind == selected,
+                onClick = { onSelect(kind) },
                 label = {
                     Text(
                         stringResource(
-                            when (scope) {
-                                SearchScope.ALL -> R.string.browse_search_scope_all
-                                SearchScope.LIBRARY -> R.string.browse_search_scope_library
-                                SearchScope.DOWNLOADED -> R.string.browse_search_scope_downloaded
+                            when (kind) {
+                                SearchKind.ALL -> R.string.browse_search_kind_all
+                                SearchKind.ARTISTS -> R.string.browse_tab_artists
+                                SearchKind.ALBUMS -> R.string.browse_tab_albums
+                                SearchKind.SONGS -> R.string.browse_tab_songs
+                                SearchKind.PLAYLISTS -> R.string.browse_tab_playlists
                             },
                         ),
                     )
@@ -332,54 +345,77 @@ private fun ScopeChips(selected: SearchScope, onSelect: (SearchScope) -> Unit) {
     }
 }
 
+/** The first filter chip on a continuo server: where results come from (All / Library / Downloaded). */
+@Composable
+private fun SourceChip(selected: SearchScope, onSelect: (SearchScope) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        FilterChip(
+            selected = selected != SearchScope.ALL,
+            onClick = { open = true },
+            label = { Text(stringResource(R.string.browse_search_source, stringResource(scopeLabel(selected)))) },
+            trailingIcon = { Icon(Icons.Rounded.ArrowDropDown, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            SearchScope.entries.forEach { scope ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(scopeLabel(scope))) },
+                    onClick = { open = false; onSelect(scope) },
+                    trailingIcon = { if (scope == selected) RadioButton(selected = true, onClick = null) },
+                )
+            }
+        }
+    }
+}
+
+private fun scopeLabel(scope: SearchScope): Int = when (scope) {
+    SearchScope.ALL -> R.string.browse_search_scope_all
+    SearchScope.LIBRARY -> R.string.browse_search_scope_library
+    SearchScope.DOWNLOADED -> R.string.browse_search_scope_downloaded
+}
+
 /** The search button runs the server search and, on a continuo server, the Everything tier too. */
 private fun searchFurtherLabel(state: SearchUiState): Int =
     if (state.showsEverything) R.string.browse_action_search_everything else R.string.browse_action_search_server
 
-/** The Everything tier: catalogue albums and tracks that aren't in the library, with Request. */
-private fun LazyListScope.everythingSection(
-    everything: EverythingUi,
-    onRequest: (String) -> Unit,
-    onOpenRequests: () -> Unit,
-) {
-    if (!everything.isEmpty) {
-        item(key = "h-everything") {
-            SectionHeader(
-                title = stringResource(R.string.browse_search_everything),
-                subtitle = stringResource(R.string.browse_search_everything_subtitle),
-                onSeeAll = onOpenRequests,
-                seeAllLabel = stringResource(R.string.requests_title),
-            )
-        }
-        items(everything.albums, key = { "e-al-" + it.key }, contentType = { "everything" }) { album ->
-            EverythingRow(
-                title = album.title,
-                subtitle = listOfNotNull(album.artist, album.year?.toString()).joinToString(" · ").ifBlank { null },
-                artworkUrl = album.artworkUrl,
-                availability = album.availability,
-                releaseGroupId = album.releaseGroupId,
-                busy = album.releaseGroupId in everything.requesting,
-                requestLabel = stringResource(R.string.browse_action_request),
-                onRequest = onRequest,
-            )
-        }
-        items(everything.tracks, key = { "e-t-" + it.key }, contentType = { "everything" }) { track ->
-            EverythingRow(
-                title = track.title,
-                subtitle = listOfNotNull(track.artist, track.albumTitle).joinToString(" · ").ifBlank { null },
-                artworkUrl = null,
-                availability = track.availability,
-                releaseGroupId = track.albumReleaseGroupId,
-                busy = track.albumReleaseGroupId in everything.requesting,
-                requestLabel = stringResource(R.string.browse_action_request_album),
-                onRequest = onRequest,
-            )
-        }
+/** Catalogue albums that aren't in the library, after the library's own albums. */
+private fun LazyListScope.catalogAlbums(everything: EverythingUi, onRequest: (String) -> Unit) {
+    items(everything.albums, key = { "e-al-" + it.key }, contentType = { "everything" }) { album ->
+        EverythingRow(
+            title = album.title,
+            subtitle = listOfNotNull(album.artist, album.year?.toString()).joinToString(" · ").ifBlank { null },
+            artworkUrl = album.artworkUrl,
+            availability = album.availability,
+            releaseGroupId = album.releaseGroupId,
+            busy = album.releaseGroupId in everything.requesting,
+            requestLabel = stringResource(R.string.browse_action_request),
+            onRequest = onRequest,
+        )
     }
+}
+
+/** Catalogue songs that aren't in the library; Request asks for the song's album. */
+private fun LazyListScope.catalogTracks(everything: EverythingUi, onRequest: (String) -> Unit) {
+    items(everything.tracks, key = { "e-t-" + it.key }, contentType = { "everything" }) { track ->
+        EverythingRow(
+            title = track.title,
+            subtitle = listOfNotNull(track.artist, track.albumTitle).joinToString(" · ").ifBlank { null },
+            artworkUrl = null,
+            availability = track.availability,
+            releaseGroupId = track.albumReleaseGroupId,
+            busy = track.albumReleaseGroupId in everything.requesting,
+            requestLabel = stringResource(R.string.browse_action_request_album),
+            onRequest = onRequest,
+        )
+    }
+}
+
+/** How the catalogue search is going, under the results: searching, unreachable or down. */
+private fun LazyListScope.everythingStatus(everything: EverythingUi) {
     val status = when {
         everything.failed -> R.string.browse_search_everything_failed
         everything.catalogDown -> R.string.browse_search_everything_offline
-        everything.searching && everything.isEmpty -> R.string.browse_search_everything_searching
+        everything.searching -> R.string.browse_search_everything_searching
         else -> null
     }
     if (status != null) {
@@ -392,6 +428,12 @@ private fun LazyListScope.everythingSection(
             )
         }
     }
+}
+
+/** On a library album the catalogue only partly matches: how much of the release you have. */
+@Composable
+private fun PartialBadge(partial: Availability.Partial) {
+    QualityBadge(label = stringResource(R.string.browse_availability_partial, partial.have, partial.expected))
 }
 
 @Composable
@@ -412,9 +454,10 @@ private fun EverythingRow(
             .heightIn(min = 52.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ArtworkImage(url = artworkUrl, contentDescription = null, modifier = Modifier.size(Dimens.listArtwork))
+        // Dimmed: not in your library. The Request button keeps full contrast.
+        ArtworkImage(url = artworkUrl, contentDescription = null, modifier = Modifier.size(Dimens.listArtwork).alpha(CATALOG_ALPHA))
         Spacer(Modifier.width(Dimens.itemSpacing))
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).alpha(CATALOG_ALPHA)) {
             Text(title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (subtitle != null) {
                 Text(
@@ -438,6 +481,8 @@ private fun EverythingRow(
         }
     }
 }
+
+private const val CATALOG_ALPHA = 0.6f
 
 /** The tonal status chip for a hit that's already under way. */
 private fun availabilityLabel(availability: Availability): Int? = when (availability) {

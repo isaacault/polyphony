@@ -62,4 +62,18 @@ class EverythingSectionTest {
     fun `no results is an empty section`() {
         assertTrue(EverythingSection.albums(null, emptyMap()).isEmpty())
     }
+
+    @Test
+    fun `a partly owned album is marked on its library row`() {
+        assertEquals(mapOf("nd-2" to Availability.Partial(9, 23, "nd-2")), EverythingSection.partials(results))
+        assertEquals(emptyMap<String, Availability.Partial>(), EverythingSection.partials(null))
+    }
+
+    @Test
+    fun `a type chip shows one section, with more room in it`() {
+        assertTrue(SearchKind.ALL.shows(SearchKind.ALBUMS))
+        assertTrue(SearchKind.ALBUMS.shows(SearchKind.ALBUMS))
+        assertFalse(SearchKind.ALBUMS.shows(SearchKind.SONGS))
+        assertTrue(SearchKind.SONGS.localLimit > SearchKind.ALL.localLimit)
+    }
 }
