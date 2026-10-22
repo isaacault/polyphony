@@ -9,6 +9,7 @@ import app.polyphony.core.domain.model.Capability
 import app.polyphony.core.domain.model.Genre
 import app.polyphony.core.domain.model.ItemKind
 import app.polyphony.core.domain.model.Lyrics
+import app.polyphony.core.domain.model.MusicBrainzIds
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.PlaylistDetail
 import app.polyphony.core.domain.model.SearchResults
@@ -118,7 +119,7 @@ internal class SubsonicProvider(
             val artist = base.copy(
                 biography = info?.biography?.stripHtml()?.takeIf { it.isNotBlank() },
                 artworkUrl = base.artworkUrl ?: info?.largeImageUrl?.takeIf { it.isNotBlank() } ?: info?.mediumImageUrl?.takeIf { it.isNotBlank() },
-                musicBrainzId = base.musicBrainzId ?: info?.musicBrainzId,
+                musicBrainzId = base.musicBrainzId ?: MusicBrainzIds.first(info?.musicBrainzId),
                 albumCount = if (dto.album.isNotEmpty()) dto.album.size else base.albumCount,
             )
             ArtistDetail(

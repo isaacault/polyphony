@@ -150,7 +150,7 @@ private fun CatalogTrackLine(track: CatalogAlbumTrack) {
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .padding(horizontal = Dimens.screenPadding)
-            .alpha(0.6f),
+            .alpha(CATALOG_TEXT_ALPHA),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

@@ -328,13 +328,13 @@ class SubsonicProviderTest {
         )
         fake.on(
             "getArtistInfo2",
-            ok(""""artistInfo2":{"biography":"John Coltrane was a <a href=\"x\">saxophonist</a> &amp; composer.","musicBrainzId":"mb",
+            ok(""""artistInfo2":{"biography":"John Coltrane was a <a href=\"x\">saxophonist</a> &amp; composer.","musicBrainzId":"69158f97-4c07-4c4e-baf8-4e4ab1ed666e",
                  "largeImageUrl":"https://img/large.jpg","similarArtist":[{"id":"ar-2","name":"Miles Davis","albumCount":9}]}"""),
         )
         val detail = fake.provider().getArtist("ar-1")
         assertEquals(listOf("al-b", "al-a"), detail.albums.map { it.id })
         assertEquals("John Coltrane was a saxophonist & composer.", detail.artist.biography)
-        assertEquals("mb", detail.artist.musicBrainzId)
+        assertEquals("69158f97-4c07-4c4e-baf8-4e4ab1ed666e", detail.artist.musicBrainzId)
         assertEquals("Miles Davis", detail.similarArtists.single().name)
         assertTrue(detail.artist.artworkUrl!!.contains("getCoverArt"))
     }

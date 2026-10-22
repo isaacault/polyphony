@@ -2,6 +2,7 @@ package app.polyphony.core.domain.repository
 
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogAlbumDetail
+import app.polyphony.core.domain.model.CatalogArtist
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxPage
@@ -29,6 +30,12 @@ interface RequestRepository {
      * with its availability: library albums are in it too, marked in_library or partial.
      */
     suspend fun artistAlbums(server: Server, artistMbid: String): List<CatalogAlbum>
+
+    /**
+     * The catalogue artist named [name] (case and punctuation aside), for a library artist the
+     * server has no MusicBrainz id for; null when the catalogue has no such artist.
+     */
+    suspend fun findArtist(server: Server, name: String): CatalogArtist?
 
     /** One catalogue album (MusicBrainz release group) with its availability and tracklist. */
     suspend fun catalogAlbum(server: Server, releaseGroupId: String): CatalogAlbumDetail
