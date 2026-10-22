@@ -1,8 +1,10 @@
 package app.polyphony.ui.browse.catalog
 
+import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DiscographyTest {
@@ -44,5 +46,30 @@ class DiscographyTest {
     fun `release types match case-insensitively`() {
         assertEquals(ReleaseType.EP, Discography.typeOf("ep"))
         assertEquals(ReleaseType.OTHER, Discography.typeOf(null))
+    }
+
+    private fun owned(id: String, year: Int?) = Album(id = id, serverId = "s", name = "Owned $id", year = year)
+
+    @Test
+    fun `your albums and the catalogue's merge into one list per release type`() {
+        val library = listOf(owned("nd-1", 2005), owned("nd-2", 2010), owned("nd-live", 2012))
+        val groups = Discography.merged(library, albums, emptyMap())
+
+        assertEquals(listOf(ReleaseType.ALBUM, ReleaseType.EP, ReleaseType.SINGLE, ReleaseType.OTHER), groups.map { it.type })
+        // Newest first; your copy stands in for the catalogue's in_library and partial releases,
+        // and a library album the catalogue doesn't list joins the Albums.
+        assertEquals(listOf("m-mb:rg:new", "o-nd-live", "o-nd-2", "o-nd-1", "m-mb:rg:old"), groups[0].entries.map { it.key })
+    }
+
+    @Test
+    fun `a release in the library under another artist stays a catalogue card`() {
+        val elsewhere = listOf(album("x", "Album", 2001, Availability.InLibrary("nd-other")))
+        val entry = Discography.merged(emptyList(), elsewhere, emptyMap()).single().entries.single()
+        assertTrue(entry is DiscographyEntry.Missing)
+    }
+
+    @Test
+    fun `no catalogue, no merged list`() {
+        assertTrue(Discography.merged(listOf(owned("nd-1", 2005)), emptyList(), emptyMap()).isEmpty())
     }
 }

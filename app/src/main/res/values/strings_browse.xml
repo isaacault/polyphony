@@ -193,8 +193,6 @@
 
     <!-- artist discography from the catalogue (#144) -->
     <string name="browse_catalog_artist_subtitle">Not in your library</string>
-    <string name="browse_catalog_not_in_library">Not in your library</string>
-    <string name="browse_catalog_not_in_library_subtitle">More from this artist</string>
     <string name="browse_catalog_in_library">In your library</string>
     <string name="browse_catalog_albums">Albums</string>
     <string name="browse_catalog_eps">EPs</string>

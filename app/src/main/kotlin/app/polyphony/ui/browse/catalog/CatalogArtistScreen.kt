@@ -3,7 +3,6 @@ package app.polyphony.ui.browse.catalog
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,7 +27,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -37,12 +35,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.R
-import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogArtist
-import app.polyphony.core.ui.components.AlbumCard
 import app.polyphony.core.ui.components.ArtistCard
 import app.polyphony.core.ui.components.ArtworkImage
 import app.polyphony.core.ui.components.ErrorState
@@ -58,8 +54,8 @@ import app.polyphony.ui.shell.LocalSnackbarHostState
 
 /**
  * Any artist's page from the catalogue (#144), laid out like a library artist's: picture,
- * biography, top songs, the discography and similar artists. Nothing here is in the library, so
- * it's dimmed; songs and albums open their album page, where they can be requested.
+ * biography, top songs, the discography and similar artists. What isn't in the library carries
+ * the request mark; songs and albums open their album page.
  */
 @Composable
 fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
@@ -160,11 +156,11 @@ fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
             // Releases continuo matched to the library under another artist name: yours, so first and not dimmed.
             if (state.inLibrary.isNotEmpty()) {
                 item(key = "h-library") { SectionHeader(title = stringResource(R.string.browse_catalog_in_library)) }
-                albumGrid("lib", state.inLibrary, dimmed = false, navigator)
+                albumGrid("lib", state.inLibrary, state, viewModel::request, navigator)
             }
             state.groups.forEach { group ->
                 item(key = "h-" + group.type) { SectionHeader(title = stringResource(releaseTypeLabel(group.type))) }
-                albumGrid(group.type.name, group.albums, dimmed = true, navigator)
+                albumGrid(group.type.name, group.albums, state, viewModel::request, navigator)
             }
             if (state.similarArtists.isNotEmpty()) {
                 item(key = "similar-header") { SectionHeader(title = stringResource(R.string.browse_artist_similar)) }
@@ -181,7 +177,6 @@ fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
                             },
                             width = 120.dp,
                             subtitle = "",
-                            modifier = if (libraryId != null) Modifier else Modifier.alpha(CATALOG_TEXT_ALPHA),
                         )
                     }
                 }
@@ -192,7 +187,13 @@ fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
 }
 
 /** Two-up album cards like a library artist's, opening the library album or the catalogue album page. */
-private fun LazyListScope.albumGrid(prefix: String, albums: List<CatalogAlbum>, dimmed: Boolean, navigator: PolyphonyNavigator) {
+private fun LazyListScope.albumGrid(
+    prefix: String,
+    albums: List<CatalogAlbum>,
+    state: CatalogArtistUiState,
+    onRequest: (String) -> Unit,
+    navigator: PolyphonyNavigator,
+) {
     items(albums.chunked(2), key = { row -> "$prefix-" + row.joinToString(",") { it.key } }, contentType = { "album-row" }) { row ->
         Row(
             Modifier
@@ -201,37 +202,23 @@ private fun LazyListScope.albumGrid(prefix: String, albums: List<CatalogAlbum>, 
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             row.forEach { album ->
-                val libraryId = when (val a = album.availability) {
-                    is Availability.InLibrary -> a.libraryAlbumId
-                    is Availability.Partial -> a.libraryAlbumId
-                    else -> null
-                }
-                Box(Modifier.weight(1f).then(if (dimmed) Modifier.alpha(CATALOG_TEXT_ALPHA) else Modifier)) {
-                    AlbumCard(
-                        album = album.asAlbum(),
-                        onClick = {
-                            when {
-                                libraryId != null -> navigator.openAlbum(libraryId)
-                                album.releaseGroupId != null -> navigator.openCatalogAlbum(album.releaseGroupId!!, album.title)
-                            }
-                        },
-                        subtitle = albumSubtitle(album),
-                    )
-                }
+                val libraryId = Discography.libraryId(album.availability)
+                CatalogAlbumCard(
+                    album = album,
+                    busy = album.releaseGroupId in state.requesting,
+                    onRequest = onRequest,
+                    onClick = {
+                        when {
+                            libraryId != null -> navigator.openAlbum(libraryId)
+                            album.releaseGroupId != null -> navigator.openCatalogAlbum(album.releaseGroupId!!, album.title)
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                )
             }
             if (row.size == 1) Spacer(Modifier.weight(1f))
         }
     }
 }
-
-/** The year, and where a request stands once there is one. */
-@Composable
-private fun albumSubtitle(album: CatalogAlbum): String = listOfNotNull(
-    album.year?.toString(),
-    availabilityLabel(album.availability)?.let { stringResource(it) },
-).joinToString(" · ")
-
-// The library's cards, fed catalogue items: their ids are catalogue keys, never library ids.
-private fun CatalogAlbum.asAlbum() = Album(id = key, serverId = "", name = title, artistName = artist, year = year, artworkUrl = artworkUrl)
 
 private fun CatalogArtist.asArtist() = Artist(id = key, serverId = "", name = name, artworkUrl = artworkUrl)

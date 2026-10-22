@@ -3,16 +3,22 @@ package app.polyphony.ui.browse.catalog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.LibraryAdd
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -21,7 +27,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -123,6 +128,8 @@ private fun AlbumAction(
     ) {
         when (availability) {
             Availability.Requestable -> Button(onClick = onRequest, enabled = !busy) {
+                Icon(Icons.Rounded.LibraryAdd, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
                 Text(stringResource(R.string.browse_action_request))
             }
             is Availability.Requested -> {
@@ -142,15 +149,14 @@ private fun AlbumAction(
     }
 }
 
-/** A tracklist line: dimmed, since none of it is playable yet. */
+/** A tracklist line (not playable yet: that's #124). */
 @Composable
 private fun CatalogTrackLine(track: CatalogAlbumTrack) {
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .padding(horizontal = Dimens.screenPadding)
-            .alpha(CATALOG_TEXT_ALPHA),
+            .padding(horizontal = Dimens.screenPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
