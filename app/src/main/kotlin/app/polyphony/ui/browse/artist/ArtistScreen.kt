@@ -254,7 +254,7 @@ fun ArtistScreen(viewModel: ArtistViewModel = hiltViewModel()) {
                                 subtitle = stringResource(R.string.browse_catalog_not_in_library_subtitle),
                             )
                         }
-                        discographyItems(state.catalogGroups, state.requesting, onRequest = viewModel::request) { ReleaseTypeLabel(it) }
+                        discographyItems(state.catalogGroups, state.requesting, onRequest = viewModel::request, onOpen = navigator::openCatalogAlbum) { ReleaseTypeLabel(it) }
                     }
                     if (state.catalogLoading) item(key = "catalog-loading") { CatalogNote(R.string.browse_catalog_loading) }
                     if (state.catalogFailed) item(key = "catalog-failed") { CatalogNote(R.string.browse_catalog_failed, isError = true) }

@@ -95,7 +95,7 @@ internal fun CatalogRow(
 private const val CATALOG_ALPHA = 0.6f
 
 /** The tonal status chip for a hit that's already under way. */
-private fun availabilityLabel(availability: Availability): Int? = when (availability) {
+internal fun availabilityLabel(availability: Availability): Int? = when (availability) {
     is Availability.Requested -> when (availability.state) {
         "searching" -> if (availability.stillLooking) R.string.browse_availability_still_looking else R.string.browse_availability_searching
         "downloading" -> R.string.browse_availability_downloading
@@ -122,12 +122,13 @@ internal fun CatalogArtistRow(artist: CatalogArtist, onClick: () -> Unit) {
 
 /**
  * Discography groups as list items: [header] for each release type, then a catalogue row per
- * release with Request or its status.
+ * release with Request or its status. [onOpen] gets the release group and title of a tapped row.
  */
 internal fun LazyListScope.discographyItems(
     groups: List<DiscographyGroup>,
     requesting: Set<String>,
     onRequest: (String) -> Unit,
+    onOpen: (releaseGroupId: String, title: String) -> Unit,
     header: @Composable (ReleaseType) -> Unit,
 ) {
     groups.forEach { group ->
@@ -142,6 +143,7 @@ internal fun LazyListScope.discographyItems(
                 busy = album.releaseGroupId in requesting,
                 requestLabel = stringResource(R.string.browse_action_request),
                 onRequest = onRequest,
+                onClick = album.releaseGroupId?.let { rg -> { onOpen(rg, album.title) } },
             )
         }
     }

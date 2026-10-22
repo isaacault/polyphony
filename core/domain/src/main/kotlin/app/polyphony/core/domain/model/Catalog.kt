@@ -63,6 +63,19 @@ data class CatalogTrack(
     val availability: Availability,
 )
 
+/** A catalogue album with its tracklist (one canonical release of the group), for its own page. */
+data class CatalogAlbumDetail(
+    val album: CatalogAlbum,
+    val tracks: List<CatalogAlbumTrack>,
+)
+
+data class CatalogAlbumTrack(
+    val position: Int,
+    val discNumber: Int,
+    val title: String,
+    val durationMs: Long?,
+)
+
 data class CatalogResults(
     val artists: List<CatalogArtist> = emptyList(),
     val albums: List<CatalogAlbum> = emptyList(),

@@ -203,6 +203,14 @@
     <string name="browse_catalog_loading">Loading the discography…</string>
     <string name="browse_catalog_failed">Couldn\'t load the rest of the discography.</string>
     <string name="browse_catalog_empty">Nothing in the catalogue for this artist.</string>
+    <string name="browse_catalog_type_ep">EP</string>
+    <string name="browse_catalog_type_single">Single</string>
+    <string name="browse_catalog_album_loading">Loading the tracklist…</string>
+    <string name="browse_catalog_album_failed">Couldn\'t load this album from the catalogue.</string>
+    <string name="browse_catalog_album_no_tracks">No tracklist in the catalogue for this album.</string>
+    <string name="browse_catalog_see_request">See request</string>
+    <string name="browse_catalog_open_library">Open in your library</string>
+    <string name="browse_catalog_open_library_partial">Open in your library (%1$d of %2$d)</string>
     <string name="browse_action_undo">Undo</string>
     <string name="browse_snack_added_to_queue">Added to queue</string>
     <string name="browse_snack_playing_next">Playing next</string>

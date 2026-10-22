@@ -81,6 +81,16 @@ internal data class HitDto(
     val ids: IdsDto? = null,
     val album: AlbumRefDto? = null,
     val availability: AvailabilityDto = AvailabilityDto(),
+    /** Only on `GET /v1/catalog/albums/{mbid}`. */
+    val tracks: List<TracklistDto> = emptyList(),
+)
+
+@Serializable
+internal data class TracklistDto(
+    val position: Int = 0,
+    val title: String = "",
+    val durationMs: Long? = null,
+    val discNumber: Int = 1,
 )
 
 @Serializable

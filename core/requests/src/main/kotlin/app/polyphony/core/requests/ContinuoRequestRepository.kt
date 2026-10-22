@@ -1,6 +1,8 @@
 package app.polyphony.core.requests
 
 import app.polyphony.core.domain.model.CatalogAlbum
+import app.polyphony.core.domain.model.CatalogAlbumDetail
+import app.polyphony.core.domain.model.CatalogAlbumTrack
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxPage
@@ -48,6 +50,16 @@ class ContinuoRequestRepository internal constructor(
         if (reply.code !in 200..299) throw client.serverError(reply, "continuo discography failed")
         val host = hostOf(server.baseUrl)
         return client.decode(ListSerializer(HitDto.serializer()), reply.body).map { it.toCatalogAlbum(host) }
+    }
+
+    override suspend fun catalogAlbum(server: Server, releaseGroupId: String): CatalogAlbumDetail {
+        val reply = client.get(server, "/v1/catalog/albums/${URLEncoder.encode(releaseGroupId, "UTF-8")}")
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo album failed")
+        val hit = client.decode(HitDto.serializer(), reply.body)
+        return CatalogAlbumDetail(
+            album = hit.toCatalogAlbum(hostOf(server.baseUrl)),
+            tracks = hit.tracks.map { CatalogAlbumTrack(it.position, it.discNumber, it.title, it.durationMs) },
+        )
     }
 
     override suspend fun requestAlbum(server: Server, releaseGroupId: String): RequestOutcome {
