@@ -112,7 +112,21 @@ CI runs locally. `scripts/ci.sh` runs what the old `Build` workflow ran (`./grad
 image runs Google's x86_64-only aapt2 under qemu there; see the Dockerfile). Runs are serialised
 machine-wide with an exclusive `flock` on `/ssd/Personal/repositories/.locks/docker-ci.lock`
 (`CI_LOCK`), shared with any other Docker CI on the host, and wait for 1.5 GB of free memory
-(`CI_MIN_MEM_MB`).
+(`CI_MIN_MEM_MB`). Kotlin compiles inside Gradle's JVM rather than a second daemon, so a run needs
+one 3 GB heap (`CI_GRADLE_HEAP`), not two.
+
+There are two depths:
+
+| | Runs | When |
+| --- | --- | --- |
+| `scripts/ci.sh --quick` | every module compiled, all unit tests (`:core:domain:test testDebugUnitTest`) | on each push, from the pre-push hook |
+| `scripts/ci.sh` | the full Build workflow: `test lintDebug :app:assembleDebug` | at merge, from `merge_when_green.sh` |
+
+`scripts/install-hooks.sh` (once per clone; it covers every worktree) points git at
+`scripts/git-hooks`, whose `pre-push` runs the quick check on the commit being pushed and blocks the
+push if it fails. It never queues: if another CI run holds the lock it lets the push through
+unchecked, since the merge gate runs the full check anyway. Skip it once with `git push --no-verify`
+or `CI_SKIP=1`. `--no-wait` gives any run the same skip-if-busy behaviour (exit 75).
 
 `scripts/ci.sh --status` does the same on a clean, pushed HEAD and posts the result as the
 `local-ci` commit status, which is what a PR shows as its check. A PR must be green on its current

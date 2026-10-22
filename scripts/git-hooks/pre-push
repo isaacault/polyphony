@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Pre-push: the quick local CI (every module compiled, unit tests run) on what is being pushed.
+# The full run (lint, debug APK) stays at merge time, in scripts/merge_when_green.sh.
+#
+# Enabled per clone by scripts/install-hooks.sh. Skip once with `git push --no-verify` or CI_SKIP=1.
+# It never queues: if another CI run holds the machine lock, the push goes ahead unchecked.
+set -u
+[ "${CI_SKIP:-}" = 1 ] && exit 0
+root=$(git rev-parse --show-toplevel)
+head=$(git rev-parse HEAD)
+zero=0000000000000000000000000000000000000000
+
+check=false
+while read -r _ local_sha remote_ref _; do
+  [ "$local_sha" = "$zero" ] && continue # deleting a remote branch
+  if [ "$local_sha" = "$head" ]; then
+    check=true
+  else
+    echo "pre-push: ${remote_ref#refs/heads/} (${local_sha:0:7}) is not this checkout's HEAD; quick CI skipped" >&2
+  fi
+done
+$check || exit 0
+
+# ci.sh builds the working tree; with uncommitted edits that is not what is being pushed.
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  echo "pre-push: uncommitted changes in $root, so quick CI would not test the pushed commit; skipped" >&2
+  exit 0
+fi
+
+"$root/scripts/ci.sh" --quick --no-wait
+rc=$?
+case "$rc" in
+  0) exit 0 ;;
+  75) echo "pre-push: the machine is busy with another CI run; pushing unchecked (the merge gate still runs)" >&2; exit 0 ;;
+  *) echo "pre-push: quick CI failed, push blocked. Fix it, or push anyway with git push --no-verify" >&2; exit 1 ;;
+esac
