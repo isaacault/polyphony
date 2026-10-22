@@ -40,6 +40,18 @@ data class CatalogAlbum(
     val availability: Availability,
 )
 
+/**
+ * An artist from the catalogue. Artists aren't requested as a whole; [musicBrainzId] opens their
+ * discography, where each album can be.
+ */
+data class CatalogArtist(
+    val key: String,
+    val musicBrainzId: String?,
+    val name: String,
+    val artworkUrl: String?,
+    val availability: Availability,
+)
+
 /** A track from the catalogue; requesting it requests its album ([albumReleaseGroupId]). */
 data class CatalogTrack(
     val key: String,
@@ -52,6 +64,7 @@ data class CatalogTrack(
 )
 
 data class CatalogResults(
+    val artists: List<CatalogArtist> = emptyList(),
     val albums: List<CatalogAlbum> = emptyList(),
     val tracks: List<CatalogTrack> = emptyList(),
     /** False when the server answered but its catalogue (Lidarr / MusicBrainz) was unreachable. */

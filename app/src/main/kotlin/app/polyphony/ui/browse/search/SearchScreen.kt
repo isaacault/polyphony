@@ -11,9 +11,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,7 +29,6 @@ import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SearchOff
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
@@ -56,7 +53,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -64,17 +60,13 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.R
 import app.polyphony.core.domain.model.Album
-import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.ui.components.AlbumRow
-import app.polyphony.core.ui.components.ArtworkImage
-import app.polyphony.core.ui.components.QualityBadge
 import app.polyphony.core.ui.components.ArtistRow
 import app.polyphony.core.ui.components.EmptyState
 import app.polyphony.core.ui.components.PlaylistRow
@@ -83,6 +75,9 @@ import app.polyphony.core.ui.components.TrackRow
 import app.polyphony.core.ui.components.listContentPadding
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.browse.catalog.CatalogArtistRow
+import app.polyphony.ui.browse.catalog.CatalogRow
+import app.polyphony.ui.browse.catalog.PartialBadge
 import app.polyphony.ui.browse.LibraryFilterRow
 import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.AlbumOptionsSheet
@@ -201,13 +196,19 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                     .padding(padding),
                 contentPadding = listContentPadding(top = 4.dp),
             ) {
-                if (state.artists.isNotEmpty()) {
+                // Each section lists what you have first, then catalogue items (dimmed, with Request).
+                if (state.artists.isNotEmpty() || state.everything.artists.isNotEmpty()) {
                     item(key = "h-artists") { SectionHeader(title = stringResource(R.string.browse_tab_artists)) }
                     items(state.artists, key = { "a-" + it.id }, contentType = { "artist" }) { artist ->
                         ArtistRow(artist, onClick = { viewModel.rememberSearch(state.query); navigator.openArtist(artist.id) })
                     }
+                    items(state.everything.artists, key = { "e-ar-" + it.key }, contentType = { "everything-artist" }) { artist ->
+                        CatalogArtistRow(artist, onClick = {
+                            viewModel.rememberSearch(state.query)
+                            artist.musicBrainzId?.let { navigator.openCatalogArtist(it, artist.name) }
+                        })
+                    }
                 }
-                // Each section lists what you have first, then catalogue items (dimmed, with Request).
                 if (state.albums.isNotEmpty() || state.everything.albums.isNotEmpty()) {
                     item(key = "h-albums") { SectionHeader(title = stringResource(R.string.browse_tab_albums)) }
                     items(state.albums, key = { "al-" + it.id }, contentType = { "album" }) { album ->
@@ -381,7 +382,7 @@ private fun searchFurtherLabel(state: SearchUiState): Int =
 /** Catalogue albums that aren't in the library, after the library's own albums. */
 private fun LazyListScope.catalogAlbums(everything: EverythingUi, onRequest: (String) -> Unit) {
     items(everything.albums, key = { "e-al-" + it.key }, contentType = { "everything" }) { album ->
-        EverythingRow(
+        CatalogRow(
             title = album.title,
             subtitle = listOfNotNull(album.artist, album.year?.toString()).joinToString(" · ").ifBlank { null },
             artworkUrl = album.artworkUrl,
@@ -397,7 +398,7 @@ private fun LazyListScope.catalogAlbums(everything: EverythingUi, onRequest: (St
 /** Catalogue songs that aren't in the library; Request asks for the song's album. */
 private fun LazyListScope.catalogTracks(everything: EverythingUi, onRequest: (String) -> Unit) {
     items(everything.tracks, key = { "e-t-" + it.key }, contentType = { "everything" }) { track ->
-        EverythingRow(
+        CatalogRow(
             title = track.title,
             subtitle = listOfNotNull(track.artist, track.albumTitle).joinToString(" · ").ifBlank { null },
             artworkUrl = null,
@@ -428,70 +429,4 @@ private fun LazyListScope.everythingStatus(everything: EverythingUi) {
             )
         }
     }
-}
-
-/** On a library album the catalogue only partly matches: how much of the release you have. */
-@Composable
-private fun PartialBadge(partial: Availability.Partial) {
-    QualityBadge(label = stringResource(R.string.browse_availability_partial, partial.have, partial.expected))
-}
-
-@Composable
-private fun EverythingRow(
-    title: String,
-    subtitle: String?,
-    artworkUrl: String?,
-    availability: Availability,
-    releaseGroupId: String?,
-    busy: Boolean,
-    requestLabel: String,
-    onRequest: (String) -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = Dimens.screenPadding, end = Dimens.screenPadding, top = 4.dp, bottom = 4.dp)
-            .heightIn(min = 52.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Dimmed: not in your library. The Request button keeps full contrast.
-        ArtworkImage(url = artworkUrl, contentDescription = null, modifier = Modifier.size(Dimens.listArtwork).alpha(CATALOG_ALPHA))
-        Spacer(Modifier.width(Dimens.itemSpacing))
-        Column(Modifier.weight(1f).alpha(CATALOG_ALPHA)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (subtitle != null) {
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        Spacer(Modifier.width(8.dp))
-        if (EverythingSection.canRequest(availability, releaseGroupId) && releaseGroupId != null) {
-            FilledTonalButton(
-                onClick = { onRequest(releaseGroupId) },
-                enabled = !busy,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-            ) { Text(requestLabel, style = MaterialTheme.typography.labelLarge) }
-        } else {
-            availabilityLabel(availability)?.let { QualityBadge(label = stringResource(it)) }
-        }
-    }
-}
-
-private const val CATALOG_ALPHA = 0.6f
-
-/** The tonal status chip for a hit that's already under way. */
-private fun availabilityLabel(availability: Availability): Int? = when (availability) {
-    is Availability.Requested -> when (availability.state) {
-        "searching" -> if (availability.stillLooking) R.string.browse_availability_still_looking else R.string.browse_availability_searching
-        "downloading" -> R.string.browse_availability_downloading
-        "importing", "scanning" -> R.string.browse_availability_importing
-        "needs_attention" -> R.string.browse_availability_needs_attention
-        else -> R.string.browse_availability_requested
-    }
-    else -> null
 }

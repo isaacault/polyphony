@@ -1,5 +1,6 @@
 package app.polyphony.core.requests
 
+import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxPage
@@ -37,9 +38,16 @@ class ContinuoRequestRepository internal constructor(
 
     override suspend fun search(server: Server, query: String, limit: Int): CatalogResults {
         val q = URLEncoder.encode(query.trim(), "UTF-8")
-        val reply = client.get(server, "/v1/search?q=$q&types=album,track&limit=$limit")
+        val reply = client.get(server, "/v1/search?q=$q&types=album,artist,track&limit=$limit")
         if (reply.code !in 200..299) throw client.serverError(reply, "continuo search failed")
         return client.decode(SearchDto.serializer(), reply.body).toDomain(artworkHost = hostOf(server.baseUrl))
+    }
+
+    override suspend fun artistAlbums(server: Server, artistMbid: String): List<CatalogAlbum> {
+        val reply = client.get(server, "/v1/catalog/artists/${URLEncoder.encode(artistMbid, "UTF-8")}/albums")
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo discography failed")
+        val host = hostOf(server.baseUrl)
+        return client.decode(ListSerializer(HitDto.serializer()), reply.body).map { it.toCatalogAlbum(host) }
     }
 
     override suspend fun requestAlbum(server: Server, releaseGroupId: String): RequestOutcome {

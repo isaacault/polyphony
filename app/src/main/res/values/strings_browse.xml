@@ -190,6 +190,19 @@
     <string name="browse_availability_importing">Importing</string>
     <string name="browse_availability_needs_attention">Needs a look</string>
     <string name="browse_availability_partial">%1$d of %2$d</string>
+
+    <!-- artist discography from the catalogue (#144) -->
+    <string name="browse_catalog_artist_subtitle">Not in your library</string>
+    <string name="browse_catalog_not_in_library">Not in your library</string>
+    <string name="browse_catalog_not_in_library_subtitle">More from this artist</string>
+    <string name="browse_catalog_in_library">In your library</string>
+    <string name="browse_catalog_albums">Albums</string>
+    <string name="browse_catalog_eps">EPs</string>
+    <string name="browse_catalog_singles">Singles</string>
+    <string name="browse_catalog_other">Other releases</string>
+    <string name="browse_catalog_loading">Loading the discography…</string>
+    <string name="browse_catalog_failed">Couldn\'t load the rest of the discography.</string>
+    <string name="browse_catalog_empty">Nothing in the catalogue for this artist.</string>
     <string name="browse_action_undo">Undo</string>
     <string name="browse_snack_added_to_queue">Added to queue</string>
     <string name="browse_snack_playing_next">Playing next</string>

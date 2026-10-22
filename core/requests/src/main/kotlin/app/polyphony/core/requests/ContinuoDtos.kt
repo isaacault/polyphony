@@ -2,6 +2,7 @@ package app.polyphony.core.requests
 
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
+import app.polyphony.core.domain.model.CatalogArtist
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.CatalogTrack
 import kotlinx.serialization.Serializable
@@ -46,6 +47,7 @@ internal data class ArtworkDto(val url: String? = null)
 internal data class IdsDto(
     val musicBrainzReleaseGroupId: String? = null,
     val navidromeAlbumId: String? = null,
+    val musicBrainzArtistId: String? = null,
 )
 
 @Serializable
@@ -98,24 +100,21 @@ internal fun AvailabilityDto.toDomain(fallbackAlbumId: String?): Availability = 
 }
 
 /**
- * The hits a phone can act on. Artists are left out (there's no catalogue artist screen yet), and
- * [artworkHost]-less artwork is dropped: third-party image hosts would break "your traffic goes
- * only to your own server" (continuo#13 will serve them itself).
+ * The hits a phone can act on. Artwork not on [artworkHost] is dropped: third-party image hosts
+ * would break "your traffic goes only to your own server" (continuo proxies catalogue art itself).
  */
 internal fun SearchDto.toDomain(artworkHost: String?): CatalogResults {
-    fun ownArtwork(url: String?): String? = url?.takeIf { artworkHost != null && hostOf(it) == artworkHost }
-    val albums = results.filter { it.kind == "album" }.map { h ->
-        CatalogAlbum(
+    fun ownArtwork(url: String?): String? = ownArtworkUrl(url, artworkHost)
+    val artists = results.filter { it.kind == "artist" }.map { h ->
+        CatalogArtist(
             key = h.key,
-            releaseGroupId = h.ids?.musicBrainzReleaseGroupId,
-            title = h.title ?: h.name.orEmpty(),
-            artist = h.artist,
-            year = h.year,
-            albumType = h.albumType,
+            musicBrainzId = h.ids?.musicBrainzArtistId,
+            name = h.name ?: h.title.orEmpty(),
             artworkUrl = ownArtwork(h.artwork?.url),
-            availability = h.availability.toDomain(h.ids?.navidromeAlbumId),
+            availability = h.availability.toDomain(null),
         )
     }
+    val albums = results.filter { it.kind == "album" }.map { it.toCatalogAlbum(artworkHost) }
     val tracks = results.filter { it.kind == "track" }.map { h ->
         CatalogTrack(
             key = h.key,
@@ -127,8 +126,22 @@ internal fun SearchDto.toDomain(artworkHost: String?): CatalogResults {
             availability = h.availability.toDomain(h.album?.navidromeAlbumId),
         )
     }
-    return CatalogResults(albums = albums, tracks = tracks, catalogAvailable = sources.catalog != "unavailable")
+    return CatalogResults(artists = artists, albums = albums, tracks = tracks, catalogAvailable = sources.catalog != "unavailable")
 }
+
+internal fun HitDto.toCatalogAlbum(artworkHost: String?) = CatalogAlbum(
+    key = key,
+    releaseGroupId = ids?.musicBrainzReleaseGroupId,
+    title = title ?: name.orEmpty(),
+    artist = artist,
+    year = year,
+    albumType = albumType,
+    artworkUrl = ownArtworkUrl(artwork?.url, artworkHost),
+    availability = availability.toDomain(ids?.navidromeAlbumId),
+)
+
+private fun ownArtworkUrl(url: String?, artworkHost: String?): String? =
+    url?.takeIf { artworkHost != null && hostOf(it) == artworkHost }
 
 internal fun hostOf(url: String): String? = runCatching { java.net.URI(url).host?.lowercase() }.getOrNull()
 
