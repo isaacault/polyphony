@@ -262,12 +262,16 @@ class ContinuoRequestRepositoryTest {
            "artwork":{"url":"https://music-api.example.com/v1/artwork?src=y"},
            "ids":{"musicBrainzReleaseGroupId":"in"},"availability":{"state":"requestable"}},
           {"kind":"album","key":"mb:rg:mh","title":"Music Has the Right to Children","year":1998,"albumType":"Album",
-           "ids":{"musicBrainzReleaseGroupId":"mh"},"availability":{"state":"on_server","storeAlbumId":"s-mh","trackCount":18}}
+           "ids":{"musicBrainzReleaseGroupId":"mh"},"availability":{"state":"on_server","storeAlbumId":"s-mh","trackCount":18}},
+          {"kind":"album","key":"mb:rg:bsn","title":"Being So Normal","year":2017,"albumType":"Album",
+           "ids":{"musicBrainzReleaseGroupId":"bsn","navidromeAlbumId":"nd-s"},
+           "availability":{"state":"partial","have":1,"expected":10,"navidromeAlbumId":"nd-s","requestable":true}}
         ]"""
         val fake = FakeContinuo().apply { routes["GET /v1/catalog/artists/boc/albums"] = { _, _ -> 200 to body } }
         val albums = repo(fake, FakeServers(server)).artistAlbums(server, "boc")
 
-        assertEquals(listOf("geo", "in", "mh"), albums.map { it.releaseGroupId })
+        assertEquals(listOf("geo", "in", "mh", "bsn"), albums.map { it.releaseGroupId })
+        assertEquals(Availability.Partial(1, 10, "nd-s", requestable = true), albums[3].availability)
         assertEquals(Availability.OnServer("s-mh"), albums[2].availability)
         assertEquals(Availability.InLibrary("nd-1"), albums[0].availability)
         assertEquals("EP", albums[1].albumType)

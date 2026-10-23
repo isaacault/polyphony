@@ -49,7 +49,7 @@ object Discography {
     fun missing(albums: List<CatalogAlbum>, requested: Map<String, Availability>): List<DiscographyGroup> =
         albums
             .map { a -> a.releaseGroupId?.let(requested::get)?.let { a.copy(availability = it) } ?: a }
-            .filterNot { it.availability is Availability.InLibrary || it.availability is Availability.Partial }
+            .filterNot { it.availability is Availability.InLibrary || (it.availability as? Availability.Partial)?.requestable == false }
             .groupBy { typeOf(it.albumType) }
             .toSortedMap()
             .map { (type, list) -> DiscographyGroup(type, list.sortedByDescending { it.year ?: 0 }.toImmutableList()) }
@@ -88,7 +88,8 @@ object Discography {
     /** The library album a catalogue release is, when it's (partly) in the library. */
     fun libraryId(availability: Availability): String? = when (availability) {
         is Availability.InLibrary -> availability.libraryAlbumId
-        is Availability.Partial -> availability.libraryAlbumId
+        // Only single songs of it: offered as the album to request, not as your copy.
+        is Availability.Partial -> availability.libraryAlbumId.takeUnless { availability.requestable }
         else -> null
     }
 

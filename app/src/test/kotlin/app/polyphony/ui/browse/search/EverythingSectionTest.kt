@@ -56,6 +56,8 @@ class EverythingSectionTest {
         assertTrue(EverythingSection.canRequest(Availability.Requestable, "rg"))
         assertFalse(EverythingSection.canRequest(Availability.Requestable, null))
         assertTrue("on the server: the request adds it", EverythingSection.canRequest(Availability.OnServer("s-1"), "rg"))
+        assertTrue("only single songs of it: the album can be requested", EverythingSection.canRequest(Availability.Partial(1, 10, "nd", requestable = true), "rg"))
+        assertFalse(EverythingSection.canRequest(Availability.Partial(9, 10, "nd"), "rg"))
         assertFalse(EverythingSection.canRequest(Availability.Requested(1, "searching"), "rg"))
         assertFalse(EverythingSection.canRequest(Availability.CatalogOnly, "rg"))
     }

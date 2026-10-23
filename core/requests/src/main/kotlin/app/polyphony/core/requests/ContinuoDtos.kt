@@ -67,6 +67,7 @@ internal data class AvailabilityDto(
     val have: Int? = null,
     val expected: Int? = null,
     val storeAlbumId: String? = null,
+    val requestable: Boolean = false,
 )
 
 @Serializable
@@ -110,7 +111,7 @@ internal data class CreatedRequestDto(val id: Long)
 
 internal fun AvailabilityDto.toDomain(fallbackAlbumId: String?): Availability = when (state) {
     "in_library", "album_in_library" -> Availability.InLibrary(navidromeAlbumId ?: fallbackAlbumId)
-    "partial" -> Availability.Partial(have ?: 0, expected ?: 0, navidromeAlbumId ?: fallbackAlbumId)
+    "partial" -> Availability.Partial(have ?: 0, expected ?: 0, navidromeAlbumId ?: fallbackAlbumId, requestable)
     "requestable" -> Availability.Requestable
     "on_server" -> storeAlbumId?.let { Availability.OnServer(it) } ?: Availability.Requestable
     "catalog" -> Availability.CatalogOnly
