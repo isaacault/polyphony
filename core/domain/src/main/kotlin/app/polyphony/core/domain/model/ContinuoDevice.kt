@@ -24,8 +24,11 @@ data class ContinuoAccount(
     val role: String,
     val capabilities: Set<String>,
 ) {
-    /** Removing albums deletes music for everyone, so it's for admins on a server that has it set up. */
-    val canRemoveAlbums: Boolean get() = role == "admin" && "library_removal" in capabilities
+    /**
+     * The server says whether this account may remove albums: it lists library_removal when its
+     * music folder is mounted and the account is allowed (every account, unless it keeps it to admins).
+     */
+    val canRemoveAlbums: Boolean get() = "library_removal" in capabilities
 }
 
 /** An album removed from the library into continuo's media cache, restorable until [restorableUntilMillis]. */
