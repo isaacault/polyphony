@@ -20,5 +20,9 @@
 - Do **not** tag a release per change. Releases are batched: several merged PRs, then one
   `scripts/release.sh <version>` (it bumps, builds, signs, verifies and publishes from this
   machine), when the user asks for a release or a milestone chunk is complete.
-- Keep PRs focused and reviewable: one concern each, with a short description of what and why,
-  and how it was verified (unit tests, emulator run, device report).
+- Keep changes focused and reviewable: one concern per commit, with a message saying what and
+  why, and a PR description of how it was verified (unit tests, emulator run, device report).
+- A full app CI run is the bottleneck, so app work is batched: finished concerns are committed
+  (unbuilt) one per commit on a batch branch (`feat/app-batch-<release>`), and when the batch is
+  ready it gets one PR, one CI run on its head, and `scripts/merge_when_green.sh <pr> --rebase`,
+  which keeps each commit on `main`. A single urgent fix can still go alone (squash merge).
