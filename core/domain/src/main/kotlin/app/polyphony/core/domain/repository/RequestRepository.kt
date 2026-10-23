@@ -1,5 +1,6 @@
 package app.polyphony.core.domain.repository
 
+import app.polyphony.core.domain.model.ArtistName
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogAlbumDetail
 import app.polyphony.core.domain.model.CatalogArtist
@@ -62,6 +63,9 @@ interface RequestRepository {
     suspend fun removedAlbums(server: Server): List<RemovedAlbum>
 
     suspend fun restoreAlbum(server: Server, removedId: Long)
+
+    /** Library artists known by another name than their original, for showing and searching both. */
+    suspend fun artistNames(server: Server): List<ArtistName>
 
     /** Request the album (MusicBrainz release group). */
     suspend fun requestAlbum(server: Server, releaseGroupId: String): RequestOutcome

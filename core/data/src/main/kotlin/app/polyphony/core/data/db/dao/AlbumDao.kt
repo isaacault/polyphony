@@ -6,6 +6,7 @@ import androidx.room.RawQuery
 import androidx.room.Upsert
 import androidx.sqlite.db.SupportSQLiteQuery
 import app.polyphony.core.data.db.entity.AlbumEntity
+import app.polyphony.core.data.db.entity.AlbumNameRow
 import app.polyphony.core.data.db.entity.AlbumTrackCount
 import app.polyphony.core.data.db.entity.PlayHistoryEntity
 import kotlinx.coroutines.flow.Flow
@@ -62,6 +63,9 @@ interface AlbumDao {
 
     @Query("SELECT id, trackCount FROM albums WHERE serverId = :serverId")
     suspend fun getTrackCounts(serverId: String): List<AlbumTrackCount>
+
+    @Query("SELECT id, name, artistName FROM albums WHERE serverId = :serverId")
+    suspend fun getNames(serverId: String): List<AlbumNameRow>
 
     @Query("UPDATE albums SET starred = :starred WHERE serverId = :serverId AND id = :id")
     suspend fun setStarred(serverId: String, id: String, starred: Boolean)
