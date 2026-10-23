@@ -2,6 +2,7 @@ package app.polyphony.ui.browse.search
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -97,6 +99,23 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
     var trackForOptions by remember { mutableStateOf<Track?>(null) }
     var albumForOptions by remember { mutableStateOf<Album?>(null) }
     val downloadedIds by rememberDownloadedIds()
+    val listState = rememberLazyListState()
+    // Results arrive in waves (cache, server, catalogue) and a list keeps its first visible row
+    // where it is, so new artists and albums landed above the view. Stay at the top until the
+    // user drags the list themselves; a new search starts at the top again.
+    var userScrolled by remember { mutableStateOf(false) }
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect { if (it is DragInteraction.Start) userScrolled = true }
+    }
+    LaunchedEffect(state.query) {
+        userScrolled = false
+        listState.scrollToItem(0)
+    }
+    val resultShape = listOf(
+        state.artists.size, state.everything.artists.size, state.albums.size, state.everything.albums.size,
+        state.playlists.size, state.tracks.size, state.everything.tracks.size,
+    )
+    LaunchedEffect(resultShape) { if (!userScrolled) listState.scrollToItem(0) }
 
     LaunchedEffect(Unit) { if (state.query.isBlank()) focusRequester.requestFocus() }
     val snackbar = LocalSnackbarHostState.current
@@ -191,12 +210,13 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                 )
             }
             else -> LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
                 contentPadding = listContentPadding(top = 4.dp),
             ) {
-                // Each section lists what you have first, then catalogue items (dimmed, with Request).
+                // Each section lists what you have first, then catalogue items, best matches first.
                 if (state.artists.isNotEmpty() || state.everything.artists.isNotEmpty()) {
                     item(key = "h-artists") { SectionHeader(title = stringResource(R.string.browse_tab_artists)) }
                     items(state.artists, key = { "a-" + it.id }, contentType = { "artist" }) { artist ->

@@ -89,4 +89,15 @@ class EverythingSectionTest {
         )
         assertEquals(listOf("Autechre"), EverythingSection.artists(artists).map { it.name })
     }
+
+    @Test
+    fun `what the query names comes first in a section`() {
+        val names = listOf("Peach Pit Live", "The Peach Pit Tapes", "Pitbull", "Peach Pit", "Peaches")
+        assertEquals(
+            listOf("Peach Pit", "Peach Pit Live", "The Peach Pit Tapes", "Pitbull", "Peaches"),
+            SearchRanking.rank(names, "peach pit") { it },
+        )
+        assertEquals(listOf("Pitbull", "Peach Pit Live"), SearchRanking.rank(listOf("Peach Pit Live", "Pitbull"), "pit") { it })
+        assertEquals(names, SearchRanking.rank(names, "  ") { it })
+    }
 }

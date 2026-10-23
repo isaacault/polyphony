@@ -14,6 +14,31 @@ import app.polyphony.ui.browse.catalog.Discography
 enum class SearchScope { ALL, LIBRARY, DOWNLOADED }
 
 /**
+ * Search's order inside each section: what the query names comes first. An exact name, then
+ * names starting with it, then a word starting with it, then the rest in the order they came.
+ */
+object SearchRanking {
+    fun <T> rank(items: List<T>, query: String, name: (T) -> String): List<T> {
+        val q = loose(query)
+        if (q.isEmpty()) return items
+        return items.withIndex().sortedWith(compareBy({ score(loose(name(it.value)), q) }, { it.index })).map { it.value }
+    }
+
+    private fun score(name: String, q: String): Int = when {
+        name == q -> 0
+        name.startsWith(q) -> 1
+        name.split(' ').any { it.startsWith(q) } -> 2
+        else -> 3
+    }
+
+    // Case and punctuation aside; spaces kept so words can be told apart. A leading "The" is
+    // ignored, as in library sorting.
+    private fun loose(s: String): String =
+        s.lowercase().map { if (it.isLetterOrDigit()) it else ' ' }.joinToString("").trim()
+            .replace(Regex("\\s+"), " ").removePrefix("the ")
+}
+
+/**
  * The type chips above the filters: ALL shows every section, the others one section with room for
  * more results in it.
  */

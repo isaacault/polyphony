@@ -72,6 +72,11 @@ object Discography {
             when {
                 owned == null -> entries += typeOf(album.albumType) to DiscographyEntry.Missing(album)
                 placed.add(owned.id) -> entries += typeOf(album.albumType) to DiscographyEntry.Owned(owned)
+                // A second release the server matched to the same library album (a "0" taken for
+                // "0%"): one library album can't be both, so this one is offered, never dropped.
+                else -> entries += typeOf(album.albumType) to DiscographyEntry.Missing(
+                    if (album.releaseGroupId != null) album.copy(availability = Availability.Requestable) else album,
+                )
             }
         }
         library.filter { it.id !in placed }.forEach { entries += ReleaseType.ALBUM to DiscographyEntry.Owned(it) }
