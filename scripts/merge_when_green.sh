@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Usage: scripts/merge_when_green.sh <pr-number>
+# Usage: scripts/merge_when_green.sh <pr-number> [--rebase]
 #
-# Squash-merges the PR and deletes its branch, but only once the `local-ci` commit status (posted
+# Squash-merges the PR (--rebase: rebase-merges it, keeping each commit; for a batch PR whose
+# commits are one concern each) and deletes its branch, but only once the `local-ci` commit status (posted
 # by scripts/ci.sh --status) is success on the PR's *current* head. If that head has no status yet,
 # this runs scripts/ci.sh --status on it in a throwaway worktree first. It never merges on a
 # missing, failed or pending status, nor on a head that changed after it looked (the merge is
@@ -9,6 +10,8 @@
 # pull requests from forks now.
 set -u
 pr="${1:?pr number}"
+method=--squash
+[ "${2:-}" = "--rebase" ] && method=--rebase
 cd "$(dirname "$0")/.." || exit 2
 # This checkout's ci.sh, so a branch cut before ci.sh existed can still be checked.
 ci_sh="$PWD/scripts/ci.sh"
@@ -25,7 +28,7 @@ while :; do
   case "$ci" in
     success)
       echo "green on ${sha:0:7}: $context=success"
-      gh pr merge "$pr" --squash --delete-branch --match-head-commit "$sha"
+      gh pr merge "$pr" "$method" --delete-branch --match-head-commit "$sha"
       exit $?
       ;;
     failure|error)
