@@ -180,14 +180,14 @@ class ContinuoRequestRepositoryTest {
     }
 
     @Test
-    fun `an admin on a server with removal set up can remove albums`() = runTest {
+    fun `whoever the server offers removal to can remove albums`() = runTest {
         val fake = FakeContinuo().apply {
             routes["GET /v1/me"] = { _, _ -> 200 to """{"user":{"id":1,"username":"isaac","role":"admin"},"capabilities":["requests","library_removal"]}""" }
         }
         val account = repo(fake, FakeServers(server)).account(server)
         assertEquals("isaac", account.username)
         assertTrue(account.canRemoveAlbums)
-        assertEquals(false, account.copy(role = "user").canRemoveAlbums)
+        assertTrue("not just admins", account.copy(role = "user").canRemoveAlbums)
         assertEquals(false, account.copy(capabilities = setOf("requests")).canRemoveAlbums)
     }
 
