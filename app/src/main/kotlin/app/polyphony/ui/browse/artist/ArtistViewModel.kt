@@ -22,6 +22,7 @@ import app.polyphony.navigation.ArtistRoute
 import app.polyphony.ui.browse.catalog.CatalogRequester
 import app.polyphony.ui.browse.catalog.Discography
 import app.polyphony.ui.browse.catalog.MergedGroup
+import app.polyphony.ui.common.ArtistNames
 import app.polyphony.ui.common.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
@@ -86,12 +87,19 @@ class ArtistViewModel @Inject constructor(
     private val playback: PlaybackController,
     private val servers: ServerRepository,
     private val requests: RequestRepository,
+    artistNames: ArtistNames,
 ) : ViewModel() {
+
 
     /** Heart or star in the header. */
     val feedback: StateFlow<Feedback> = feedbackRepository.feedback
 
     val artistId: String = savedStateHandle.toRoute<ArtistRoute>().artistId
+    /** The artist's name in its own script when the library shows a Latin one (青葉市子). */
+    val originalName: StateFlow<String?> = combine(library.artist(artistId), artistNames.names) { a, names ->
+        a?.let { artist -> names.firstOrNull { it.name.equals(artist.name, ignoreCase = true) }?.originalName }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     private val refreshFailed = MutableStateFlow(false)
     private val topTracks = MutableStateFlow<List<Track>?>(null)
     private val similar = MutableStateFlow<List<Artist>>(emptyList())

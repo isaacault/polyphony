@@ -41,3 +41,6 @@ data class RemovedAlbum(
     val restorableUntilMillis: Long?,
     val libraryAlbumId: String?,
 )
+
+/** An artist the library knows by another name than its original (Ichiko Aoba / 青葉市子). */
+data class ArtistName(val name: String, val originalName: String, val sortName: String?)

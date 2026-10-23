@@ -133,7 +133,12 @@ class LibrarySyncEngine(
         listener.onProgress("Recent albums", 0.08f)
         val recent = provider.getAlbums(AlbumListType.RECENTLY_ADDED, size = recentAlbumWindow, offset = 0)
         val known = sink.albumTrackCounts(serverId)
-        val changed = recent.filter { known[it.id] != it.trackCount }
+        // A retag (an artist renamed on the server) keeps the track count: compare names too, so
+        // the album's tracks are re-read now rather than at the next daily full sync.
+        val names = sink.albumNames(serverId)
+        val changed = recent.filter { a ->
+            known[a.id] != a.trackCount || names[a.id]?.let { (name, artist) -> name != a.name || artist != a.artistName } == true
+        }
         sink.writeAlbums(serverId, recent, generation)
         val estimated = changed.sumOf { it.trackCount }.takeIf { it > 0 }
         val tracks = if (changed.isEmpty()) 0 else {

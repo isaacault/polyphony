@@ -24,6 +24,7 @@ import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.ui.browse.catalog.CatalogRequester
+import app.polyphony.ui.common.ArtistNames
 import app.polyphony.ui.common.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
@@ -45,6 +46,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -152,6 +154,7 @@ class SearchViewModel @Inject constructor(
     private val servers: ServerRepository,
     private val requests: RequestRepository,
     private val feedbackRepository: FeedbackRepository,
+    private val artistNames: ArtistNames,
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
@@ -188,7 +191,9 @@ class SearchViewModel @Inject constructor(
     private val localResults = combine(query.map { it.trim() }.debounce(150).distinctUntilChanged(), effectiveFilter, kind) { q, f, k -> Triple(q, f, k.localLimit) }
         .distinctUntilChanged()
         .flatMapLatest { (q, f, limit) ->
-            if (q.isBlank()) flowOf(SearchResults()) else library.searchLocal(q, limit, f)
+            if (q.isBlank()) flowOf(SearchResults()) else combine(library.searchLocal(q, limit, f), byOriginalName(q, f)) { found, extra ->
+                if (extra.isEmpty()) found else found.copy(artists = (extra + found.artists).distinctBy { it.id })
+            }
         }
 
     private val matchingPlaylists = combine(
@@ -199,6 +204,13 @@ class SearchViewModel @Inject constructor(
         kind,
     ) { q, playlists, k ->
         if (q.isBlank()) emptyList() else playlists.filter { it.name.contains(q, ignoreCase = true) }.take(if (k == SearchKind.ALL) 10 else k.localLimit)
+    }
+
+    /** Library artists whose original name was typed (フィッシュマンズ finds Fishmans). */
+    private fun byOriginalName(q: String, f: LibraryFilter): Flow<List<Artist>> = artistNames.names.map { names ->
+        ArtistNames.matching(names, q).flatMap { name ->
+            library.searchLocal(name, 5, f).first().artists.filter { it.name.equals(name, ignoreCase = true) }
+        }
     }
 
     private val libraryState: Flow<SearchUiState> = combine(

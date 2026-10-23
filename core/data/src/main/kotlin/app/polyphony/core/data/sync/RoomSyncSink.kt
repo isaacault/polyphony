@@ -82,6 +82,9 @@ class RoomSyncSink @Inject constructor(private val db: PolyphonyDatabase) : Sync
     override suspend fun albumTrackCounts(serverId: String): Map<String, Int> =
         db.albumDao().getTrackCounts(serverId).associate { it.id to it.trackCount }
 
+    override suspend fun albumNames(serverId: String): Map<String, Pair<String, String?>> =
+        db.albumDao().getNames(serverId).associate { it.id to (it.name to it.artistName) }
+
     override suspend fun deleteStale(serverId: String, generation: Long) {
         db.withTransaction {
             db.trackDao().deleteStale(serverId, generation)

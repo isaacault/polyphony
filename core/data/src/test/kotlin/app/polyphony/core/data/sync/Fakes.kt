@@ -86,7 +86,10 @@ internal open class FakeProvider(
 }
 
 /** Records everything the engine writes. */
-internal class RecordingSink(initialAlbumCounts: Map<String, Int> = emptyMap()) : SyncSink {
+internal class RecordingSink(
+    initialAlbumCounts: Map<String, Int> = emptyMap(),
+    private val albumNames: Map<String, Pair<String, String?>> = emptyMap(),
+) : SyncSink {
     val artists = mutableListOf<Artist>()
     val albums = mutableListOf<Album>()
     val tracks = mutableListOf<Track>()
@@ -107,5 +110,6 @@ internal class RecordingSink(initialAlbumCounts: Map<String, Int> = emptyMap()) 
     override suspend fun applyStarred(serverId: String, starred: StarredContent, generation: Long) { this.starred = starred }
     override suspend fun writeGenres(serverId: String, genres: List<Genre>, generation: Long) { this.genres = genres }
     override suspend fun albumTrackCounts(serverId: String): Map<String, Int> = albumCounts.toMap()
+    override suspend fun albumNames(serverId: String): Map<String, Pair<String, String?>> = albumNames
     override suspend fun deleteStale(serverId: String, generation: Long) { staleDeletedAt = generation }
 }

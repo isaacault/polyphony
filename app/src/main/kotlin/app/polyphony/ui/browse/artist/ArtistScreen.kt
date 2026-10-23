@@ -88,6 +88,7 @@ fun ArtistScreen(viewModel: ArtistViewModel = hiltViewModel()) {
     val trackIds by viewModel.trackIds.collectAsStateWithLifecycle()
 
     val feedback by viewModel.feedback.collectAsStateWithLifecycle()
+    val originalName by viewModel.originalName.collectAsStateWithLifecycle()
     var rateOpen by remember { mutableStateOf(false) }
     val snackbar = LocalSnackbarHostState.current
     val context = LocalContext.current
@@ -153,6 +154,7 @@ fun ArtistScreen(viewModel: ArtistViewModel = hiltViewModel()) {
                                 )
                             },
                             meta = buildList {
+                                originalName?.let(::add)
                                 val albumCount = state.albums.size.takeIf { it > 0 } ?: artist.albumCount
                                 if (albumCount > 0) add(pluralStringResource(R.plurals.browse_count_albums, albumCount, albumCount))
                             }.joinToString(" · ").ifBlank { null },

@@ -19,6 +19,8 @@ interface SyncSink {
     suspend fun writeGenres(serverId: String, genres: List<Genre>, generation: Long)
     /** Album id → track count for everything currently cached (used by incremental sync). */
     suspend fun albumTrackCounts(serverId: String): Map<String, Int>
+    /** Cached album id -> (title, artist), to notice albums retagged on the server. */
+    suspend fun albumNames(serverId: String): Map<String, Pair<String, String?>> = emptyMap()
     /** Delete artists/albums/tracks/genres whose generation is older than [generation]. */
     suspend fun deleteStale(serverId: String, generation: Long)
 }

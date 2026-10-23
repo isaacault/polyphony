@@ -1,5 +1,6 @@
 package app.polyphony.core.requests
 
+import app.polyphony.core.domain.model.ArtistName
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogAlbumDetail
@@ -188,6 +189,14 @@ class ContinuoRequestRepository internal constructor(
     override suspend fun restoreAlbum(server: Server, removedId: Long) {
         val reply = client.post(server, "/v1/library/removed/$removedId/restore", "{}")
         if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't restore the album")
+    }
+
+    override suspend fun artistNames(server: Server): List<ArtistName> {
+        val reply = client.get(server, "/v1/library/artist-names")
+        if (reply.code == 404) return emptyList()  // a continuo from before names
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't list artist names")
+        return client.decode(ListSerializer(ArtistNameDto.serializer()), reply.body)
+            .mapNotNull { d -> d.originalName?.takeIf { it.isNotBlank() }?.let { ArtistName(d.name, it, d.sortName) } }
     }
 
     override suspend fun devices(server: Server): List<ContinuoDevice> {
