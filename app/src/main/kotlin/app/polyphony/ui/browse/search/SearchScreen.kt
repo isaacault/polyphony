@@ -25,10 +25,13 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.DropdownMenu
@@ -71,6 +74,7 @@ import app.polyphony.core.domain.model.Track
 import app.polyphony.core.ui.components.AlbumRow
 import app.polyphony.core.ui.components.ArtistRow
 import app.polyphony.core.ui.components.EmptyState
+import app.polyphony.core.ui.components.MediaRow
 import app.polyphony.core.ui.components.PlaylistRow
 import app.polyphony.core.ui.components.SectionHeader
 import app.polyphony.core.ui.components.TrackRow
@@ -216,7 +220,88 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                     .padding(padding),
                 contentPadding = listContentPadding(top = 4.dp),
             ) {
-                // Each section lists what you have first, then catalogue items, best matches first.
+                // Exact matches first, whatever they are (Spotify's top result), labelled with their type.
+                if (!state.top.isEmpty) {
+                    item(key = "h-top") { SectionHeader(title = stringResource(R.string.browse_search_top_results)) }
+                    val top = state.top
+                    items(top.artists, key = { "ta-" + it.id }, contentType = { "artist" }) { artist ->
+                        MediaRow(
+                            title = artist.name,
+                            subtitle = stringResource(R.string.browse_search_type_artist),
+                            artworkUrl = artist.artworkUrl,
+                            onClick = { viewModel.rememberSearch(state.query); navigator.openArtist(artist.id) },
+                            shape = CircleShape,
+                            placeholder = Icons.Rounded.Person,
+                        )
+                    }
+                    items(top.catalogArtists, key = { "tea-" + it.key }, contentType = { "everything-artist" }) { artist ->
+                        CatalogArtistRow(artist, subtitle = stringResource(R.string.browse_search_type_artist), onClick = {
+                            viewModel.rememberSearch(state.query)
+                            artist.musicBrainzId?.let { navigator.openCatalogArtist(it, artist.name) }
+                        })
+                    }
+                    items(top.albums, key = { "tal-" + it.id }, contentType = { "album" }) { album ->
+                        MediaRow(
+                            title = album.name,
+                            subtitle = typed(R.string.browse_search_type_album, album.artistName),
+                            artworkUrl = album.artworkUrl,
+                            onClick = { viewModel.rememberSearch(state.query); navigator.openAlbum(album.id) },
+                            onLongClick = { albumForOptions = album },
+                            onMoreClick = { albumForOptions = album },
+                            placeholder = Icons.Rounded.Album,
+                        )
+                    }
+                    items(top.catalogAlbums, key = { "teal-" + it.key }, contentType = { "everything" }) { album ->
+                        CatalogRow(
+                            title = album.title,
+                            subtitle = typed(R.string.browse_search_type_album, album.artist),
+                            artworkUrl = album.artworkUrl,
+                            availability = album.availability,
+                            releaseGroupId = album.releaseGroupId,
+                            busy = album.releaseGroupId in state.everything.requesting,
+                            requestLabel = stringResource(R.string.browse_action_request),
+                            onRequest = viewModel::request,
+                            onClick = album.releaseGroupId?.let { rg -> { navigator.openCatalogAlbum(rg, album.title) } },
+                        )
+                    }
+                    items(top.playlists, key = { "tp-" + it.id }, contentType = { "playlist" }) { playlist ->
+                        MediaRow(
+                            title = playlist.name,
+                            subtitle = stringResource(R.string.browse_search_type_playlist),
+                            artworkUrl = playlist.artworkUrl,
+                            onClick = { viewModel.rememberSearch(state.query); navigator.openPlaylist(playlist.id) },
+                            placeholder = Icons.AutoMirrored.Rounded.QueueMusic,
+                        )
+                    }
+                    items(top.tracks, key = { "tt-" + it.id }, contentType = { "track" }) { track ->
+                        TrackSwipeRow(track = track) {
+                            TrackRow(
+                                track = track,
+                                onClick = { viewModel.playTrack(track) },
+                                isCurrent = track.id == state.currentTrackId,
+                                isPlaying = state.isPlaying,
+                                subtitle = typed(R.string.browse_search_type_song, track.artistName),
+                                isDownloaded = track.id in downloadedIds,
+                                onLongClick = { trackForOptions = track },
+                                onMoreClick = { trackForOptions = track },
+                            )
+                        }
+                    }
+                    items(top.catalogTracks, key = { "tet-" + it.key }, contentType = { "everything" }) { track ->
+                        CatalogRow(
+                            title = track.title,
+                            subtitle = typed(R.string.browse_search_type_song, track.artist),
+                            artworkUrl = null,
+                            availability = track.availability,
+                            releaseGroupId = track.albumReleaseGroupId,
+                            busy = track.albumReleaseGroupId in state.everything.requesting,
+                            requestLabel = stringResource(R.string.browse_action_request_album),
+                            onRequest = viewModel::request,
+                            onClick = track.albumReleaseGroupId?.let { rg -> { navigator.openCatalogAlbum(rg, track.albumTitle ?: track.title) } },
+                        )
+                    }
+                }
+                // Then by type: artists, albums, playlists, songs; yours first, best matches first.
                 if (state.artists.isNotEmpty() || state.everything.artists.isNotEmpty()) {
                     item(key = "h-artists") { SectionHeader(title = stringResource(R.string.browse_tab_artists)) }
                     items(state.artists, key = { "a-" + it.id }, contentType = { "artist" }) { artist ->
@@ -254,7 +339,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                         TrackSwipeRow(track = track) {
                             TrackRow(
                                 track = track,
-                                onClick = { viewModel.playTrack(state.tracks.indexOf(track)) },
+                                onClick = { viewModel.playTrack(track) },
                                 isCurrent = track.id == state.currentTrackId,
                                 isPlaying = state.isPlaying,
                                 isDownloaded = track.id in downloadedIds,
@@ -333,6 +418,11 @@ private fun RecentSearches(
         item { Spacer(Modifier.height(16.dp)) }
     }
 }
+
+/** "Album · Peach Pit": a top result's type, with who it's by when known. */
+@Composable
+private fun typed(type: Int, by: String?): String =
+    listOfNotNull(stringResource(type), by?.takeIf { it.isNotBlank() }).joinToString(" · ")
 
 /** Row 1 under the search field: which kinds of result to show. */
 @Composable

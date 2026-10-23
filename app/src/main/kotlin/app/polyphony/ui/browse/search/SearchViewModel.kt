@@ -71,6 +71,23 @@ data class EverythingUi(
     val isEmpty: Boolean get() = artists.isEmpty() && albums.isEmpty() && tracks.isEmpty()
 }
 
+/**
+ * Exact name matches, pulled out of their sections and shown first, like Spotify's top result:
+ * artists, then albums, playlists and songs; yours, then the catalogue's.
+ */
+data class TopResults(
+    val artists: ImmutableList<Artist> = persistentListOf(),
+    val catalogArtists: ImmutableList<CatalogArtist> = persistentListOf(),
+    val albums: ImmutableList<Album> = persistentListOf(),
+    val catalogAlbums: ImmutableList<CatalogAlbum> = persistentListOf(),
+    val playlists: ImmutableList<Playlist> = persistentListOf(),
+    val tracks: ImmutableList<Track> = persistentListOf(),
+    val catalogTracks: ImmutableList<CatalogTrack> = persistentListOf(),
+) {
+    val isLibraryEmpty: Boolean get() = artists.isEmpty() && albums.isEmpty() && playlists.isEmpty() && tracks.isEmpty()
+    val isEmpty: Boolean get() = isLibraryEmpty && catalogArtists.isEmpty() && catalogAlbums.isEmpty() && catalogTracks.isEmpty()
+}
+
 data class SearchUiState(
     val query: String = "",
     val artists: ImmutableList<Artist> = persistentListOf(),
@@ -87,14 +104,18 @@ data class SearchUiState(
     val scopesAvailable: Boolean = false,
     val scope: SearchScope = SearchScope.LIBRARY,
     val kind: SearchKind = SearchKind.ALL,
+    val top: TopResults = TopResults(),
     val everything: EverythingUi = EverythingUi(),
     /** Narrows the library sections; starts empty every time Search opens. */
     val filter: LibraryFilter = LibraryFilter.NONE,
     val feedback: Feedback = Feedback(),
 ) {
     val hasQuery: Boolean get() = query.isNotBlank()
-    val isLibraryEmpty: Boolean get() = artists.isEmpty() && albums.isEmpty() && tracks.isEmpty() && playlists.isEmpty()
-    val isEmpty: Boolean get() = isLibraryEmpty && everything.isEmpty
+    val isLibraryEmpty: Boolean get() = artists.isEmpty() && albums.isEmpty() && tracks.isEmpty() && playlists.isEmpty() && top.isLibraryEmpty
+    val isEmpty: Boolean get() = isLibraryEmpty && everything.isEmpty && top.isEmpty
+
+    /** What a tapped song plays through: the top-result songs, then the Songs section. */
+    val playable: List<Track> get() = top.tracks + tracks
     val showsEverything: Boolean get() = scopesAvailable && scope == SearchScope.ALL && !filter.isActive
 
     /**
@@ -223,21 +244,38 @@ class SearchViewModel @Inject constructor(
     val state: StateFlow<SearchUiState> = combine(libraryState, everythingState, playback.state, feedbackRepository.feedback, kind) { s, (isLinked, sc, every), pb, fb, k ->
         val shown = if (isLinked && sc == SearchScope.ALL && !s.filter.isActive) every else EverythingUi()
         val q = s.query
+        // Exact matches lead on All; on a type chip they simply come first in that one section.
+        val lead = k == SearchKind.ALL
         fun <T> ranked(on: Boolean, items: List<T>, name: (T) -> String) =
-            if (on) SearchRanking.rank(items, q, name).toImmutableList() else persistentListOf()
+            if (on) SearchRanking.rank(items, q, name) else emptyList()
+        fun <T> split(on: Boolean, items: List<T>, name: (T) -> String): Pair<List<T>, List<T>> =
+            ranked(on, items, name).partition { lead && SearchRanking.isExact(name(it), q) }
+        val (topArtists, artists) = split(k.shows(SearchKind.ARTISTS), s.artists) { it.name }
+        val (topAlbums, albums) = split(k.shows(SearchKind.ALBUMS), s.albums) { it.name }
+        val (topPlaylists, playlists) = split(k.shows(SearchKind.PLAYLISTS), s.playlists) { it.name }
+        val (topTracks, tracks) = split(k.shows(SearchKind.SONGS), s.tracks) { it.title }
+        val (topCatArtists, catArtists) = split(k.shows(SearchKind.ARTISTS), shown.artists) { it.name }
+        val (topCatAlbums, catAlbums) = split(k.shows(SearchKind.ALBUMS), shown.albums) { it.title }
+        val (topCatTracks, catTracks) = split(k.shows(SearchKind.SONGS), shown.tracks) { it.title }
         s.copy(
             feedback = fb,
             scopesAvailable = isLinked,
             scope = sc,
             kind = k,
-            artists = ranked(k.shows(SearchKind.ARTISTS), s.artists) { it.name },
-            albums = ranked(k.shows(SearchKind.ALBUMS), s.albums) { it.name },
-            tracks = ranked(k.shows(SearchKind.SONGS), s.tracks) { it.title },
-            playlists = ranked(k.shows(SearchKind.PLAYLISTS), s.playlists) { it.name },
+            top = TopResults(
+                artists = topArtists.toImmutableList(), catalogArtists = topCatArtists.toImmutableList(),
+                albums = topAlbums.toImmutableList(), catalogAlbums = topCatAlbums.toImmutableList(),
+                playlists = topPlaylists.toImmutableList(),
+                tracks = topTracks.toImmutableList(), catalogTracks = topCatTracks.toImmutableList(),
+            ),
+            artists = artists.toImmutableList(),
+            albums = albums.toImmutableList(),
+            tracks = tracks.toImmutableList(),
+            playlists = playlists.toImmutableList(),
             everything = shown.copy(
-                artists = ranked(k.shows(SearchKind.ARTISTS), shown.artists) { it.name },
-                albums = ranked(k.shows(SearchKind.ALBUMS), shown.albums) { it.title },
-                tracks = ranked(k.shows(SearchKind.SONGS), shown.tracks) { it.title },
+                artists = catArtists.toImmutableList(),
+                albums = catAlbums.toImmutableList(),
+                tracks = catTracks.toImmutableList(),
             ),
             currentTrackId = pb.currentTrack?.id,
             isPlaying = pb.isPlaying,
@@ -371,9 +409,10 @@ class SearchViewModel @Inject constructor(
         recent.value = recent.value - term
     }
 
-    fun playTrack(index: Int) {
-        val tracks = state.value.tracks
-        if (index !in tracks.indices) return
+    fun playTrack(track: Track) {
+        val tracks = state.value.playable
+        val index = tracks.indexOf(track)
+        if (index < 0) return
         rememberSearch(query.value)
         playback.playTracks(tracks, index, queueTitle = "Search: ${query.value.trim()}")
     }
