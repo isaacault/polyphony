@@ -72,7 +72,7 @@ object EverythingSection {
 
     fun tracks(results: CatalogResults?, requested: Map<String, Availability>): List<CatalogTrack> =
         results?.tracks.orEmpty()
-            .map { t -> t.albumReleaseGroupId?.let(requested::get)?.let { t.copy(availability = it) } ?: t }
+            .map { t -> t.requestKeys.firstNotNullOfOrNull(requested::get)?.let { t.copy(availability = it) } ?: t }
             .filterNot { it.availability.isInLibrary() }
 
     /**

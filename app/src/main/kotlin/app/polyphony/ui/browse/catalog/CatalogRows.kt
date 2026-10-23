@@ -33,6 +33,7 @@ import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogArtist
+import app.polyphony.core.domain.model.CatalogTrack
 import app.polyphony.core.ui.components.AlbumCard
 import app.polyphony.core.ui.components.ArtworkImage
 import app.polyphony.core.ui.components.MediaRow
@@ -168,6 +169,10 @@ internal fun catalogAlbumSubtitle(album: CatalogAlbum): String = listOfNotNull(
 
 // The library's card, fed a catalogue item: its id is a catalogue key, never a library id.
 internal fun CatalogAlbum.asAlbum() = Album(id = key, serverId = "", name = title, artistName = artist, year = year, artworkUrl = artworkUrl)
+
+/** What a song row's request button says to TalkBack: the song, when it knows its recording. */
+internal fun requestTrackLabel(track: CatalogTrack): Int =
+    if (track.recordingId != null) R.string.browse_action_request_song else R.string.browse_action_request_album
 
 /** The tonal status chip for a hit that's already under way. */
 internal fun availabilityLabel(availability: Availability): Int? = when (availability) {

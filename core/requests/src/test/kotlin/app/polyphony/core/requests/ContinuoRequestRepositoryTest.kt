@@ -124,6 +124,7 @@ class ContinuoRequestRepositoryTest {
         assertEquals(Availability.Requested(17, "downloading", false), results.albums[2].availability)
         assertEquals(Availability.Requested(3, "teleporting", false), results.albums[3].availability)
         assertEquals("tch", results.tracks.single().albumReleaseGroupId)
+        assertEquals("the recording, for requesting just the song", "1", results.tracks.single().recordingId)
         assertEquals(listOf("boc", "ae"), results.artists.map { it.musicBrainzId })
         assertEquals(Availability.CatalogOnly, results.artists[1].availability)
         assertEquals("https://music-api.example.com/v1/artwork?src=x", results.artists[1].artworkUrl)
@@ -189,6 +190,8 @@ class ContinuoRequestRepositoryTest {
         assertTrue(account.canRemoveAlbums)
         assertTrue("not just admins", account.copy(role = "user").canRemoveAlbums)
         assertEquals(false, account.copy(capabilities = setOf("requests")).canRemoveAlbums)
+        assertTrue(account.copy(capabilities = setOf("track_requests")).canRequestSongs)
+        assertEquals(false, account.canRequestSongs)
     }
 
     @Test
@@ -339,6 +342,12 @@ class ContinuoRequestRepositoryTest {
             409 to """{"error":{"code":"added_to_library","message":"x","retryable":false,"storeAlbumId":"s-9"}}"""
         }
         assertEquals(RequestOutcome.Added, repo.requestAlbum(server, "th"))
+
+        fake.routes["POST /v1/requests"] = { _, _ -> 201 to """{"id":22,"status":"pending"}""" }
+        assertEquals(RequestOutcome.Requested(22), repo.requestTrack(server, "rec-1", "th"))
+        val song = fake.seen.last { it.first.url.encodedPath == "/v1/requests" }.second!!
+        assertTrue(song.contains("\"kind\":\"track\"") && song.contains("\"musicBrainzRecordingId\":\"rec-1\"") &&
+            song.contains("\"musicBrainzReleaseGroupId\":\"th\""))
 
         fake.routes["POST /v1/requests"] = { _, _ -> 502 to """{"error":{"code":"lidarr_unavailable","message":"Lidarr is down."}}""" }
         try {

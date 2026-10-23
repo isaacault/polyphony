@@ -81,7 +81,12 @@ data class CatalogTrack(
     val albumTitle: String?,
     val albumReleaseGroupId: String?,
     val availability: Availability,
-)
+    /** The song's MusicBrainz recording: a server with song requests gets just this song. */
+    val recordingId: String? = null,
+) {
+    /** What requests of this song are keyed by: the song itself, else its album. */
+    val requestKeys: List<String> get() = listOfNotNull(recordingId, albumReleaseGroupId)
+}
 
 /** A catalogue album with its tracklist (one canonical release of the group), for its own page. */
 data class CatalogAlbumDetail(

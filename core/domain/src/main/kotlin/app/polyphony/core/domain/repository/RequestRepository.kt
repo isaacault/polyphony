@@ -67,6 +67,9 @@ interface RequestRepository {
     /** Library artists known by another name than their original, for showing and searching both. */
     suspend fun artistNames(server: Server): List<ArtistName>
 
+    /** Request just this song (MusicBrainz recording) of the album [albumReleaseGroupId]. */
+    suspend fun requestTrack(server: Server, recordingId: String, albumReleaseGroupId: String): RequestOutcome
+
     /** Request the album (MusicBrainz release group). */
     suspend fun requestAlbum(server: Server, releaseGroupId: String): RequestOutcome
 

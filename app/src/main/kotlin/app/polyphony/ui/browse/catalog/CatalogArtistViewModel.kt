@@ -63,9 +63,9 @@ data class CatalogArtistUiState(
 /** The pure parts of the catalogue artist page. */
 object CatalogArtistPageLogic {
 
-    /** A request made on this page shows on every song from that album straight away. */
+    /** A request made on this page shows straight away: on the song, or on every song of a requested album. */
     fun topTracks(tracks: List<CatalogTrack>, requested: Map<String, Availability>): List<CatalogTrack> =
-        tracks.map { t -> t.albumReleaseGroupId?.let(requested::get)?.let { t.copy(availability = it) } ?: t }
+        tracks.map { t -> t.requestKeys.firstNotNullOfOrNull(requested::get)?.let { t.copy(availability = it) } ?: t }
 
     /** The hero picture: the artist's own, else the newest album cover. */
     fun heroArtwork(page: CatalogArtistPage?, albums: List<CatalogAlbum>): String? =
@@ -158,4 +158,6 @@ class CatalogArtistViewModel @Inject constructor(
         }.toMap()
 
     fun request(releaseGroupId: String) = requester.request(releaseGroupId)
+
+    fun requestTrack(track: CatalogTrack) = requester.requestTrack(track)
 }

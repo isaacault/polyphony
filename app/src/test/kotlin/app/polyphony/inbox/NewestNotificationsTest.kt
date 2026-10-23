@@ -53,6 +53,7 @@ class NewestNotificationsTest {
         override suspend fun restoreAlbum(server: Server, removedId: Long): Unit = error("unused")
         override suspend fun catalogArtist(server: Server, artistMbid: String): CatalogArtistPage? = error("unused")
         override suspend fun requestAlbum(server: Server, releaseGroupId: String): RequestOutcome = error("unused")
+        override suspend fun requestTrack(server: Server, recordingId: String, albumReleaseGroupId: String): RequestOutcome = error("unused")
         override suspend fun requests(server: Server, activeOnly: Boolean): List<MusicRequest> = error("unused")
         override fun events(server: Server): Flow<RequestEvent> = error("unused")
         override suspend fun perform(server: Server, requestId: Long, action: RequestAction): String = error("unused")

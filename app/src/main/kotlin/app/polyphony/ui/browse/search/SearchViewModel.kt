@@ -411,6 +411,9 @@ class SearchViewModel @Inject constructor(
     /** Request the album with this MusicBrainz release group (an album row, or a track's album). */
     fun request(releaseGroupId: String) = requester.request(releaseGroupId)
 
+    /** Request a song row: the song itself where the server can, else its album. */
+    fun requestTrack(track: CatalogTrack) = requester.requestTrack(track)
+
     fun rememberSearch(term: String) {
         val t = term.trim()
         if (t.isBlank()) return
