@@ -24,6 +24,9 @@ object SearchRanking {
         return items.withIndex().sortedWith(compareBy({ score(loose(name(it.value)), q) }, { it.index })).map { it.value }
     }
 
+    /** The name is what was typed (case, punctuation and a leading "The" aside). */
+    fun isExact(name: String, query: String): Boolean = loose(query).let { it.isNotEmpty() && loose(name) == it }
+
     private fun score(name: String, q: String): Int = when {
         name == q -> 0
         name.startsWith(q) -> 1

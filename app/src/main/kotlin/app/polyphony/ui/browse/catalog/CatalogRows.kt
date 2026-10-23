@@ -183,10 +183,10 @@ internal fun availabilityLabel(availability: Availability): Int? = when (availab
 
 /** A catalogue artist (nothing of theirs in the library); opens their page. */
 @Composable
-internal fun CatalogArtistRow(artist: CatalogArtist, onClick: () -> Unit) {
+internal fun CatalogArtistRow(artist: CatalogArtist, onClick: () -> Unit, subtitle: String? = null) {
     MediaRow(
         title = artist.name,
-        subtitle = stringResource(R.string.browse_catalog_artist_subtitle),
+        subtitle = subtitle ?: stringResource(R.string.browse_catalog_artist_subtitle),
         artworkUrl = artist.artworkUrl,
         onClick = onClick,
         shape = CircleShape,

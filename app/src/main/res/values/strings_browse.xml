@@ -169,6 +169,11 @@
     <string name="browse_search_scope_downloaded">Downloaded</string>
     <string name="browse_search_source">Source: %1$s</string>
     <string name="browse_search_kind_all">All</string>
+    <string name="browse_search_top_results">Top results</string>
+    <string name="browse_search_type_artist">Artist</string>
+    <string name="browse_search_type_album">Album</string>
+    <string name="browse_search_type_playlist">Playlist</string>
+    <string name="browse_search_type_song">Song</string>
     <string name="browse_search_everything_searching">Searching everything…</string>
     <string name="browse_search_everything_failed">Couldn\'t reach the catalogue. Library results are still shown.</string>
     <string name="browse_search_everything_offline">The catalogue is unavailable right now.</string>

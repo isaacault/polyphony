@@ -100,4 +100,13 @@ class EverythingSectionTest {
         assertEquals(listOf("Pitbull", "Peach Pit Live"), SearchRanking.rank(listOf("Peach Pit Live", "Pitbull"), "pit") { it })
         assertEquals(names, SearchRanking.rank(names, "  ") { it })
     }
+
+    @Test
+    fun `an exact name is what was typed, case, punctuation and The aside`() {
+        assertTrue(SearchRanking.isExact("The Strokes", "strokes"))
+        assertTrue(SearchRanking.isExact("Peach Pit", "peach  pit"))
+        assertTrue(SearchRanking.isExact("AC/DC", "ac dc"))
+        assertFalse(SearchRanking.isExact("Peach Pit Live", "peach pit"))
+        assertFalse(SearchRanking.isExact("Anything", "  "))
+    }
 }
