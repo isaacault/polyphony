@@ -222,19 +222,22 @@ class SearchViewModel @Inject constructor(
 
     val state: StateFlow<SearchUiState> = combine(libraryState, everythingState, playback.state, feedbackRepository.feedback, kind) { s, (isLinked, sc, every), pb, fb, k ->
         val shown = if (isLinked && sc == SearchScope.ALL && !s.filter.isActive) every else EverythingUi()
+        val q = s.query
+        fun <T> ranked(on: Boolean, items: List<T>, name: (T) -> String) =
+            if (on) SearchRanking.rank(items, q, name).toImmutableList() else persistentListOf()
         s.copy(
             feedback = fb,
             scopesAvailable = isLinked,
             scope = sc,
             kind = k,
-            artists = if (k.shows(SearchKind.ARTISTS)) s.artists else persistentListOf(),
-            albums = if (k.shows(SearchKind.ALBUMS)) s.albums else persistentListOf(),
-            tracks = if (k.shows(SearchKind.SONGS)) s.tracks else persistentListOf(),
-            playlists = if (k.shows(SearchKind.PLAYLISTS)) s.playlists else persistentListOf(),
+            artists = ranked(k.shows(SearchKind.ARTISTS), s.artists) { it.name },
+            albums = ranked(k.shows(SearchKind.ALBUMS), s.albums) { it.name },
+            tracks = ranked(k.shows(SearchKind.SONGS), s.tracks) { it.title },
+            playlists = ranked(k.shows(SearchKind.PLAYLISTS), s.playlists) { it.name },
             everything = shown.copy(
-                artists = if (k.shows(SearchKind.ARTISTS)) shown.artists else persistentListOf(),
-                albums = if (k.shows(SearchKind.ALBUMS)) shown.albums else persistentListOf(),
-                tracks = if (k.shows(SearchKind.SONGS)) shown.tracks else persistentListOf(),
+                artists = ranked(k.shows(SearchKind.ARTISTS), shown.artists) { it.name },
+                albums = ranked(k.shows(SearchKind.ALBUMS), shown.albums) { it.title },
+                tracks = ranked(k.shows(SearchKind.SONGS), shown.tracks) { it.title },
             ),
             currentTrackId = pb.currentTrack?.id,
             isPlaying = pb.isPlaying,

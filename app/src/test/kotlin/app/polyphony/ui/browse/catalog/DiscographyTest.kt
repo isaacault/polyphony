@@ -72,4 +72,16 @@ class DiscographyTest {
     fun `no catalogue, no merged list`() {
         assertTrue(Discography.merged(listOf(owned("nd-1", 2005)), emptyList(), emptyMap()).isEmpty())
     }
+
+    @Test
+    fun `a second release matched to the same library album is offered, not dropped`() {
+        val live = owned("nd-live", 2014)
+        val catalog = listOf(
+            album("zero-pct", "Album", 2014, Availability.InLibrary("nd-live")),
+            album("zero", "Album", 2013, Availability.InLibrary("nd-live")),
+        )
+        val entries = Discography.merged(listOf(live), catalog, emptyMap()).single().entries
+        assertEquals(listOf("o-nd-live", "m-mb:rg:zero"), entries.map { it.key })
+        assertEquals(Availability.Requestable, (entries[1] as DiscographyEntry.Missing).album.availability)
+    }
 }
