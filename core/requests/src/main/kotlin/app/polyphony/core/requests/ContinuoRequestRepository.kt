@@ -102,6 +102,7 @@ class ContinuoRequestRepository internal constructor(
                 val err = runCatching { client.decode(ErrorEnvelope.serializer(), reply.body).error }.getOrNull()
                 when (err?.code) {
                     "in_library" -> RequestOutcome.InLibrary(err?.navidromeAlbumId)
+                    "added_to_library" -> RequestOutcome.Added
                     "already_requested" -> RequestOutcome.AlreadyRequested(err?.requestId)
                     else -> throw client.serverError(reply, "continuo refused the request")
                 }

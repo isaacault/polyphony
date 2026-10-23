@@ -81,9 +81,12 @@ object EverythingSection {
      */
     fun partials(results: CatalogResults?): Map<String, Availability.Partial> = Discography.partials(results?.albums.orEmpty())
 
-    /** True when there's something to request: a release group and nothing under way or owned. */
+    /**
+     * True when there's something to request: a release group and nothing under way or owned.
+     * An album on the server but not in this account's library counts: the request adds it.
+     */
     fun canRequest(availability: Availability, releaseGroupId: String?): Boolean =
-        releaseGroupId != null && availability == Availability.Requestable
+        releaseGroupId != null && (availability == Availability.Requestable || availability is Availability.OnServer)
 
     private fun Availability.isInLibrary(): Boolean =
         this is Availability.InLibrary || this is Availability.Partial

@@ -144,6 +144,11 @@ private fun AlbumAction(
                     Text(stringResource(R.string.browse_catalog_open_library_partial, availability.have, availability.expected))
                 }
             }
+            is Availability.OnServer -> Button(onClick = onRequest, enabled = !busy) {
+                Icon(Icons.Rounded.LibraryAdd, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                Text(stringResource(R.string.browse_action_add))
+            }
             Availability.CatalogOnly -> Unit
         }
     }

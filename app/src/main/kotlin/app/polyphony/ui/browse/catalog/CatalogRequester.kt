@@ -52,6 +52,10 @@ class CatalogRequester(
                         _requested.update { it + (releaseGroupId to Availability.InLibrary(outcome.libraryAlbumId)) }
                         messages.send(UiMessage(R.string.browse_request_in_library))
                     }
+                    RequestOutcome.Added -> {
+                        _requested.update { it + (releaseGroupId to Availability.InLibrary(null)) }
+                        messages.send(UiMessage(R.string.browse_request_added))
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
