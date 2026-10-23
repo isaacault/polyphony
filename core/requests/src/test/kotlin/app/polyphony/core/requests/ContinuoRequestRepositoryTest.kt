@@ -220,6 +220,18 @@ class ContinuoRequestRepositoryTest {
     }
 
     @Test
+    fun `continuo's resolver picks among same-name artists`() = runTest {
+        val fake = FakeContinuo().apply {
+            routes["GET /v1/catalog/artists/resolve"] = { req, _ ->
+                assertEquals("Peach Pit", req.url.queryParameter("name"))
+                200 to """{"musicBrainzArtistId":"canadian","name":"Peach Pit","sharedAlbums":1,"inLidarr":false}"""
+            }
+        }
+        assertEquals("canadian", repo(fake, FakeServers(server)).findArtist(server, "Peach Pit")?.musicBrainzId)
+        assertTrue("no name search once the resolver answered", fake.seen.none { it.first.url.encodedPath == "/v1/search" })
+    }
+
+    @Test
     fun `an artist without an id is found by name in the catalogue`() = runTest {
         val fake = FakeContinuo().apply {
             routes["GET /v1/search"] = { _, _ ->

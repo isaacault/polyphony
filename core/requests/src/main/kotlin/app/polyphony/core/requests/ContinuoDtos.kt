@@ -418,3 +418,7 @@ internal fun RemovedDto.toDomain() = app.polyphony.core.domain.model.RemovedAlbu
     restorableUntilMillis = parseTimestamp(restorableUntil),
     libraryAlbumId = ids?.navidromeAlbumId,
 )
+
+/** `GET /v1/catalog/artists/resolve`: the catalogue artist a library artist without an id is. */
+@Serializable
+internal data class ResolvedArtistDto(val musicBrainzArtistId: String, val name: String = "")
