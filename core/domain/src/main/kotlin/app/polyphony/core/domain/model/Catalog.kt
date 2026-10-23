@@ -11,8 +11,11 @@ sealed interface Availability {
     /** In the server library; [libraryAlbumId] opens it (an album, or a track's album). */
     data class InLibrary(val libraryAlbumId: String?) : Availability
 
-    /** Partly in the library: [have] of [expected] tracks. */
-    data class Partial(val have: Int, val expected: Int, val libraryAlbumId: String?) : Availability
+    /**
+     * Partly in the library: [have] of [expected] tracks. [requestable] when what's there is only
+     * songs requested on their own: the whole album can still be requested.
+     */
+    data class Partial(val have: Int, val expected: Int, val libraryAlbumId: String?, val requestable: Boolean = false) : Availability
 
     /**
      * On the server but not in this account's own library (another account has it). Requesting

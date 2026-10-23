@@ -112,7 +112,9 @@ class CatalogArtistViewModel @Inject constructor(
             hasArtistPicture = p?.artist?.artworkUrl != null,
             biography = p?.biography,
             topTracks = CatalogArtistPageLogic.topTracks(p?.topTracks.orEmpty(), req).toImmutableList(),
-            inLibrary = all.filter { it.availability is Availability.InLibrary || it.availability is Availability.Partial }.toImmutableList(),
+            inLibrary = all.filter {
+                it.availability is Availability.InLibrary || (it.availability as? Availability.Partial)?.requestable == false
+            }.toImmutableList(),
             groups = Discography.missing(all, req).toImmutableList(),
             similarArtists = p?.similarArtists.orEmpty().toImmutableList(),
             libraryArtistIds = ids.toImmutableMap(),

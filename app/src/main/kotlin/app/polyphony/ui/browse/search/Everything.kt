@@ -83,11 +83,13 @@ object EverythingSection {
 
     /**
      * True when there's something to request: a release group and nothing under way or owned.
-     * An album on the server but not in this account's library counts: the request adds it.
+     * An album on the server but not in this account's library counts (the request adds it), and
+     * so does one you only have single songs of.
      */
     fun canRequest(availability: Availability, releaseGroupId: String?): Boolean =
-        releaseGroupId != null && (availability == Availability.Requestable || availability is Availability.OnServer)
+        releaseGroupId != null && (availability == Availability.Requestable || availability is Availability.OnServer ||
+            (availability is Availability.Partial && availability.requestable))
 
     private fun Availability.isInLibrary(): Boolean =
-        this is Availability.InLibrary || this is Availability.Partial
+        this is Availability.InLibrary || (this is Availability.Partial && !requestable)
 }

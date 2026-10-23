@@ -139,9 +139,18 @@ private fun AlbumAction(
             is Availability.InLibrary -> availability.libraryAlbumId?.let { id ->
                 FilledTonalButton(onClick = { onOpenLibrary(id) }) { Text(stringResource(R.string.browse_catalog_open_library)) }
             }
-            is Availability.Partial -> availability.libraryAlbumId?.let { id ->
-                FilledTonalButton(onClick = { onOpenLibrary(id) }) {
-                    Text(stringResource(R.string.browse_catalog_open_library_partial, availability.have, availability.expected))
+            is Availability.Partial -> {
+                if (availability.requestable) {
+                    Button(onClick = onRequest, enabled = !busy) {
+                        Icon(Icons.Rounded.LibraryAdd, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                        Text(stringResource(R.string.browse_action_request_album))
+                    }
+                }
+                availability.libraryAlbumId?.let { id ->
+                    FilledTonalButton(onClick = { onOpenLibrary(id) }) {
+                        Text(stringResource(R.string.browse_catalog_open_library_partial, availability.have, availability.expected))
+                    }
                 }
             }
             is Availability.OnServer -> Button(onClick = onRequest, enabled = !busy) {
