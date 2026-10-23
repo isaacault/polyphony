@@ -1,5 +1,6 @@
 package app.polyphony.core.requests
 
+import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogAlbumDetail
 import app.polyphony.core.domain.model.CatalogAlbumTrack
@@ -59,6 +60,14 @@ class ContinuoRequestRepository internal constructor(
 
     override suspend fun findArtist(server: Server, name: String): CatalogArtist? {
         val q = URLEncoder.encode(name.trim(), "UTF-8")
+        // continuo picks among same-name artists by what the library holds (MusicBrainz has four
+        // "Peach Pit"s). An older continuo doesn't have the route (404, or 400 from the artist page
+        // route taking "resolve" for an id): the plain name search stands in.
+        val resolved = client.get(server, "/v1/catalog/artists/resolve?name=$q")
+        if (resolved.code in 200..299) {
+            val dto = client.decode(ResolvedArtistDto.serializer(), resolved.body)
+            return CatalogArtist("mb:artist:${dto.musicBrainzArtistId}", dto.musicBrainzArtistId, dto.name, null, Availability.InLibrary(null))
+        }
         val reply = client.get(server, "/v1/search?q=$q&types=artist&limit=10")
         if (reply.code !in 200..299) throw client.serverError(reply, "continuo search failed")
         val wanted = sameName(name)
