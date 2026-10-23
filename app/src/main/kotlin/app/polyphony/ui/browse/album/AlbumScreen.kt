@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.MoreVert
@@ -39,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.ui.common.FilledStar
+import app.polyphony.ui.common.LibraryRemovalViewModel
 import app.polyphony.ui.common.RatingMenu
 import androidx.compose.foundation.layout.Box
 import app.polyphony.R
@@ -55,6 +57,7 @@ import app.polyphony.core.ui.components.TrackRow
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.core.ui.util.formatDurationLong
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.common.RemoveAlbumDialog
 import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.AddToPlaylistSheet
 import app.polyphony.ui.common.CollectionDownloadButton
@@ -76,6 +79,17 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
 
     val feedback by viewModel.feedback.collectAsStateWithLifecycle()
     var rateOpen by remember { mutableStateOf(false) }
+    val removal = hiltViewModel<LibraryRemovalViewModel>().removal
+    val canRemove by removal.canRemove.collectAsStateWithLifecycle()
+    var confirmRemove by remember { mutableStateOf(false) }
+    if (confirmRemove && album != null) {
+        RemoveAlbumDialog(
+            album = album,
+            // The album leaves this phone's library too, so its page closes behind it.
+            onConfirm = { confirmRemove = false; removal.remove(album); navigator.back() },
+            onDismiss = { confirmRemove = false },
+        )
+    }
     HeroScaffold(
         title = album?.name ?: "",
         listState = listState,
@@ -130,6 +144,13 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
                             text = { Text(stringResource(R.string.browse_action_go_to_artist)) },
                             leadingIcon = { Icon(Icons.Rounded.Person, null) },
                             onClick = { menuOpen = false; album.artistId?.let(navigator::openArtist) },
+                        )
+                    }
+                    if (canRemove) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.library_remove), color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = MaterialTheme.colorScheme.error) },
+                            onClick = { menuOpen = false; confirmRemove = true },
                         )
                     }
                 }

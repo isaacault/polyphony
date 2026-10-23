@@ -180,6 +180,46 @@ class ContinuoRequestRepositoryTest {
     }
 
     @Test
+    fun `an admin on a server with removal set up can remove albums`() = runTest {
+        val fake = FakeContinuo().apply {
+            routes["GET /v1/me"] = { _, _ -> 200 to """{"user":{"id":1,"username":"isaac","role":"admin"},"capabilities":["requests","library_removal"]}""" }
+        }
+        val account = repo(fake, FakeServers(server)).account(server)
+        assertEquals("isaac", account.username)
+        assertTrue(account.canRemoveAlbums)
+        assertEquals(false, account.copy(role = "user").canRemoveAlbums)
+        assertEquals(false, account.copy(capabilities = setOf("requests")).canRemoveAlbums)
+    }
+
+    @Test
+    fun `removing, listing and restoring albums`() = runTest {
+        val removed = """{"id":4,"kind":"album","title":"0","artist":"Ichiko Aoba","removedAt":"2026-10-23T10:00:00+00:00",
+          "removedBy":"isaac","restorableUntil":"2026-11-22T10:00:00+00:00","bytes":10,"ids":{"navidromeAlbumId":"nd-1"}}"""
+        val fake = FakeContinuo().apply {
+            routes["POST /v1/library/albums/nd-1/remove"] = { _, _ -> 200 to removed }
+            routes["GET /v1/library/removed"] = { _, _ -> 200 to "[$removed]" }
+            routes["POST /v1/library/removed/4/restore"] = { _, _ -> 200 to """{"restored":true}""" }
+            routes["POST /v1/library/albums/nd-2/remove"] = { _, _ ->
+                409 to """{"error":{"code":"shared_folder","message":"Another album shares this folder, so it can't be removed on its own."}}"""
+            }
+        }
+        val repo = repo(fake, FakeServers(server))
+        val out = repo.removeAlbum(server, "nd-1")
+        assertEquals(4L, out.id)
+        assertEquals("nd-1", out.libraryAlbumId)
+        assertTrue((out.restorableUntilMillis ?: 0) > (out.removedAtMillis ?: Long.MAX_VALUE))
+        assertEquals(listOf("0"), repo.removedAlbums(server).map { it.title })
+        repo.restoreAlbum(server, 4)
+        assertTrue(fake.seen.any { it.first.url.encodedPath == "/v1/library/removed/4/restore" })
+        try {
+            repo.removeAlbum(server, "nd-2")
+            fail("a refusal must surface")
+        } catch (e: ProviderException) {
+            assertTrue(e.message.orEmpty().contains("shares this folder"))
+        }
+    }
+
+    @Test
     fun `an artist without an id is found by name in the catalogue`() = runTest {
         val fake = FakeContinuo().apply {
             routes["GET /v1/search"] = { _, _ ->

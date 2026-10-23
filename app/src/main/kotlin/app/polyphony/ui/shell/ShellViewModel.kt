@@ -2,6 +2,7 @@ package app.polyphony.ui.shell
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.polyphony.core.domain.model.RemovedAlbum
 import app.polyphony.core.domain.playback.CastController
 import app.polyphony.core.domain.playback.CastState
 import app.polyphony.core.domain.playback.PlaybackController
@@ -12,8 +13,11 @@ import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.inbox.InboxBadges
 import app.polyphony.navigation.DeepLink
+import app.polyphony.ui.common.LibraryRemoval
+import app.polyphony.ui.common.RemovalEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -32,7 +36,13 @@ class ShellViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val requestRepository: RequestRepository,
     private val inboxBadges: InboxBadges,
+    private val libraryRemoval: LibraryRemoval,
 ) : ViewModel() {
+
+    /** Removals and restores finish here, whichever screen started them (continuo#23). */
+    val removalEvents: SharedFlow<RemovalEvent> = libraryRemoval.events
+
+    fun undoRemoval(album: RemovedAlbum) = libraryRemoval.restore(album)
 
     val playback: StateFlow<PlaybackState> = playbackController.state
     val cast: StateFlow<CastState> = castController.state

@@ -17,3 +17,24 @@ data class ContinuoDevice(
     /** The device making the call, i.e. this install. */
     val current: Boolean,
 )
+
+/** The continuo account this install is signed in as (`GET /v1/me`). */
+data class ContinuoAccount(
+    val username: String,
+    val role: String,
+    val capabilities: Set<String>,
+) {
+    /** Removing albums deletes music for everyone, so it's for admins on a server that has it set up. */
+    val canRemoveAlbums: Boolean get() = role == "admin" && "library_removal" in capabilities
+}
+
+/** An album removed from the library into continuo's media cache, restorable until [restorableUntilMillis]. */
+data class RemovedAlbum(
+    val id: Long,
+    val title: String,
+    val artist: String?,
+    val removedAtMillis: Long?,
+    val removedBy: String?,
+    val restorableUntilMillis: Long?,
+    val libraryAlbumId: String?,
+)

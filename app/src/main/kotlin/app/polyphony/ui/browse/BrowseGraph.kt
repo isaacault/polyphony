@@ -16,6 +16,7 @@ import app.polyphony.navigation.InboxRoute
 import app.polyphony.navigation.LibraryRoute
 import app.polyphony.navigation.PlaylistRoute
 import app.polyphony.navigation.PolyphonyNavigator
+import app.polyphony.navigation.RemovedAlbumsRoute
 import app.polyphony.navigation.RequestsRoute
 import app.polyphony.navigation.SearchRoute
 import app.polyphony.ui.browse.album.AlbumScreen
@@ -31,6 +32,7 @@ import app.polyphony.ui.browse.playlist.PlaylistScreen
 import app.polyphony.ui.browse.search.SearchScreen
 import app.polyphony.ui.downloads.DownloadsScreen
 import app.polyphony.ui.inbox.InboxScreen
+import app.polyphony.ui.requests.RemovedAlbumsScreen
 import app.polyphony.ui.requests.RequestsScreen
 
 /** Browse destinations: tabs plus every detail screen. Screens read [app.polyphony.navigation.LocalNavigator]. */
@@ -48,5 +50,6 @@ fun NavGraphBuilder.browseGraph(navigator: PolyphonyNavigator) {
     composable<AlbumListRoute> { AlbumListScreen() }
     composable<DownloadsRoute> { DownloadsScreen() }
     composable<RequestsRoute> { RequestsScreen() }
+    composable<RemovedAlbumsRoute> { RemovedAlbumsScreen() }
     composable<InboxRoute> { InboxScreen() }
 }

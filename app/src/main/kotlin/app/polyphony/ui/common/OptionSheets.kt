@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Info
@@ -34,6 +35,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -141,10 +143,21 @@ fun AlbumOptionsSheet(
     val navigator = LocalNavigator.current
     val haptics = LocalHapticFeedback.current
     var addToPlaylistIds by remember { mutableStateOf<List<String>?>(null) }
+    val removal = hiltViewModel<LibraryRemovalViewModel>().removal
+    val canRemove by removal.canRemove.collectAsStateWithLifecycle()
+    var confirmRemove by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { removal.recheck() }
 
     addToPlaylistIds?.let { ids ->
         AddToPlaylistSheet(trackIds = ids, onDismiss = { addToPlaylistIds = null; onDismiss() })
         return
+    }
+    if (confirmRemove) {
+        RemoveAlbumDialog(
+            album = album,
+            onConfirm = { confirmRemove = false; removal.remove(album); onDismiss() },
+            onDismiss = { confirmRemove = false },
+        )
     }
 
     OptionsSheet(
@@ -184,6 +197,12 @@ fun AlbumOptionsSheet(
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
             SheetItem(Icons.Rounded.Person, stringResource(R.string.browse_action_go_to_artist)) {
                 onDismiss(); album.artistId?.let(navigator::openArtist)
+            }
+        }
+        if (canRemove) {
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            SheetItem(Icons.Rounded.DeleteOutline, stringResource(R.string.library_remove), tint = MaterialTheme.colorScheme.error) {
+                confirmRemove = true
             }
         }
     }

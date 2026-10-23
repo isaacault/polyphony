@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Removing albums from a continuo server's library (continuo#23) -->
+    <string name="library_remove">Remove from library</string>
+    <string name="library_remove_title">Remove %1$s?</string>
+    <string name="library_remove_text">It leaves the library for everyone on this server. continuo stops Lidarr from downloading it again and keeps the files in its cache, where you can restore it for at least a week, and up to 30 days.</string>
+    <string name="library_remove_confirm">Remove</string>
+    <string name="library_removed">Removed %1$s</string>
+    <string name="library_undo">Undo</string>
+    <string name="library_restored">%1$s is back. It reappears once the server has rescanned.</string>
+    <string name="library_remove_failed">Couldn\'t remove the album: %1$s</string>
+    <string name="library_restore_failed">Couldn\'t restore the album: %1$s</string>
+    <string name="library_removed_title">Recently removed</string>
+    <string name="library_removed_summary">Albums removed from the library, still restorable</string>
+    <string name="library_removed_empty">Nothing removed recently.</string>
+    <string name="library_removed_failed">Couldn\'t load removed albums: %1$s</string>
+    <string name="library_removed_until">Restorable until %1$s</string>
+    <string name="library_restore">Restore</string>
+</resources>

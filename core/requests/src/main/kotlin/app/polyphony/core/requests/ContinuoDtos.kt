@@ -386,3 +386,35 @@ internal fun NotificationListDto.toDomain(since: Long) = app.polyphony.core.doma
     cursor = cursor ?: items.maxOfOrNull { it.id } ?: since,
     unreadCount = unreadCount,
 )
+
+// ---- account and library removal (continuo#23) ----
+
+@Serializable
+internal data class MeUserDto(val username: String = "", val role: String = "user")
+
+@Serializable
+internal data class MeDto(val user: MeUserDto = MeUserDto(), val capabilities: List<String> = emptyList())
+
+@Serializable
+internal data class RemovedIdsDto(val navidromeAlbumId: String? = null)
+
+@Serializable
+internal data class RemovedDto(
+    val id: Long,
+    val title: String? = null,
+    val artist: String? = null,
+    val removedAt: String? = null,
+    val removedBy: String? = null,
+    val restorableUntil: String? = null,
+    val ids: RemovedIdsDto? = null,
+)
+
+internal fun RemovedDto.toDomain() = app.polyphony.core.domain.model.RemovedAlbum(
+    id = id,
+    title = title.orEmpty(),
+    artist = artist,
+    removedAtMillis = parseTimestamp(removedAt),
+    removedBy = removedBy,
+    restorableUntilMillis = parseTimestamp(restorableUntil),
+    libraryAlbumId = ids?.navidromeAlbumId,
+)

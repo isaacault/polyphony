@@ -6,9 +6,11 @@ import app.polyphony.core.domain.model.CatalogAlbumTrack
 import app.polyphony.core.domain.model.CatalogArtist
 import app.polyphony.core.domain.model.CatalogArtistPage
 import app.polyphony.core.domain.model.CatalogResults
+import app.polyphony.core.domain.model.ContinuoAccount
 import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxPage
 import app.polyphony.core.domain.model.MusicRequest
+import app.polyphony.core.domain.model.RemovedAlbum
 import app.polyphony.core.domain.model.RequestAction
 import app.polyphony.core.domain.model.RequestEvent
 import app.polyphony.core.domain.model.RequestOutcome
@@ -153,6 +155,30 @@ class ContinuoRequestRepository internal constructor(
         }
         if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't do that")
         return runCatching { client.decode(ActionResultDto.serializer(), reply.body).message }.getOrNull().orEmpty()
+    }
+
+    override suspend fun account(server: Server): ContinuoAccount {
+        val reply = client.get(server, "/v1/me")
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't say who you are")
+        val me = client.decode(MeDto.serializer(), reply.body)
+        return ContinuoAccount(me.user.username, me.user.role, me.capabilities.toSet())
+    }
+
+    override suspend fun removeAlbum(server: Server, libraryAlbumId: String): RemovedAlbum {
+        val reply = client.post(server, "/v1/library/albums/${URLEncoder.encode(libraryAlbumId, "UTF-8")}/remove", "{}")
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't remove the album")
+        return client.decode(RemovedDto.serializer(), reply.body).toDomain()
+    }
+
+    override suspend fun removedAlbums(server: Server): List<RemovedAlbum> {
+        val reply = client.get(server, "/v1/library/removed")
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't list removed albums")
+        return client.decode(ListSerializer(RemovedDto.serializer()), reply.body).map { it.toDomain() }
+    }
+
+    override suspend fun restoreAlbum(server: Server, removedId: Long) {
+        val reply = client.post(server, "/v1/library/removed/$removedId/restore", "{}")
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't restore the album")
     }
 
     override suspend fun devices(server: Server): List<ContinuoDevice> {

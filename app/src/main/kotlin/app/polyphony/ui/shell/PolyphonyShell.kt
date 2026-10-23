@@ -16,10 +16,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -47,6 +50,7 @@ import app.polyphony.navigation.DeepLink
 import app.polyphony.navigation.PolyphonyNavHost
 import app.polyphony.navigation.PolyphonyNavigator
 import app.polyphony.navigation.Route
+import app.polyphony.ui.common.RemovalEvent
 import app.polyphony.ui.common.TrackSwipeScope
 import app.polyphony.ui.player.PlayerViewModel
 import kotlinx.coroutines.launch
@@ -114,6 +118,28 @@ fun PolyphonyShell(
     }
     val linkScope = rememberCoroutineScope()
     val missingServerText = stringResource(R.string.browse_link_server_missing)
+    val context = LocalContext.current
+    // Album removals outlive the sheet that started them: their outcome shows here, with Undo.
+    LaunchedEffect(shellViewModel) {
+        shellViewModel.removalEvents.collect { event ->
+            when (event) {
+                is RemovalEvent.Removed -> linkScope.launch {
+                    val result = snackbarHostState.showSnackbar(
+                        message = context.getString(R.string.library_removed, event.album.title),
+                        actionLabel = context.getString(R.string.library_undo),
+                        duration = SnackbarDuration.Long,
+                    )
+                    if (result == SnackbarResult.ActionPerformed) shellViewModel.undoRemoval(event.album)
+                }
+                is RemovalEvent.Restored -> linkScope.launch {
+                    snackbarHostState.showSnackbar(context.getString(R.string.library_restored, event.title))
+                }
+                is RemovalEvent.Failed -> linkScope.launch {
+                    snackbarHostState.showSnackbar(context.getString(event.text, event.detail), duration = SnackbarDuration.Long)
+                }
+            }
+        }
+    }
     // polyphony:// deep links, also fired by the launcher app shortcuts (see res/xml/shortcuts.xml)
     // and by continuo's "Ready to play" notifications.
     LaunchedEffect(deepLink) {

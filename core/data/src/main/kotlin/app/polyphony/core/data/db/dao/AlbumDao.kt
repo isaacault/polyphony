@@ -84,6 +84,9 @@ interface AlbumDao {
     @Query("DELETE FROM albums WHERE serverId = :serverId")
     suspend fun deleteByServer(serverId: String)
 
+    @Query("DELETE FROM albums WHERE serverId = :serverId AND id = :id")
+    suspend fun delete(serverId: String, id: String)
+
     @Query("SELECT COUNT(*) FROM albums WHERE serverId = :serverId")
     suspend fun count(serverId: String): Int
 }
