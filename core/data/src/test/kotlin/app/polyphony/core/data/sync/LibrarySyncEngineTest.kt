@@ -83,6 +83,19 @@ class LibrarySyncEngineTest {
     }
 
     @Test
+    fun `incremental sync re-reads an album retagged on the server`() = runTest {
+        val provider = FakeProvider(albumCount = 4, tracksPerAlbum = 2)
+        // Counts all match; al3's cached artist is the old name (the server now has none in the fake).
+        val cached = (1..4).associate { "al$it" to 2 }
+        val names = (1..4).associate { "al$it" to ("Album $it" to null) } + ("al3" to ("Album 3" to "青葉市子"))
+        val sink = RecordingSink(cached, names)
+
+        engine.run(provider, sink, generation = 4L, full = false) { _, _ -> }
+
+        assertEquals(listOf("al3"), provider.albumDetailCalls)
+    }
+
+    @Test
     fun `starred content is applied even when empty`() = runTest {
         val provider = FakeProvider(albumCount = 1, starred = StarredContent())
         val sink = RecordingSink()

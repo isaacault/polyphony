@@ -422,3 +422,7 @@ internal fun RemovedDto.toDomain() = app.polyphony.core.domain.model.RemovedAlbu
 /** `GET /v1/catalog/artists/resolve`: the catalogue artist a library artist without an id is. */
 @Serializable
 internal data class ResolvedArtistDto(val musicBrainzArtistId: String, val name: String = "")
+
+/** `GET /v1/library/artist-names`. */
+@Serializable
+internal data class ArtistNameDto(val name: String, val originalName: String? = null, val sortName: String? = null)

@@ -1,5 +1,6 @@
 package app.polyphony.inbox
 
+import app.polyphony.core.domain.model.ArtistName
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogAlbumDetail
 import app.polyphony.core.domain.model.CatalogArtist
@@ -46,6 +47,7 @@ class NewestNotificationsTest {
         override suspend fun catalogAlbum(server: Server, releaseGroupId: String): CatalogAlbumDetail = error("unused")
         override suspend fun findArtist(server: Server, name: String): CatalogArtist? = error("unused")
         override suspend fun account(server: Server): ContinuoAccount = error("unused")
+        override suspend fun artistNames(server: Server): List<ArtistName> = error("unused")
         override suspend fun removeAlbum(server: Server, libraryAlbumId: String): RemovedAlbum = error("unused")
         override suspend fun removedAlbums(server: Server): List<RemovedAlbum> = error("unused")
         override suspend fun restoreAlbum(server: Server, removedId: Long): Unit = error("unused")

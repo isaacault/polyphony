@@ -227,3 +227,5 @@ data class PlayHistoryEntity(
 
 /** Projection used by the sync engine to detect new / changed albums cheaply. */
 data class AlbumTrackCount(val id: String, val trackCount: Int)
+
+data class AlbumNameRow(val id: String, val name: String, val artistName: String?)
