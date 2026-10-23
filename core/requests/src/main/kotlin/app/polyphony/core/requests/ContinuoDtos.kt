@@ -99,6 +99,13 @@ internal data class TracklistDto(
 internal data class CreateRequestBody(val kind: String, val musicBrainzReleaseGroupId: String)
 
 @Serializable
+internal data class CreateTrackRequestBody(
+    val kind: String,
+    val musicBrainzRecordingId: String,
+    val musicBrainzReleaseGroupId: String,
+)
+
+@Serializable
 internal data class CreatedRequestDto(val id: Long)
 
 internal fun AvailabilityDto.toDomain(fallbackAlbumId: String?): Availability = when (state) {
@@ -171,6 +178,7 @@ internal fun HitDto.toCatalogTrack() = CatalogTrack(
     albumTitle = album?.title,
     albumReleaseGroupId = album?.musicBrainzReleaseGroupId,
     availability = availability.toDomain(album?.navidromeAlbumId),
+    recordingId = key.removePrefix("mb:rec:").takeIf { key.startsWith("mb:rec:") && it.isNotBlank() },
 )
 
 internal fun HitDto.toCatalogAlbum(artworkHost: String?) = CatalogAlbum(

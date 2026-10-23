@@ -70,6 +70,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.R
 import app.polyphony.core.domain.model.Album
+import app.polyphony.core.domain.model.CatalogTrack
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.ui.components.AlbumRow
 import app.polyphony.core.ui.components.ArtistRow
@@ -85,6 +86,7 @@ import app.polyphony.ui.browse.catalog.CatalogArtistRow
 import app.polyphony.ui.browse.catalog.CatalogRow
 import app.polyphony.ui.browse.catalog.PartialBadge
 import app.polyphony.ui.browse.LibraryFilterRow
+import app.polyphony.ui.browse.catalog.requestTrackLabel
 import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.AlbumOptionsSheet
 import app.polyphony.ui.common.OfflineModeBanner
@@ -294,9 +296,9 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             artworkUrl = null,
                             availability = track.availability,
                             releaseGroupId = track.albumReleaseGroupId,
-                            busy = track.albumReleaseGroupId in state.everything.requesting,
-                            requestLabel = stringResource(R.string.browse_action_request_album),
-                            onRequest = viewModel::request,
+                            busy = track.requestKeys.any { it in state.everything.requesting },
+                            requestLabel = stringResource(requestTrackLabel(track)),
+                            onRequest = { viewModel.requestTrack(track) },
                             onClick = track.albumReleaseGroupId?.let { rg -> { navigator.openCatalogAlbum(rg, track.albumTitle ?: track.title) } },
                         )
                     }
@@ -348,7 +350,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             )
                         }
                     }
-                    catalogTracks(state.everything, onRequest = viewModel::request, onOpen = navigator::openCatalogAlbum)
+                    catalogTracks(state.everything, onRequest = viewModel::requestTrack, onOpen = navigator::openCatalogAlbum)
                 }
                 if (state.showsEverything) everythingStatus(state.everything)
                 item(key = "remote") {
@@ -506,8 +508,8 @@ private fun LazyListScope.catalogAlbums(everything: EverythingUi, onRequest: (St
     }
 }
 
-/** Catalogue songs that aren't in the library; Request asks for the song's album. */
-private fun LazyListScope.catalogTracks(everything: EverythingUi, onRequest: (String) -> Unit, onOpen: (String, String) -> Unit) {
+/** Catalogue songs that aren't in the library; Request asks for the song (or, on an older server, its album). */
+private fun LazyListScope.catalogTracks(everything: EverythingUi, onRequest: (CatalogTrack) -> Unit, onOpen: (String, String) -> Unit) {
     items(everything.tracks, key = { "e-t-" + it.key }, contentType = { "everything" }) { track ->
         CatalogRow(
             title = track.title,
@@ -515,9 +517,9 @@ private fun LazyListScope.catalogTracks(everything: EverythingUi, onRequest: (St
             artworkUrl = null,
             availability = track.availability,
             releaseGroupId = track.albumReleaseGroupId,
-            busy = track.albumReleaseGroupId in everything.requesting,
-            requestLabel = stringResource(R.string.browse_action_request_album),
-            onRequest = onRequest,
+            busy = track.requestKeys.any { it in everything.requesting },
+            requestLabel = stringResource(requestTrackLabel(track)),
+            onRequest = { onRequest(track) },
             // A song opens its album: that's what can be requested.
             onClick = track.albumReleaseGroupId?.let { rg -> { onOpen(rg, track.albumTitle ?: track.title) } },
         )

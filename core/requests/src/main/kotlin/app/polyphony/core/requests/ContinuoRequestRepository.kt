@@ -93,8 +93,13 @@ class ContinuoRequestRepository internal constructor(
         )
     }
 
-    override suspend fun requestAlbum(server: Server, releaseGroupId: String): RequestOutcome {
-        val body = Json.encodeToString(CreateRequestBody.serializer(), CreateRequestBody("album", releaseGroupId))
+    override suspend fun requestTrack(server: Server, recordingId: String, albumReleaseGroupId: String): RequestOutcome =
+        sendRequest(server, Json.encodeToString(CreateTrackRequestBody.serializer(), CreateTrackRequestBody("track", recordingId, albumReleaseGroupId)))
+
+    override suspend fun requestAlbum(server: Server, releaseGroupId: String): RequestOutcome =
+        sendRequest(server, Json.encodeToString(CreateRequestBody.serializer(), CreateRequestBody("album", releaseGroupId)))
+
+    private suspend fun sendRequest(server: Server, body: String): RequestOutcome {
         val reply = client.post(server, "/v1/requests", body)
         return when {
             reply.code in 200..299 -> RequestOutcome.Requested(client.decode(CreatedRequestDto.serializer(), reply.body).id)

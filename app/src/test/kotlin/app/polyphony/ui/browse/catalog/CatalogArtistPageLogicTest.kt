@@ -24,6 +24,13 @@ class CatalogArtistPageLogicTest {
     }
 
     @Test
+    fun `a song requested on its own marks that song only`() {
+        val requested = mapOf("rec-1" to Availability.Requested(4, "requested"))
+        val out = CatalogArtistPageLogic.topTracks(listOf(track("a").copy(recordingId = "rec-1"), track("a")), requested)
+        assertEquals(listOf(Availability.Requested(4, "requested"), Availability.Requestable), out.map { it.availability })
+    }
+
+    @Test
     fun `the hero is the artist's picture, else the newest album cover`() {
         val albums = listOf(album("old", 1998, "old.jpg"), album("new", 2013, "new.jpg"), album("none", 2020, null))
         val page = CatalogArtistPage(CatalogArtist("k", "boc", "BoC", "boc.jpg", Availability.CatalogOnly), null, null, null, emptyList(), emptyList())

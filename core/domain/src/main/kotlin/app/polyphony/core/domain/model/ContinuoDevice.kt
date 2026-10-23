@@ -29,6 +29,9 @@ data class ContinuoAccount(
      * music folder is mounted and the account is allowed (every account, unless it keeps it to admins).
      */
     val canRemoveAlbums: Boolean get() = "library_removal" in capabilities
+
+    /** The server can fetch a single song (from Soulseek) instead of its whole album. */
+    val canRequestSongs: Boolean get() = "track_requests" in capabilities
 }
 
 /** An album removed from the library into continuo's media cache, restorable until [restorableUntilMillis]. */
