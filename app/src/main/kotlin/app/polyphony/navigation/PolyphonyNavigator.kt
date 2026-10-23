@@ -48,6 +48,7 @@ class PolyphonyNavigator(val navController: NavHostController) {
     fun openAlbumList(kind: AlbumListKind) = navController.navigate(AlbumListRoute(kind.name), singleTop)
     fun openDownloads() = navController.navigate(DownloadsRoute, singleTop)
     fun openRequests(focusId: Long? = null) = navController.navigate(RequestsRoute(focusId), singleTop)
+    fun openRemovedAlbums() = navController.navigate(RemovedAlbumsRoute, singleTop)
     fun openInbox() = navController.navigate(InboxRoute, singleTop)
 
     fun openSettings() = navController.navigate(SettingsRoute, singleTop)

@@ -106,6 +106,9 @@ interface TrackDao {
     @Query("DELETE FROM tracks WHERE serverId = :serverId")
     suspend fun deleteByServer(serverId: String)
 
+    @Query("DELETE FROM tracks WHERE serverId = :serverId AND albumId = :albumId")
+    suspend fun deleteByAlbum(serverId: String, albumId: String)
+
     @Query("SELECT COUNT(*) FROM tracks WHERE serverId = :serverId")
     suspend fun count(serverId: String): Int
 

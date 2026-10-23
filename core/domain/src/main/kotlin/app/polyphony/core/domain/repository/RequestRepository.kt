@@ -5,9 +5,11 @@ import app.polyphony.core.domain.model.CatalogAlbumDetail
 import app.polyphony.core.domain.model.CatalogArtist
 import app.polyphony.core.domain.model.CatalogArtistPage
 import app.polyphony.core.domain.model.CatalogResults
+import app.polyphony.core.domain.model.ContinuoAccount
 import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxPage
 import app.polyphony.core.domain.model.MusicRequest
+import app.polyphony.core.domain.model.RemovedAlbum
 import app.polyphony.core.domain.model.RequestAction
 import app.polyphony.core.domain.model.RequestEvent
 import app.polyphony.core.domain.model.RequestOutcome
@@ -46,6 +48,20 @@ interface RequestRepository {
 
     /** One catalogue album (MusicBrainz release group) with its availability and tracklist. */
     suspend fun catalogAlbum(server: Server, releaseGroupId: String): CatalogAlbumDetail
+
+    /** Who this install is signed in as, and what the server offers. */
+    suspend fun account(server: Server): ContinuoAccount
+
+    /**
+     * Remove library album [libraryAlbumId] from the server: continuo stops Lidarr from fetching it
+     * again and moves its files into its cache, where [restoreAlbum] can bring it back. Admins only.
+     */
+    suspend fun removeAlbum(server: Server, libraryAlbumId: String): RemovedAlbum
+
+    /** Removed albums still restorable, newest first. */
+    suspend fun removedAlbums(server: Server): List<RemovedAlbum>
+
+    suspend fun restoreAlbum(server: Server, removedId: Long)
 
     /** Request the album (MusicBrainz release group). */
     suspend fun requestAlbum(server: Server, releaseGroupId: String): RequestOutcome

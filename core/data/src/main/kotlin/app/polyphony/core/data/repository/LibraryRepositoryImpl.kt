@@ -498,6 +498,14 @@ class LibraryRepositoryImpl @Inject constructor(
 
     // ---------------------------------------------------------------- refresh
 
+    override suspend fun forgetAlbum(id: String) {
+        val sid = serverRepository.getActive()?.id ?: return
+        db.withTransaction {
+            trackDao.deleteByAlbum(sid, id)
+            albumDao.delete(sid, id)
+        }
+    }
+
     override suspend fun refreshArtist(id: String) {
         if (offlineMode()) return
         val detail = remote { it.getArtist(id) }

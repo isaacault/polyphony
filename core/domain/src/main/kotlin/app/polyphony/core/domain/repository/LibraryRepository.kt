@@ -109,6 +109,9 @@ interface LibraryRepository {
     /** Remote search for things not yet synced. */
     suspend fun searchRemote(query: String): SearchResults
 
+    /** Drop an album and its tracks from this phone's copy of the library (it left the server). */
+    suspend fun forgetAlbum(id: String)
+
     // ---- On-demand refresh from the server (fills the cache) ----
     suspend fun refreshArtist(id: String)
     suspend fun refreshAlbum(id: String)

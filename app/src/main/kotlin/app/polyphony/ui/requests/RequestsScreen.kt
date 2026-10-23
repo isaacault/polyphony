@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.LibraryAdd
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.RestoreFromTrash
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -58,6 +59,7 @@ import app.polyphony.core.ui.components.QualityBadge
 import app.polyphony.core.ui.components.listContentPadding
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.common.LibraryRemovalViewModel
 import app.polyphony.ui.inbox.InboxButton
 import app.polyphony.ui.shell.LocalSnackbarHostState
 
@@ -69,6 +71,7 @@ fun RequestsScreen(viewModel: RequestsViewModel = hiltViewModel()) {
     val snackbar = LocalSnackbarHostState.current
     val context = LocalContext.current
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val canRemove by hiltViewModel<LibraryRemovalViewModel>().removal.canRemove.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     var confirmRemove by remember { mutableStateOf<MusicRequest?>(null) }
 
@@ -101,6 +104,11 @@ fun RequestsScreen(viewModel: RequestsViewModel = hiltViewModel()) {
                     },
                     actions = {
                         if (state.linked) InboxButton()
+                        if (canRemove) {
+                            IconButton(onClick = { navigator.openRemovedAlbums() }) {
+                                Icon(Icons.Rounded.RestoreFromTrash, contentDescription = stringResource(R.string.library_removed_title))
+                            }
+                        }
                         IconButton(onClick = viewModel::reload) {
                             Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.requests_action_refresh))
                         }
