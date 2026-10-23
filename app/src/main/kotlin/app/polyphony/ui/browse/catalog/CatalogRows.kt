@@ -171,6 +171,7 @@ internal fun CatalogAlbum.asAlbum() = Album(id = key, serverId = "", name = titl
 
 /** The tonal status chip for a hit that's already under way. */
 internal fun availabilityLabel(availability: Availability): Int? = when (availability) {
+    is Availability.OnServer -> R.string.browse_availability_on_server
     is Availability.Requested -> when (availability.state) {
         "searching" -> if (availability.stillLooking) R.string.browse_availability_still_looking else R.string.browse_availability_searching
         "downloading" -> R.string.browse_availability_downloading

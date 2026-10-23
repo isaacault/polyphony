@@ -181,14 +181,17 @@
     <string name="browse_search_try_everything">Nothing in your synced library. Search everything to find it and request it.</string>
     <string name="browse_search_no_results_everything">Nothing matched on the server or in the catalogue.</string>
     <string name="browse_action_request">Request</string>
+    <string name="browse_action_add">Add to library</string>
     <string name="browse_action_request_album">Request album</string>
     <string name="browse_request_sent">Requested. You\'ll be notified when it\'s ready to play.</string>
     <string name="browse_request_already">Already requested.</string>
     <string name="browse_request_in_library">That\'s already in your library.</string>
+    <string name="browse_request_added">Added to your library.</string>
     <string name="browse_request_failed">Couldn\'t request it: %1$s</string>
     <string name="browse_request_sign_in">Sign in to continuo again (Settings → Servers) to request music.</string>
     <!-- availability chips on Everything results -->
     <string name="browse_availability_requested">Requested</string>
+    <string name="browse_availability_on_server">On the server</string>
     <string name="browse_availability_searching">Searching</string>
     <string name="browse_availability_still_looking">Still looking</string>
     <string name="browse_availability_downloading">Downloading</string>

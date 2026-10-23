@@ -55,6 +55,7 @@ class EverythingSectionTest {
     fun `only requestable hits with a release group get a Request button`() {
         assertTrue(EverythingSection.canRequest(Availability.Requestable, "rg"))
         assertFalse(EverythingSection.canRequest(Availability.Requestable, null))
+        assertTrue("on the server: the request adds it", EverythingSection.canRequest(Availability.OnServer("s-1"), "rg"))
         assertFalse(EverythingSection.canRequest(Availability.Requested(1, "searching"), "rg"))
         assertFalse(EverythingSection.canRequest(Availability.CatalogOnly, "rg"))
     }

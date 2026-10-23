@@ -257,12 +257,15 @@ class ContinuoRequestRepositoryTest {
            "ids":{"musicBrainzReleaseGroupId":"geo","navidromeAlbumId":"nd-1"},"availability":{"state":"in_library","navidromeAlbumId":"nd-1"}},
           {"kind":"album","key":"mb:rg:in","title":"In a Beautiful Place Out in the Country","year":2000,"albumType":"EP",
            "artwork":{"url":"https://music-api.example.com/v1/artwork?src=y"},
-           "ids":{"musicBrainzReleaseGroupId":"in"},"availability":{"state":"requestable"}}
+           "ids":{"musicBrainzReleaseGroupId":"in"},"availability":{"state":"requestable"}},
+          {"kind":"album","key":"mb:rg:mh","title":"Music Has the Right to Children","year":1998,"albumType":"Album",
+           "ids":{"musicBrainzReleaseGroupId":"mh"},"availability":{"state":"on_server","storeAlbumId":"s-mh","trackCount":18}}
         ]"""
         val fake = FakeContinuo().apply { routes["GET /v1/catalog/artists/boc/albums"] = { _, _ -> 200 to body } }
         val albums = repo(fake, FakeServers(server)).artistAlbums(server, "boc")
 
-        assertEquals(listOf("geo", "in"), albums.map { it.releaseGroupId })
+        assertEquals(listOf("geo", "in", "mh"), albums.map { it.releaseGroupId })
+        assertEquals(Availability.OnServer("s-mh"), albums[2].availability)
         assertEquals(Availability.InLibrary("nd-1"), albums[0].availability)
         assertEquals("EP", albums[1].albumType)
         assertEquals(Availability.Requestable, albums[1].availability)
@@ -331,6 +334,11 @@ class ContinuoRequestRepositoryTest {
             409 to """{"error":{"code":"in_library","message":"x","retryable":false,"navidromeAlbumId":"nd-9"}}"""
         }
         assertEquals(RequestOutcome.InLibrary("nd-9"), repo.requestAlbum(server, "th"))
+
+        fake.routes["POST /v1/requests"] = { _, _ ->
+            409 to """{"error":{"code":"added_to_library","message":"x","retryable":false,"storeAlbumId":"s-9"}}"""
+        }
+        assertEquals(RequestOutcome.Added, repo.requestAlbum(server, "th"))
 
         fake.routes["POST /v1/requests"] = { _, _ -> 502 to """{"error":{"code":"lidarr_unavailable","message":"Lidarr is down."}}""" }
         try {

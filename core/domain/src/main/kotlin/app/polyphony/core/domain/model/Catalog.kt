@@ -14,6 +14,12 @@ sealed interface Availability {
     /** Partly in the library: [have] of [expected] tracks. */
     data class Partial(val have: Int, val expected: Int, val libraryAlbumId: String?) : Availability
 
+    /**
+     * On the server but not in this account's own library (another account has it). Requesting
+     * it adds it at once: nothing downloads. [storeAlbumId] is continuo's id for it.
+     */
+    data class OnServer(val storeAlbumId: String) : Availability
+
     /** Not in the library and not requested: can be requested. */
     data object Requestable : Availability
 
@@ -102,6 +108,9 @@ sealed interface RequestOutcome {
     data class Requested(val requestId: Long) : RequestOutcome
     data class AlreadyRequested(val requestId: Long?) : RequestOutcome
     data class InLibrary(val libraryAlbumId: String?) : RequestOutcome
+
+    /** It was on the server, so continuo put it straight into this account's library. */
+    data object Added : RequestOutcome
 }
 
 /**

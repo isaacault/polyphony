@@ -66,6 +66,7 @@ internal data class AvailabilityDto(
     val stillLooking: Boolean = false,
     val have: Int? = null,
     val expected: Int? = null,
+    val storeAlbumId: String? = null,
 )
 
 @Serializable
@@ -104,6 +105,7 @@ internal fun AvailabilityDto.toDomain(fallbackAlbumId: String?): Availability = 
     "in_library", "album_in_library" -> Availability.InLibrary(navidromeAlbumId ?: fallbackAlbumId)
     "partial" -> Availability.Partial(have ?: 0, expected ?: 0, navidromeAlbumId ?: fallbackAlbumId)
     "requestable" -> Availability.Requestable
+    "on_server" -> storeAlbumId?.let { Availability.OnServer(it) } ?: Availability.Requestable
     "catalog" -> Availability.CatalogOnly
     // requested | searching | downloading | importing | scanning | needs_attention, and any state
     // a newer server adds: something is under way, so never offer to request it again.
