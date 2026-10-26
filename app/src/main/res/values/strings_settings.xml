@@ -110,6 +110,9 @@
     <string name="settings_appearance_grid_columns">Grid columns</string>
     <string name="settings_appearance_track_numbers">Show track numbers</string>
     <string name="settings_appearance_track_numbers_summary">In album track lists, instead of artwork</string>
+    <string name="settings_appearance_rating_style">Ratings on songs</string>
+    <string name="settings_appearance_rating_compact">★4</string>
+    <string name="settings_appearance_rating_stars">★★★★☆</string>
     <string name="settings_appearance_preview_primary">Primary</string>
     <string name="settings_appearance_preview_secondary">Secondary</string>
     <string name="settings_appearance_preview_tertiary">Tertiary</string>

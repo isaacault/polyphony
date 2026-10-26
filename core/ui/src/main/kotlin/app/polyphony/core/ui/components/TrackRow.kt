@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,9 +36,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.polyphony.core.domain.model.Track
+import app.polyphony.core.domain.repository.RatingStyle
 import app.polyphony.core.ui.theme.ArtworkShapes
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.core.ui.util.formatDuration
+
+/** How star ratings show on track rows (Appearance → Ratings on songs); provided at the app root. */
+val LocalRatingStyle = staticCompositionLocalOf { RatingStyle.COMPACT }
 
 /**
  * A dense track row. Shows artwork (or the track number inside an album) and
@@ -155,20 +161,7 @@ fun TrackRow(
         }
         if (showRating && track.rating > 0) {
             Spacer(Modifier.width(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.Star,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(14.dp),
-                )
-                Text(
-                    text = track.rating.coerceIn(1, 5).toString(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.semantics { contentDescription = "Rated ${track.rating.coerceIn(1, 5)} of 5" },
-                )
-            }
+            RatingMark(track.rating.coerceIn(1, 5), LocalRatingStyle.current)
         }
         if (isDownloaded) {
             Spacer(Modifier.width(8.dp))
@@ -192,6 +185,31 @@ fun TrackRow(
         }
         // Options are reached by long-press (see combinedClickable above); no overflow button.
         Spacer(Modifier.width(Dimens.itemSpacing))
+    }
+}
+
+/** A song's star rating, just before its duration: ★4, or five small stars with [stars] filled. */
+@Composable
+private fun RatingMark(stars: Int, style: RatingStyle) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "Rated $stars of 5" },
+    ) {
+        when (style) {
+            RatingStyle.COMPACT -> {
+                Icon(Icons.Rounded.Star, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
+                     modifier = Modifier.size(14.dp))
+                Text(stars.toString(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
+            RatingStyle.STARS -> repeat(5) { i ->
+                Icon(
+                    imageVector = if (i < stars) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                    contentDescription = null,
+                    tint = if (i < stars) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                    modifier = Modifier.size(12.dp),
+                )
+            }
+        }
     }
 }
 
