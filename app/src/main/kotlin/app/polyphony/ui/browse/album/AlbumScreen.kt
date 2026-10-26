@@ -167,6 +167,8 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
             else -> {
                 val groups = remember(state.tracks) { state.tracks.groupBy { it.discNumber ?: 1 }.toSortedMap() }
                 val multiDisc = groups.size > 1
+                // Shown once in the header; a track's own chip only where it differs.
+                val albumQuality = remember(state.tracks) { AlbumTrackDetails.albumQuality(state.tracks) }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
@@ -195,6 +197,7 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
                                 if (count > 0) add(pluralStringResource(R.plurals.browse_count_songs, count, count))
                                 val duration = state.totalDurationMs.takeIf { it > 0 } ?: album.durationMs
                                 if (duration > 0) add(formatDurationLong(duration))
+                                albumQuality?.let { add(it) }
                             }.joinToString(" · "),
                             belowTitle = {
                                 PlayShuffleButtons(
@@ -235,7 +238,15 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
                                     isCurrent = track.id == state.currentTrackId,
                                     isPlaying = state.isPlaying,
                                     showArtwork = !state.showTrackNumbers,
-                                    subtitle = if (track.artistName != null && track.artistName != album.artistName) track.artistName else null,
+                                    // Only what the page doesn't already say: who's featured on this one.
+                                    subtitle = when (val credit = AlbumTrackDetails.credit(track, album.artistName)) {
+                                        is AlbumTrackDetails.Credit.Featuring -> stringResource(R.string.browse_track_featuring, credit.names)
+                                        is AlbumTrackDetails.Credit.Other -> credit.artist
+                                        null -> null
+                                    },
+                                    fallbackSubtitle = false,
+                                    qualityLabel = AlbumTrackDetails.trackQuality(track, albumQuality),
+                                    showFavourite = true,
                                     isDownloaded = track.id in downloadedIds,
                                     onLongClick = { trackForOptions = track },
                                     onMoreClick = { trackForOptions = track },

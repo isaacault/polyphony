@@ -31,7 +31,10 @@ feel physical. Everything below is a rule unless marked "prefer".
 
 - Lists are `LazyColumn`/`LazyVerticalGrid` with stable `key`s and `contentType`s.
 - Track rows: 56 dp artwork (or track number when inside an album), title (1 line), subtitle
-  "artist · album" (1 line), trailing duration. Long-press opens the options sheet; there is no
+  "artist · album" (1 line), trailing duration. On an album page a row says only what the page
+  doesn't: featured artists ("ft. Future", none when the title already names them; a
+  compilation's track artist), a quality chip only where the track differs from the album
+  (whose quality is in the header), and a small heart on favourites. Long-press opens the options sheet; there is no
   overflow button. Explicit/lossless badges are small tonal chips. The playing track shows an
   animated equaliser glyph instead of its number.
 - Song rows outside the queue are wrapped in `TrackSwipeRow`: each physical direction runs the
