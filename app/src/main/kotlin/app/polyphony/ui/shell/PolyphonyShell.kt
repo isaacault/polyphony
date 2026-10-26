@@ -50,6 +50,7 @@ import app.polyphony.navigation.DeepLink
 import app.polyphony.navigation.PolyphonyNavHost
 import app.polyphony.navigation.PolyphonyNavigator
 import app.polyphony.navigation.Route
+import app.polyphony.ui.common.PlayNowEvent
 import app.polyphony.ui.common.RemovalEvent
 import app.polyphony.ui.common.TrackSwipeScope
 import app.polyphony.ui.player.PlayerViewModel
@@ -136,6 +137,36 @@ fun PolyphonyShell(
                 }
                 is RemovalEvent.Failed -> linkScope.launch {
                     snackbarHostState.showSnackbar(context.getString(event.text, event.detail), duration = SnackbarDuration.Long)
+                }
+            }
+        }
+    }
+    // Play now (continuo#12): finding a copy, then playing it with Keep, or Request when nobody has it.
+    LaunchedEffect(shellViewModel) {
+        shellViewModel.playNowEvents.collect { event ->
+            snackbarHostState.currentSnackbarData?.dismiss()
+            linkScope.launch {
+                when (event) {
+                    is PlayNowEvent.Finding -> snackbarHostState.showSnackbar(
+                        context.getString(R.string.playnow_finding, event.title), duration = SnackbarDuration.Indefinite)
+                    is PlayNowEvent.Playing -> {
+                        val result = snackbarHostState.showSnackbar(
+                            message = context.getString(R.string.playnow_playing, event.title),
+                            actionLabel = context.getString(R.string.playnow_keep),
+                            duration = SnackbarDuration.Long,
+                        )
+                        if (result == SnackbarResult.ActionPerformed) shellViewModel.keepPlayNow(event.streamId, event.title)
+                    }
+                    is PlayNowEvent.Kept -> snackbarHostState.showSnackbar(context.getString(R.string.playnow_kept, event.title))
+                    is PlayNowEvent.Failed -> {
+                        val track = event.track
+                        val result = snackbarHostState.showSnackbar(
+                            message = context.getString(R.string.playnow_failed, event.title),
+                            actionLabel = track?.let { context.getString(R.string.playnow_request) },
+                            duration = SnackbarDuration.Long,
+                        )
+                        if (result == SnackbarResult.ActionPerformed && track != null) shellViewModel.requestInstead(track)
+                    }
                 }
             }
         }

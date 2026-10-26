@@ -50,6 +50,7 @@ import app.polyphony.core.ui.theme.ArtworkShapes
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.navigation.PolyphonyNavigator
+import app.polyphony.ui.common.PlayNowViewModel
 import app.polyphony.ui.shell.LocalSnackbarHostState
 
 /**
@@ -59,6 +60,8 @@ import app.polyphony.ui.shell.LocalSnackbarHostState
  */
 @Composable
 fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
+    val playNow = hiltViewModel<PlayNowViewModel>().playNow
+    val canPlayNow by playNow.available.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
     val snackbar = LocalSnackbarHostState.current
@@ -138,6 +141,8 @@ fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
                         onRequest = { viewModel.requestTrack(track) },
                         onClick = when {
                             inLibrary != null -> ({ navigator.openAlbum(inLibrary) })
+                            // Play now (continuo#12): a song you don't have plays when tapped.
+                            canPlayNow && track.recordingId != null -> ({ playNow.play(track) })
                             track.albumReleaseGroupId != null -> ({ navigator.openCatalogAlbum(track.albumReleaseGroupId!!, track.albumTitle ?: track.title) })
                             else -> null
                         },

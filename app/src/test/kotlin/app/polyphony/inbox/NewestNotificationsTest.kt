@@ -11,12 +11,14 @@ import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxNotification
 import app.polyphony.core.domain.model.InboxPage
 import app.polyphony.core.domain.model.MusicRequest
+import app.polyphony.core.domain.model.PlayNowStream
 import app.polyphony.core.domain.model.RemovedAlbum
 import app.polyphony.core.domain.model.RequestAction
 import app.polyphony.core.domain.model.RequestEvent
 import app.polyphony.core.domain.model.RequestOutcome
 import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.model.ServerType
+import app.polyphony.core.domain.model.StreamRequest
 import app.polyphony.core.domain.repository.RequestRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.test.runTest
@@ -54,6 +56,10 @@ class NewestNotificationsTest {
         override suspend fun catalogArtist(server: Server, artistMbid: String): CatalogArtistPage? = error("unused")
         override suspend fun requestAlbum(server: Server, releaseGroupId: String): RequestOutcome = error("unused")
         override suspend fun requestTrack(server: Server, recordingId: String, albumReleaseGroupId: String): RequestOutcome = error("unused")
+        override suspend fun startPlayNow(server: Server, recordingId: String, albumReleaseGroupId: String?, title: String, artist: String, durationMs: Long?): PlayNowStream = error("unused")
+        override suspend fun playNowStatus(server: Server, streamId: String): PlayNowStream = error("unused")
+        override suspend fun keepPlayNow(server: Server, streamId: String) = error("unused")
+        override suspend fun playNowStream(server: Server, streamId: String): StreamRequest = error("unused")
         override suspend fun requests(server: Server, activeOnly: Boolean): List<MusicRequest> = error("unused")
         override fun events(server: Server): Flow<RequestEvent> = error("unused")
         override suspend fun perform(server: Server, requestId: Long, action: RequestAction): String = error("unused")

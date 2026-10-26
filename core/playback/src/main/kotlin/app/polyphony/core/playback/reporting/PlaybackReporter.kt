@@ -1,5 +1,6 @@
 package app.polyphony.core.playback.reporting
 
+import app.polyphony.core.domain.model.PlayNowIds
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.playback.engine.ServerLookup
@@ -25,13 +26,15 @@ class PlaybackReporter(
     private var startedAt: Long = 0L
 
     fun onTrackStarted(track: Track?) {
-        current = track
+        // A Play now song (continuo#12) isn't a Navidrome song: there's nothing to report it as.
+        current = track?.takeIf { PlayNowIds.streamId(it.id) == null }
         playedMs = 0L
         reported = false
         startedAt = System.currentTimeMillis()
-        if (track == null || !enabled) return
+        val reportable = current ?: return
+        if (!enabled) return
         scope.launch(Dispatchers.IO) {
-            runCatching { serverLookup.awaitProvider(track.serverId)?.reportNowPlaying(track.id) }
+            runCatching { serverLookup.awaitProvider(reportable.serverId)?.reportNowPlaying(reportable.id) }
         }
     }
 

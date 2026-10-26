@@ -2,6 +2,7 @@ package app.polyphony.ui.shell
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.polyphony.core.domain.model.CatalogTrack
 import app.polyphony.core.domain.model.RemovedAlbum
 import app.polyphony.core.domain.playback.CastController
 import app.polyphony.core.domain.playback.CastState
@@ -14,6 +15,8 @@ import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.inbox.InboxBadges
 import app.polyphony.navigation.DeepLink
 import app.polyphony.ui.common.LibraryRemoval
+import app.polyphony.ui.common.PlayNow
+import app.polyphony.ui.common.PlayNowEvent
 import app.polyphony.ui.common.RemovalEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -37,7 +40,15 @@ class ShellViewModel @Inject constructor(
     private val requestRepository: RequestRepository,
     private val inboxBadges: InboxBadges,
     private val libraryRemoval: LibraryRemoval,
+    private val playNow: PlayNow,
 ) : ViewModel() {
+
+    /** Play now outcomes (continuo#12), wherever the song was tapped. */
+    val playNowEvents: SharedFlow<PlayNowEvent> = playNow.events
+
+    fun keepPlayNow(streamId: String, title: String) = playNow.keep(streamId, title)
+
+    fun requestInstead(track: CatalogTrack) = playNow.request(track)
 
     /** Removals and restores finish here, whichever screen started them (continuo#23). */
     val removalEvents: SharedFlow<RemovalEvent> = libraryRemoval.events
