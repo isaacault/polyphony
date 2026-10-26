@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,7 +49,13 @@ fun TrackRow(
     showArtwork: Boolean = true,
     trackNumber: Int? = null,
     subtitle: String? = null,
+    /** Without a [subtitle], show "artist · album"; off where the page already says both (an album). */
+    fallbackSubtitle: Boolean = true,
     showQualityBadge: Boolean = true,
+    /** The quality chip's text; defaults to the track's own (FLAC, HI-RES). */
+    qualityLabel: String? = qualityBadgeLabel(track),
+    /** A small heart on a favourited track. */
+    showFavourite: Boolean = false,
     showDuration: Boolean = true,
     /** Shows a small check-circle before the duration when the track is available offline. */
     isDownloaded: Boolean = false,
@@ -112,18 +119,31 @@ fun TrackRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (showQualityBadge) {
-                    qualityBadgeLabel(track)?.let { QualityBadge(it) }
+            val badge = qualityLabel?.takeIf { showQualityBadge }
+            val line = subtitle ?: if (fallbackSubtitle) defaultSubtitle(track) else null
+            if (badge != null || line != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    badge?.let { QualityBadge(it) }
+                    line?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
-                Text(
-                    text = subtitle ?: defaultSubtitle(track),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
             }
+        }
+        if (showFavourite && track.starred) {
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                imageVector = Icons.Rounded.Favorite,
+                contentDescription = "Favourite",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp),
+            )
         }
         if (isDownloaded) {
             Spacer(Modifier.width(8.dp))

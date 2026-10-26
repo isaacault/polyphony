@@ -184,6 +184,7 @@
     <string name="browse_action_add">Add to library</string>
     <string name="browse_action_request_album">Request album</string>
     <string name="browse_action_request_song">Request song</string>
+    <string name="browse_track_featuring">ft. %1$s</string>
     <string name="browse_request_sent">Requested. You\'ll be notified when it\'s ready to play.</string>
     <string name="browse_request_song_sent">Requested the song. You\'ll be notified when it\'s ready to play.</string>
     <string name="browse_request_already">Already requested.</string>
