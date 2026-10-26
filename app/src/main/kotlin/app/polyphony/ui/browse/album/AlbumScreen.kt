@@ -246,7 +246,6 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
                                     },
                                     fallbackSubtitle = false,
                                     qualityLabel = AlbumTrackDetails.trackQuality(track, albumQuality),
-                                    showFavourite = true,
                                     isDownloaded = track.id in downloadedIds,
                                     onLongClick = { trackForOptions = track },
                                     onMoreClick = { trackForOptions = track },

@@ -116,6 +116,7 @@ fun FavoritesScreen(viewModel: FavoritesViewModel = hiltViewModel()) {
                                         onClick = { viewModel.playTrack(list.indexOf(track)) },
                                         isCurrent = track.id == playback.currentTrack?.id,
                                         isPlaying = playback.isPlaying,
+                                        showFavourite = false,   // every row here is one
                                         onLongClick = { trackForOptions = track },
                                         onMoreClick = { trackForOptions = track },
                                     )

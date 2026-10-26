@@ -305,7 +305,7 @@ private fun QueueRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = listOfNotNull(track.displayArtist, track.albumName).joinToString(" · "),
+                    text = track.displayArtist,   // the artwork already says which album
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

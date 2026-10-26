@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,6 +28,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,13 +52,18 @@ fun TrackRow(
     showArtwork: Boolean = true,
     trackNumber: Int? = null,
     subtitle: String? = null,
-    /** Without a [subtitle], show "artist · album"; off where the page already says both (an album). */
+    /**
+     * Without a [subtitle], show the artist (and the album too when there's no artwork to show
+     * it); off where the page already says who it's by (an album, an artist's top songs).
+     */
     fallbackSubtitle: Boolean = true,
     showQualityBadge: Boolean = true,
     /** The quality chip's text; defaults to the track's own (FLAC, HI-RES). */
     qualityLabel: String? = qualityBadgeLabel(track),
-    /** A small heart on a favourited track. */
-    showFavourite: Boolean = false,
+    /** A small heart on a track you've favourited (off where every row is one). */
+    showFavourite: Boolean = true,
+    /** Your star rating of the track, where set: ★4. */
+    showRating: Boolean = true,
     showDuration: Boolean = true,
     /** Shows a small check-circle before the duration when the track is available offline. */
     isDownloaded: Boolean = false,
@@ -120,7 +128,7 @@ fun TrackRow(
                 overflow = TextOverflow.Ellipsis,
             )
             val badge = qualityLabel?.takeIf { showQualityBadge }
-            val line = subtitle ?: if (fallbackSubtitle) defaultSubtitle(track) else null
+            val line = subtitle ?: if (fallbackSubtitle) defaultSubtitle(track, withAlbum = !showArtwork) else null
             if (badge != null || line != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     badge?.let { QualityBadge(it) }
@@ -144,6 +152,23 @@ fun TrackRow(
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(14.dp),
             )
+        }
+        if (showRating && track.rating > 0) {
+            Spacer(Modifier.width(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Star,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(14.dp),
+                )
+                Text(
+                    text = track.rating.coerceIn(1, 5).toString(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.semantics { contentDescription = "Rated ${track.rating.coerceIn(1, 5)} of 5" },
+                )
+            }
         }
         if (isDownloaded) {
             Spacer(Modifier.width(8.dp))
@@ -192,8 +217,9 @@ fun qualityBadgeLabel(track: Track): String? = when {
     else -> null
 }
 
-private fun defaultSubtitle(track: Track): String {
+// The artwork already says which album it is.
+private fun defaultSubtitle(track: Track, withAlbum: Boolean): String {
     val artist = track.displayArtist
     val album = track.albumName
-    return if (album.isNullOrBlank()) artist else "$artist · $album"
+    return if (!withAlbum || album.isNullOrBlank()) artist else "$artist · $album"
 }
