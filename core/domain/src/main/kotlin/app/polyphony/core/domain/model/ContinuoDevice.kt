@@ -32,6 +32,9 @@ data class ContinuoAccount(
 
     /** The server can fetch a single song (from Soulseek) instead of its whole album. */
     val canRequestSongs: Boolean get() = "track_requests" in capabilities
+
+    /** The server can fetch a song you don't have and play it while it downloads (continuo#12). */
+    val canPlayNow: Boolean get() = "play_now" in capabilities
 }
 
 /** An album removed from the library into continuo's media cache, restorable until [restorableUntilMillis]. */

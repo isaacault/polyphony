@@ -10,12 +10,14 @@ import app.polyphony.core.domain.model.ContinuoAccount
 import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxPage
 import app.polyphony.core.domain.model.MusicRequest
+import app.polyphony.core.domain.model.PlayNowStream
 import app.polyphony.core.domain.model.RemovedAlbum
 import app.polyphony.core.domain.model.RequestAction
 import app.polyphony.core.domain.model.RequestEvent
 import app.polyphony.core.domain.model.RequestOutcome
 import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.model.ServerOptions
+import app.polyphony.core.domain.model.StreamRequest
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -66,6 +68,24 @@ interface RequestRepository {
 
     /** Library artists known by another name than their original, for showing and searching both. */
     suspend fun artistNames(server: Server): List<ArtistName>
+
+    /** Start fetching a song to play now (continuo#12); poll [playNowStatus] until it's playable. */
+    suspend fun startPlayNow(
+        server: Server,
+        recordingId: String,
+        albumReleaseGroupId: String?,
+        title: String,
+        artist: String,
+        durationMs: Long?,
+    ): PlayNowStream
+
+    suspend fun playNowStatus(server: Server, streamId: String): PlayNowStream
+
+    /** Keep a played-now song: continuo files its copy into your library (nothing downloads again). */
+    suspend fun keepPlayNow(server: Server, streamId: String)
+
+    /** Where the player fetches a Play now song's audio, with this install's authorisation. */
+    suspend fun playNowStream(server: Server, streamId: String): StreamRequest
 
     /** Request just this song (MusicBrainz recording) of the album [albumReleaseGroupId]. */
     suspend fun requestTrack(server: Server, recordingId: String, albumReleaseGroupId: String): RequestOutcome

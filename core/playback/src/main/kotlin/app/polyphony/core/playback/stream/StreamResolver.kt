@@ -3,8 +3,10 @@ package app.polyphony.core.playback.stream
 import android.net.Uri
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.ResolvingDataSource
+import app.polyphony.core.domain.model.PlayNowIds
 import app.polyphony.core.domain.repository.DownloadRepository
 import app.polyphony.core.domain.repository.LibraryRepository
+import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.transcode.TranscodeProfile
 import app.polyphony.core.domain.transcode.TranscodeDecision
@@ -37,6 +39,7 @@ class StreamResolver @Inject constructor(
     private val engine: TranscodeDecisionEngine,
     private val downloadRepository: DownloadRepository,
     private val settingsRepository: SettingsRepository,
+    private val requestRepository: RequestRepository,
 ) : ResolvingDataSource.Resolver {
 
     /** Session memory of transcodes this server could not deliver. */
@@ -64,6 +67,7 @@ class StreamResolver @Inject constructor(
     @Throws(IOException::class)
     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
         val (serverId, trackId) = MediaItemFactory.parseUri(dataSpec.uri) ?: return dataSpec
+        PlayNowIds.streamId(trackId)?.let { return resolvePlayNow(serverId, trackId, it, dataSpec) }
         val track = queueStore.get(trackId)
             ?: runBlocking { runCatching { libraryRepository.getTrack(trackId) }.getOrNull() }
             ?: throw IOException("Unknown track $trackId")
@@ -87,6 +91,24 @@ class StreamResolver @Inject constructor(
             .setUri(Uri.parse(request.url))
             .setHttpRequestHeaders(dataSpec.httpRequestHeaders + request.headers)
             .setKey("$trackId|${decision.profile.fingerprint}")
+            .build()
+    }
+
+    /**
+     * A Play now song (continuo#12): continuo serves it while it downloads, untranscoded; the
+     * request carries this install's continuo authorisation.
+     */
+    private fun resolvePlayNow(serverId: String, trackId: String, streamId: String, dataSpec: DataSpec): DataSpec {
+        val provider = serverLookup.providerFor(serverId)
+            ?: runBlocking { serverLookup.awaitProvider(serverId) }
+            ?: throw IOException("Unknown server $serverId")
+        val request = runBlocking { runCatching { requestRepository.playNowStream(provider.server, streamId) }.getOrNull() }
+            ?: throw IOException("continuo can't serve $trackId")
+        record(trackId, TranscodeDecision(TranscodeProfile.ORIGINAL, TranscodeDecision.Reason.DEFAULT))
+        return dataSpec.buildUpon()
+            .setUri(Uri.parse(request.url))
+            .setHttpRequestHeaders(dataSpec.httpRequestHeaders + request.headers)
+            .setKey("$trackId|playnow")
             .build()
     }
 

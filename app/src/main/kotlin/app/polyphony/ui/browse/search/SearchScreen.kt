@@ -87,6 +87,7 @@ import app.polyphony.ui.browse.catalog.CatalogRow
 import app.polyphony.ui.browse.catalog.PartialBadge
 import app.polyphony.ui.browse.LibraryFilterRow
 import app.polyphony.ui.browse.catalog.requestTrackLabel
+import app.polyphony.ui.common.PlayNowViewModel
 import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.AlbumOptionsSheet
 import app.polyphony.ui.common.OfflineModeBanner
@@ -97,6 +98,10 @@ import app.polyphony.ui.shell.LocalSnackbarHostState
 @Composable
 fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Play now (continuo#12): a song you don't have plays when tapped, where the server can.
+    val playNow = hiltViewModel<PlayNowViewModel>().playNow
+    val canPlayNow by playNow.available.collectAsStateWithLifecycle()
+    val playSong: ((CatalogTrack) -> Unit)? = if (canPlayNow) playNow::play else null
     val genres by viewModel.genreNames.collectAsStateWithLifecycle()
     val years by viewModel.yearRange.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.current
@@ -299,7 +304,8 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             busy = track.requestKeys.any { it in state.everything.requesting },
                             requestLabel = stringResource(requestTrackLabel(track)),
                             onRequest = { viewModel.requestTrack(track) },
-                            onClick = track.albumReleaseGroupId?.let { rg -> { navigator.openCatalogAlbum(rg, track.albumTitle ?: track.title) } },
+                            onClick = playSong?.takeIf { track.recordingId != null }?.let { play -> { play(track) } }
+                                ?: track.albumReleaseGroupId?.let { rg -> { navigator.openCatalogAlbum(rg, track.albumTitle ?: track.title) } },
                         )
                     }
                 }
@@ -350,7 +356,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             )
                         }
                     }
-                    catalogTracks(state.everything, onRequest = viewModel::requestTrack, onOpen = navigator::openCatalogAlbum)
+                    catalogTracks(state.everything, onRequest = viewModel::requestTrack, onOpen = navigator::openCatalogAlbum, onPlay = playSong)
                 }
                 if (state.showsEverything) everythingStatus(state.everything)
                 item(key = "remote") {
@@ -509,7 +515,12 @@ private fun LazyListScope.catalogAlbums(everything: EverythingUi, onRequest: (St
 }
 
 /** Catalogue songs that aren't in the library; Request asks for the song (or, on an older server, its album). */
-private fun LazyListScope.catalogTracks(everything: EverythingUi, onRequest: (CatalogTrack) -> Unit, onOpen: (String, String) -> Unit) {
+private fun LazyListScope.catalogTracks(
+    everything: EverythingUi,
+    onRequest: (CatalogTrack) -> Unit,
+    onOpen: (String, String) -> Unit,
+    onPlay: ((CatalogTrack) -> Unit)? = null,
+) {
     items(everything.tracks, key = { "e-t-" + it.key }, contentType = { "everything" }) { track ->
         CatalogRow(
             title = track.title,
@@ -520,8 +531,9 @@ private fun LazyListScope.catalogTracks(everything: EverythingUi, onRequest: (Ca
             busy = track.requestKeys.any { it in everything.requesting },
             requestLabel = stringResource(requestTrackLabel(track)),
             onRequest = { onRequest(track) },
-            // A song opens its album: that's what can be requested.
-            onClick = track.albumReleaseGroupId?.let { rg -> { onOpen(rg, track.albumTitle ?: track.title) } },
+            // A song plays now where the server can (continuo#12), else opens its album.
+            onClick = onPlay?.takeIf { track.recordingId != null }?.let { play -> { play(track) } }
+                ?: track.albumReleaseGroupId?.let { rg -> { onOpen(rg, track.albumTitle ?: track.title) } },
         )
     }
 }

@@ -6,6 +6,7 @@ import app.polyphony.core.domain.model.CatalogArtist
 import app.polyphony.core.domain.model.CatalogArtistPage
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.CatalogTrack
+import app.polyphony.core.domain.model.PlayNowStream
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -98,6 +99,30 @@ internal data class TracklistDto(
 
 @Serializable
 internal data class CreateRequestBody(val kind: String, val musicBrainzReleaseGroupId: String)
+
+@Serializable
+internal data class PlayNowBody(
+    val musicBrainzRecordingId: String,
+    val musicBrainzReleaseGroupId: String? = null,
+    val title: String,
+    val artist: String,
+    val durationMs: Long? = null,
+)
+
+@Serializable
+internal data class PlayNowDto(
+    val id: String,
+    val status: String = "searching",
+    val playable: Boolean = false,
+    val percent: Double = 0.0,
+    val title: String? = null,
+    val artist: String? = null,
+    val durationMs: Long? = null,
+    val format: String? = null,
+    val error: String? = null,
+) {
+    fun toDomain() = PlayNowStream(id, status, playable, percent, title.orEmpty(), artist, durationMs, format, error)
+}
 
 @Serializable
 internal data class CreateTrackRequestBody(

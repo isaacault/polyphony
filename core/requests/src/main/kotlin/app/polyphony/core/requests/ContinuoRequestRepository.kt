@@ -12,11 +12,13 @@ import app.polyphony.core.domain.model.ContinuoAccount
 import app.polyphony.core.domain.model.ContinuoDevice
 import app.polyphony.core.domain.model.InboxPage
 import app.polyphony.core.domain.model.MusicRequest
+import app.polyphony.core.domain.model.PlayNowStream
 import app.polyphony.core.domain.model.RemovedAlbum
 import app.polyphony.core.domain.model.RequestAction
 import app.polyphony.core.domain.model.RequestEvent
 import app.polyphony.core.domain.model.RequestOutcome
 import app.polyphony.core.domain.model.Server
+import app.polyphony.core.domain.model.StreamRequest
 import app.polyphony.core.domain.provider.ProviderException
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
@@ -92,6 +94,36 @@ class ContinuoRequestRepository internal constructor(
             tracks = hit.tracks.map { CatalogAlbumTrack(it.position, it.discNumber, it.title, it.durationMs) },
         )
     }
+
+    override suspend fun startPlayNow(
+        server: Server,
+        recordingId: String,
+        albumReleaseGroupId: String?,
+        title: String,
+        artist: String,
+        durationMs: Long?,
+    ): PlayNowStream {
+        val body = Json.encodeToString(PlayNowBody.serializer(), PlayNowBody(recordingId, albumReleaseGroupId, title, artist, durationMs))
+        val reply = client.post(server, "/v1/play-now", body)
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't play that song")
+        return client.decode(PlayNowDto.serializer(), reply.body).toDomain()
+    }
+
+    override suspend fun playNowStatus(server: Server, streamId: String): PlayNowStream {
+        val reply = client.get(server, "/v1/play-now/${URLEncoder.encode(streamId, "UTF-8")}")
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo lost that song")
+        return client.decode(PlayNowDto.serializer(), reply.body).toDomain()
+    }
+
+    override suspend fun keepPlayNow(server: Server, streamId: String) {
+        val reply = client.post(server, "/v1/play-now/${URLEncoder.encode(streamId, "UTF-8")}/keep", "{}")
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't keep that song")
+    }
+
+    override suspend fun playNowStream(server: Server, streamId: String): StreamRequest = StreamRequest(
+        url = server.baseUrl.trimEnd('/') + "/v1/play-now/${URLEncoder.encode(streamId, "UTF-8")}/audio",
+        headers = mapOf("Authorization" to "Bearer ${client.accessToken(server, force = false)}"),
+    )
 
     override suspend fun requestTrack(server: Server, recordingId: String, albumReleaseGroupId: String): RequestOutcome =
         sendRequest(server, Json.encodeToString(CreateTrackRequestBody.serializer(), CreateTrackRequestBody("track", recordingId, albumReleaseGroupId)))

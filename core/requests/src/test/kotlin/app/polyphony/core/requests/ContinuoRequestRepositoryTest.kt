@@ -362,6 +362,30 @@ class ContinuoRequestRepositoryTest {
     }
 
     @Test
+    fun `play now starts, reports when playable, keeps, and streams with the session`() = runTest {
+        val fake = FakeContinuo()
+        val repo = repo(fake, FakeServers(server))
+        fake.routes["POST /v1/play-now"] = { _, _ -> 201 to """{"id":"s1","status":"searching","playable":false,"percent":0,"title":"Visit Croatia","artist":"Alabaster dePlume"}""" }
+        val started = repo.startPlayNow(server, "rec-1", "rg-1", "Visit Croatia", "Alabaster dePlume", 230_000)
+        assertEquals("s1", started.id)
+        assertEquals(false, started.playable)
+        val sent = fake.seen.last { it.first.url.encodedPath == "/v1/play-now" }.second!!
+        assertTrue(sent.contains("\"musicBrainzRecordingId\":\"rec-1\"") && sent.contains("\"title\":\"Visit Croatia\""))
+
+        fake.routes["GET /v1/play-now/s1"] = { _, _ -> 200 to """{"id":"s1","status":"streaming","playable":true,"percent":12.5,"title":"Visit Croatia","format":"flac"}""" }
+        val status = repo.playNowStatus(server, "s1")
+        assertTrue(status.playable)
+        assertEquals("flac", status.format)
+
+        fake.routes["POST /v1/play-now/s1/keep"] = { _, _ -> 200 to """{"id":9}""" }
+        repo.keepPlayNow(server, "s1")
+
+        val stream = repo.playNowStream(server, "s1")
+        assertTrue(stream.url.endsWith("/v1/play-now/s1/audio"))
+        assertTrue(stream.headers["Authorization"]!!.startsWith("Bearer "))
+    }
+
+    @Test
     fun `a server without a stored session can't search`() = runTest {
         val bare = server.copy(options = mapOf(ServerOptions.CONTINUO to "true"))
         try {
