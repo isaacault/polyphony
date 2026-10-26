@@ -61,6 +61,7 @@ import app.polyphony.core.ui.components.TrackRow
 import app.polyphony.core.ui.theme.ArtworkShapes
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.browse.album.AlbumTrackDetails
 import app.polyphony.ui.browse.catalog.CatalogAlbumCard
 import app.polyphony.ui.browse.catalog.CatalogNote
 import app.polyphony.ui.browse.catalog.Discography
@@ -205,7 +206,14 @@ fun ArtistScreen(viewModel: ArtistViewModel = hiltViewModel()) {
                                     onClick = { viewModel.playTopTrack(state.topTracks.indexOf(track)) },
                                     isCurrent = track.id == state.currentTrackId,
                                     isPlaying = state.isPlaying,
-                                    subtitle = track.albumName,
+                                    // The page says whose songs these are and the artwork which album:
+                                    // only who else is on it.
+                                    subtitle = when (val credit = AlbumTrackDetails.credit(track, artist?.name)) {
+                                        is AlbumTrackDetails.Credit.Featuring -> stringResource(R.string.browse_track_featuring, credit.names)
+                                        is AlbumTrackDetails.Credit.Other -> credit.artist
+                                        null -> null
+                                    },
+                                    fallbackSubtitle = false,
                                     isDownloaded = track.id in downloadedIds,
                                     onLongClick = { trackForOptions = track },
                                     onMoreClick = { trackForOptions = track },
