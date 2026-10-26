@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
@@ -13,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.core.domain.repository.AppSettings
 import app.polyphony.core.domain.repository.SettingsRepository
+import app.polyphony.core.ui.components.LocalRatingStyle
 import app.polyphony.core.ui.theme.PolyphonyTheme
 import app.polyphony.inbox.InboxScheduler
 import app.polyphony.ui.PolyphonyApp
@@ -56,11 +58,13 @@ class MainActivity : ComponentActivity() {
                 seedColor = Color(current.appearance.accentSeedArgb),
                 pureBlack = current.appearance.pureBlack,
             ) {
-                PolyphonyApp(
-                    onboardingComplete = current.onboardingComplete,
-                    deepLink = link,
-                    onDeepLinkConsumed = { deepLink.value = null },
-                )
+                CompositionLocalProvider(LocalRatingStyle provides current.appearance.ratingStyle) {
+                    PolyphonyApp(
+                        onboardingComplete = current.onboardingComplete,
+                        deepLink = link,
+                        onDeepLinkConsumed = { deepLink.value = null },
+                    )
+                }
             }
         }
     }

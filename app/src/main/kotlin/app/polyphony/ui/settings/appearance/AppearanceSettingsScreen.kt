@@ -56,6 +56,7 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import app.polyphony.core.domain.repository.LibraryLayout
 import app.polyphony.core.domain.repository.PlayerArtworkStyle
+import app.polyphony.core.domain.repository.RatingStyle
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.ThemeMode
 import app.polyphony.core.domain.repository.TrackSwipeAction
@@ -255,6 +256,15 @@ fun AppearanceSettingsScreen(viewModel: AppearanceViewModel = hiltViewModel()) {
                 summary = stringResource(R.string.settings_appearance_track_numbers_summary),
                 checked = s.showTrackNumbers,
                 onCheckedChange = { on -> viewModel.update { it.copy(showTrackNumbers = on) } },
+            )
+            SegmentedPreference(
+                title = stringResource(R.string.settings_appearance_rating_style),
+                options = listOf(
+                    ListOption(RatingStyle.COMPACT, stringResource(R.string.settings_appearance_rating_compact)),
+                    ListOption(RatingStyle.STARS, stringResource(R.string.settings_appearance_rating_stars)),
+                ),
+                selected = s.ratingStyle,
+                onSelected = { style -> viewModel.update { it.copy(ratingStyle = style) } },
             )
         }
     }

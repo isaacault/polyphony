@@ -32,6 +32,10 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 @Serializable
 enum class PlayerArtworkStyle { ROUNDED, SQUARE, CIRCLE }
 
+/** How a song's star rating shows on its row: ★4, or all five stars with the rating filled. */
+@Serializable
+enum class RatingStyle { COMPACT, STARS }
+
 /** How a library collection is laid out. */
 @Serializable
 enum class LibraryLayout { LIST, GRID }
@@ -61,6 +65,7 @@ data class AppearanceSettings(
     val gridColumns: Int = 0,
     val playerArtworkStyle: PlayerArtworkStyle = PlayerArtworkStyle.ROUNDED,
     val showTrackNumbers: Boolean = true,
+    val ratingStyle: RatingStyle = RatingStyle.COMPACT,
     val blurredPlayerBackground: Boolean = true,
     /** Per-collection layout in the Library and "see all" lists. */
     val artistsLayout: LibraryLayout = LibraryLayout.LIST,
