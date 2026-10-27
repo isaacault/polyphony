@@ -565,6 +565,25 @@ class PlaybackService : MediaLibraryService() {
                 }
             }
             if (!loadFailure || player.isRemotePlayback()) return
+            // A Play now song (continuo#12) that caught up with its download: the next bytes are
+            // still coming from Soulseek. Wait for them and carry on where it was, instead of
+            // treating it as a broken stream.
+            if (PlayNowIds.streamId(trackId) != null) {
+                if (retryTrackId != trackId) { retryTrackId = trackId; retryCount = 0 }
+                if (retryCount < PLAY_NOW_WAITS) {
+                    retryCount++
+                    Log.i(TAG, "Play now song is ahead of its download; waiting (${retryCount}/$PLAY_NOW_WAITS)")
+                    retryJob?.cancel()
+                    retryJob = scope.launch {
+                        delay(PLAY_NOW_WAIT_MS)
+                        if (player.currentMediaItem?.mediaId == trackId && player.playbackState == Player.STATE_IDLE) reloadCurrentItem()
+                    }
+                    return
+                }
+                Log.w(TAG, "Play now song's download stopped; giving up on it")
+                if (player.hasNextMediaItem()) { player.seekToNextMediaItem(); player.prepare(); player.play() }
+                return
+            }
             // Transient failures (network hand-over, server hiccup): retry the same stream with a
             // short back-off before concluding anything about the server.
             if (retryTrackId != trackId) { retryTrackId = trackId; retryCount = 0 }
@@ -856,6 +875,9 @@ class PlaybackService : MediaLibraryService() {
     companion object {
         private const val TAG = "PlaybackService"
         private const val MAX_LOAD_RETRIES = 2
+        /** A Play now song ahead of its download waits up to 3 minutes for it, every 3 s. */
+        private const val PLAY_NOW_WAITS = 60
+        private const val PLAY_NOW_WAIT_MS = 3_000L
         private const val SLOW_RETRY_ATTEMPTS = 12
         private const val SLOW_RETRY_INTERVAL_MS = 15_000L
         const val SESSION_ID = "polyphony"
