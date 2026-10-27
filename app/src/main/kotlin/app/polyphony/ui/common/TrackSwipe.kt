@@ -36,6 +36,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.polyphony.R
+import app.polyphony.core.domain.model.Availability
+import app.polyphony.core.domain.model.CatalogTrack
 import app.polyphony.core.domain.model.ItemKind
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.PlaybackController
@@ -230,8 +232,8 @@ fun TrackSwipeRow(
     }
     val config = host.config.value
     val downloaded = track.id in host.downloadedIds.value
-    val leftToRight = swipeSpec(config.leftToRight, track, downloaded, config.usesRatings)
-    val rightToLeft = swipeSpec(config.rightToLeft, track, downloaded, config.usesRatings)
+    val leftToRight = swipeSpec(config.leftToRight, track.starred, downloaded, config.usesRatings)
+    val rightToLeft = swipeSpec(config.rightToLeft, track.starred, downloaded, config.usesRatings)
     SwipeActionRow(
         leftToRight = leftToRight,
         rightToLeft = rightToLeft,
@@ -244,8 +246,46 @@ fun TrackSwipeRow(
     )
 }
 
+/**
+ * Swipe actions on a song you don't have (polyphony#164): Add to queue and Play next queue it
+ * through Play now, which fetches it in turn; the other actions are about songs in the library, so
+ * a direction set to one of them stays still, as if set to Nothing. No swipes where the server
+ * can't play songs you don't have, nor on a song whose album is already yours.
+ */
 @Composable
-private fun swipeSpec(action: TrackSwipeAction, track: Track, downloaded: Boolean, usesRatings: Boolean): SwipeActionSpec? {
+fun CatalogSwipeRow(
+    track: CatalogTrack,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surface,
+    content: @Composable () -> Unit,
+) {
+    val host = LocalTrackSwipe.current
+    val playNow = hiltViewModel<PlayNowViewModel>().playNow
+    val available by playNow.available.collectAsStateWithLifecycle()
+    // A song that's yours (its album is in the library) opens there instead.
+    if (host == null || !available || track.recordingId == null || track.availability is Availability.InLibrary) {
+        Box(modifier) { content() }
+        return
+    }
+    val config = host.config.value
+    val leftToRight = config.leftToRight.takeIf { it.queues() }
+    val rightToLeft = config.rightToLeft.takeIf { it.queues() }
+    SwipeActionRow(
+        leftToRight = leftToRight?.let { swipeSpec(it, starred = false, downloaded = false, usesRatings = false) },
+        rightToLeft = rightToLeft?.let { swipeSpec(it, starred = false, downloaded = false, usesRatings = false) },
+        onLeftToRight = { leftToRight?.let { playNow.queue(track, next = it == TrackSwipeAction.PLAY_NEXT) } },
+        onRightToLeft = { rightToLeft?.let { playNow.queue(track, next = it == TrackSwipeAction.PLAY_NEXT) } },
+        modifier = modifier,
+        containerColor = containerColor,
+        onThresholdCrossed = { host.haptics.thresholdActivate() },
+        content = content,
+    )
+}
+
+private fun TrackSwipeAction.queues() = this == TrackSwipeAction.ADD_TO_QUEUE || this == TrackSwipeAction.PLAY_NEXT
+
+@Composable
+private fun swipeSpec(action: TrackSwipeAction, starred: Boolean, downloaded: Boolean, usesRatings: Boolean): SwipeActionSpec? {
     val scheme = MaterialTheme.colorScheme
     return when (action) {
         TrackSwipeAction.NONE -> null
@@ -264,7 +304,7 @@ private fun swipeSpec(action: TrackSwipeAction, track: Track, downloaded: Boolea
         TrackSwipeAction.TOGGLE_FAVORITE -> if (usesRatings) spec(
             Icons.Rounded.Star, stringResource(R.string.feedback_swipe_rate),
             scheme.tertiaryContainer, scheme.onTertiaryContainer,
-        ) else if (track.starred) spec(
+        ) else if (starred) spec(
             Icons.Rounded.FavoriteBorder, stringResource(R.string.browse_swipe_unfavorite),
             scheme.tertiaryContainer, scheme.onTertiaryContainer,
         ) else spec(

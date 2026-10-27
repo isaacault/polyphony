@@ -53,6 +53,7 @@ import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.navigation.PolyphonyNavigator
 import app.polyphony.ui.common.CatalogSongSheet
+import app.polyphony.ui.common.CatalogSwipeRow
 import app.polyphony.ui.common.PlayNowViewModel
 import app.polyphony.ui.shell.LocalSnackbarHostState
 
@@ -134,24 +135,27 @@ fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
                 item(key = "top-header") { SectionHeader(title = stringResource(R.string.browse_artist_top_songs)) }
                 items(visible, key = { "top-" + it.key }, contentType = { "catalog-track" }) { track ->
                     val inLibrary = (track.availability as? Availability.InLibrary)?.libraryAlbumId
-                    CatalogRow(
-                        title = track.title,
-                        subtitle = track.albumTitle,
-                        artworkUrl = null,
-                        availability = track.availability,
-                        releaseGroupId = track.albumReleaseGroupId,
-                        busy = track.requestKeys.any { it in state.requesting },
-                        requestLabel = stringResource(requestTrackLabel(track)),
-                        onRequest = { viewModel.requestTrack(track) },
-                        onClick = when {
-                            inLibrary != null -> ({ navigator.openAlbum(inLibrary) })
-                            // Play now (continuo#12): a song you don't have plays when tapped.
-                            canPlayNow && track.recordingId != null -> ({ playNow.play(track) })
-                            track.albumReleaseGroupId != null -> ({ navigator.openCatalogAlbum(track.albumReleaseGroupId!!, track.albumTitle ?: track.title) })
-                            else -> null
-                        },
-                        onLongClick = if (inLibrary == null) ({ songForOptions = track }) else null,
-                    )
+                    // Swipes queue it through Play now (polyphony#164).
+                    CatalogSwipeRow(track) {
+                        CatalogRow(
+                            title = track.title,
+                            subtitle = track.albumTitle,
+                            artworkUrl = null,
+                            availability = track.availability,
+                            releaseGroupId = track.albumReleaseGroupId,
+                            busy = track.requestKeys.any { it in state.requesting },
+                            requestLabel = stringResource(requestTrackLabel(track)),
+                            onRequest = { viewModel.requestTrack(track) },
+                            onClick = when {
+                                inLibrary != null -> ({ navigator.openAlbum(inLibrary) })
+                                // Play now (continuo#12): a song you don't have plays when tapped.
+                                canPlayNow && track.recordingId != null -> ({ playNow.play(track) })
+                                track.albumReleaseGroupId != null -> ({ navigator.openCatalogAlbum(track.albumReleaseGroupId!!, track.albumTitle ?: track.title) })
+                                else -> null
+                            },
+                            onLongClick = if (inLibrary == null) ({ songForOptions = track }) else null,
+                        )
+                    }
                 }
                 if (state.topTracks.size > 5) {
                     item(key = "top-more") {

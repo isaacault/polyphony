@@ -41,6 +41,10 @@ feel physical. Everything below is a rule unless marked "prefer".
   filled (Appearance → Ratings on songs). Long-press opens the options sheet; there is no
   overflow button. Explicit/lossless badges are small tonal chips. The playing track shows an
   animated equaliser glyph instead of its number.
+- Rows of songs you don't have (catalogue search, artist and album pages) are wrapped in
+  `CatalogSwipeRow`: Add to queue and Play next queue them through Play now; a direction set to
+  any other action stays still there. Long-press opens their sheet (Play now, Play next, Add to
+  queue, Go to album).
 - Song rows outside the queue are wrapped in `TrackSwipeRow`: each physical direction runs the
   action from Appearance → Gestures (default left-to-right adds to the queue). The row follows
   the finger with a rubber band, commits at ~30 % of the width or on a fling, then springs home;

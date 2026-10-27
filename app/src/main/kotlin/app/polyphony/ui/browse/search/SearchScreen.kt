@@ -88,6 +88,7 @@ import app.polyphony.ui.browse.catalog.PartialBadge
 import app.polyphony.ui.browse.LibraryFilterRow
 import app.polyphony.ui.browse.catalog.requestTrackLabel
 import app.polyphony.ui.common.CatalogSongSheet
+import app.polyphony.ui.common.CatalogSwipeRow
 import app.polyphony.ui.common.PlayNowViewModel
 import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.AlbumOptionsSheet
@@ -297,19 +298,21 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                         }
                     }
                     items(top.catalogTracks, key = { "tet-" + it.key }, contentType = { "everything" }) { track ->
-                        CatalogRow(
-                            title = track.title,
-                            subtitle = typed(R.string.browse_search_type_song, track.artist),
-                            artworkUrl = null,
-                            availability = track.availability,
-                            releaseGroupId = track.albumReleaseGroupId,
-                            busy = track.requestKeys.any { it in state.everything.requesting },
-                            requestLabel = stringResource(requestTrackLabel(track)),
-                            onRequest = { viewModel.requestTrack(track) },
-                            onClick = playSong?.takeIf { track.recordingId != null }?.let { play -> { play(track) } }
-                                ?: track.albumReleaseGroupId?.let { rg -> { navigator.openCatalogAlbum(rg, track.albumTitle ?: track.title) } },
-                            onLongClick = { songForOptions = track },
-                        )
+                        CatalogSwipeRow(track) {
+                            CatalogRow(
+                                title = track.title,
+                                subtitle = typed(R.string.browse_search_type_song, track.artist),
+                                artworkUrl = null,
+                                availability = track.availability,
+                                releaseGroupId = track.albumReleaseGroupId,
+                                busy = track.requestKeys.any { it in state.everything.requesting },
+                                requestLabel = stringResource(requestTrackLabel(track)),
+                                onRequest = { viewModel.requestTrack(track) },
+                                onClick = playSong?.takeIf { track.recordingId != null }?.let { play -> { play(track) } }
+                                    ?: track.albumReleaseGroupId?.let { rg -> { navigator.openCatalogAlbum(rg, track.albumTitle ?: track.title) } },
+                                onLongClick = { songForOptions = track },
+                            )
+                        }
                     }
                 }
                 // Then by type: artists, albums, playlists, songs; yours first, best matches first.
@@ -534,20 +537,22 @@ private fun LazyListScope.catalogTracks(
     onOptions: ((CatalogTrack) -> Unit)? = null,
 ) {
     items(everything.tracks, key = { "e-t-" + it.key }, contentType = { "everything" }) { track ->
-        CatalogRow(
-            title = track.title,
-            subtitle = listOfNotNull(track.artist, track.albumTitle).joinToString(" · ").ifBlank { null },
-            artworkUrl = null,
-            availability = track.availability,
-            releaseGroupId = track.albumReleaseGroupId,
-            busy = track.requestKeys.any { it in everything.requesting },
-            requestLabel = stringResource(requestTrackLabel(track)),
-            onRequest = { onRequest(track) },
-            // A song plays now where the server can (continuo#12), else opens its album.
-            onClick = onPlay?.takeIf { track.recordingId != null }?.let { play -> { play(track) } }
-                ?: track.albumReleaseGroupId?.let { rg -> { onOpen(rg, track.albumTitle ?: track.title) } },
-            onLongClick = onOptions?.let { options -> { options(track) } },
-        )
+        CatalogSwipeRow(track) {
+            CatalogRow(
+                title = track.title,
+                subtitle = listOfNotNull(track.artist, track.albumTitle).joinToString(" · ").ifBlank { null },
+                artworkUrl = null,
+                availability = track.availability,
+                releaseGroupId = track.albumReleaseGroupId,
+                busy = track.requestKeys.any { it in everything.requesting },
+                requestLabel = stringResource(requestTrackLabel(track)),
+                onRequest = { onRequest(track) },
+                // A song plays now where the server can (continuo#12), else opens its album.
+                onClick = onPlay?.takeIf { track.recordingId != null }?.let { play -> { play(track) } }
+                    ?: track.albumReleaseGroupId?.let { rg -> { onOpen(rg, track.albumTitle ?: track.title) } },
+                onLongClick = onOptions?.let { options -> { options(track) } },
+            )
+        }
     }
 }
 
