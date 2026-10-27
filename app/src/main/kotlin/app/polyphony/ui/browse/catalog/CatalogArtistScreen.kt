@@ -140,7 +140,7 @@ fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
                         CatalogRow(
                             title = track.title,
                             subtitle = track.albumTitle,
-                            artworkUrl = null,
+                            artworkUrl = track.artworkUrl,
                             availability = track.availability,
                             releaseGroupId = track.albumReleaseGroupId,
                             busy = track.requestKeys.any { it in state.requesting },
