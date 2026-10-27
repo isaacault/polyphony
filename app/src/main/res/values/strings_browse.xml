@@ -194,6 +194,10 @@
     <string name="playnow_request">Request</string>
     <string name="playnow_keep_in_library">Keep in your library</string>
     <string name="playnow_kept_short">Kept</string>
+    <string name="playnow_status_queued">Waiting its turn</string>
+    <string name="playnow_status_searching">Finding a copy…</string>
+    <string name="playnow_status_downloading">Downloading %1$d%%</string>
+    <string name="playnow_status_failed">Couldn\'t fetch it</string>
     <string name="playnow_queued_next">%1$s plays next; fetching it from Soulseek</string>
     <string name="playnow_queued_end">Added %1$s to the queue; fetching it from Soulseek</string>
     <string name="playnow_action_play">Play now</string>

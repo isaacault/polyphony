@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import app.polyphony.core.domain.model.Feedback
 import app.polyphony.core.domain.model.ItemKind
 import app.polyphony.core.domain.model.Lyrics
+import app.polyphony.core.domain.model.PlayNowIds
+import app.polyphony.core.domain.model.PlayNowStream
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.CastController
@@ -18,6 +20,7 @@ import app.polyphony.core.domain.repository.AppearanceSettings
 import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.ProviderRegistry
+import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.playback.stream.StreamResolver
@@ -63,6 +66,7 @@ class PlayerViewModel @Inject constructor(
     private val providerRegistry: ProviderRegistry,
     feedbackRepository: FeedbackRepository,
     private val streamResolver: StreamResolver,
+    private val requests: RequestRepository,
 ) : ViewModel() {
 
     private fun <T> Flow<T>.asState(initial: T): StateFlow<T> =
@@ -85,6 +89,35 @@ class PlayerViewModel @Inject constructor(
             }
         }
         .asState(emptySet())
+
+    /**
+     * Where each Play now song in the queue stands (continuo#12): finding a copy, waiting its
+     * turn, downloading, ready or failed; by track id. Asked every 2 s until every one is ready
+     * or failed.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val playNowStatus: StateFlow<Map<String, PlayNowStream>> = playbackController.state
+        .map { s -> s.queue.mapNotNull { t -> PlayNowIds.streamId(t.id)?.let { t.id to it } } }
+        .distinctUntilChanged()
+        .flatMapLatest { ids ->
+            flow {
+                val known = HashMap<String, PlayNowStream>()
+                while (ids.isNotEmpty()) {
+                    val server = serverRepository.getActive()?.takeIf { requests.supports(it) }
+                    if (server != null) {
+                        for ((trackId, streamId) in ids) {
+                            if (known[trackId]?.status in DONE) continue
+                            runCatching { requests.playNowStatus(server, streamId) }.getOrNull()?.let { known[trackId] = it }
+                        }
+                    }
+                    emit(known.toMap())
+                    if (ids.all { (trackId, _) -> known[trackId]?.status in DONE }) break
+                    delay(2_000)
+                }
+                if (ids.isEmpty()) emit(emptyMap())
+            }
+        }
+        .asState(emptyMap())
     val cast: StateFlow<CastState> = castController.state
     val position: StateFlow<PlaybackPosition> = playbackController.position.asState(PlaybackPosition())
 
@@ -285,3 +318,7 @@ class PlayerViewModel @Inject constructor(
         _messages.tryEmit(message)
     }
 }
+
+/** Play now statuses past which nothing changes. */
+private val DONE = setOf("ready", "failed")
+

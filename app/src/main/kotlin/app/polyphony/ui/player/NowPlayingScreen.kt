@@ -113,6 +113,7 @@ fun NowPlayingScreen(
     val appearance by viewModel.appearance.collectAsStateWithLifecycle()
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsStateWithLifecycle()
     val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
+    val playNowStatus by viewModel.playNowStatus.collectAsStateWithLifecycle()
     val rating by viewModel.rating.collectAsStateWithLifecycle()
     val feedback by viewModel.feedback.collectAsStateWithLifecycle()
     val lyricsState by viewModel.lyrics.collectAsStateWithLifecycle()
@@ -246,6 +247,7 @@ fun NowPlayingScreen(
                                 haptics.toggle(!isFavorite)
                                 viewModel.toggleFavorite()
                             },
+                            fetching = playNowStatusLabel(playNowStatus[track.id]),
                             keep = playNowStream?.let { stream ->
                                 KeepAction(kept = stream in kept) {
                                     haptics.toggle(true)
@@ -649,6 +651,8 @@ private fun PlayerTrackInfo(
     onRate: (Int) -> Unit,
     onArtist: () -> Unit,
     onToggleFavorite: () -> Unit,
+    /** A Play now song still downloading: "Downloading 40%". */
+    fetching: String? = null,
     keep: KeepAction? = null,
 ) {
     Row(
@@ -680,6 +684,14 @@ private fun PlayerTrackInfo(
                         onClick = onArtist,
                     ),
             )
+            if (fetching != null) {
+                Text(
+                    text = fetching,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
         }
         if (keep != null) {
             IconButton(onClick = keep.onKeep, enabled = !keep.kept) {
