@@ -53,6 +53,12 @@ interface RequestRepository {
      */
     suspend fun libraryAlbumTracklist(server: Server, libraryAlbumId: String): app.polyphony.core.domain.model.LibraryAlbumTracklist?
 
+    /**
+     * A song's lyrics from continuo (LRCLIB, continuo#59): for one the library has none for, or
+     * a Play now song; null when none are known or the server is too old to say.
+     */
+    suspend fun lyrics(server: Server, artist: String, title: String, album: String?, durationMs: Long?): app.polyphony.core.domain.model.Lyrics?
+
     /** Home's discovery rows; null from a continuo too old to have them. */
     suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery?
 

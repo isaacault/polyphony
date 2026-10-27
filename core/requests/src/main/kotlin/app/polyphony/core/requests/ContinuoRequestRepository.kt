@@ -64,6 +64,19 @@ class ContinuoRequestRepository internal constructor(
         )
     }
 
+    override suspend fun lyrics(server: Server, artist: String, title: String, album: String?, durationMs: Long?): app.polyphony.core.domain.model.Lyrics? {
+        fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+        val query = buildString {
+            append("artist=").append(enc(artist)).append("&title=").append(enc(title))
+            album?.takeIf { it.isNotBlank() }?.let { append("&album=").append(enc(it)) }
+            durationMs?.takeIf { it > 0 }?.let { append("&durationMs=").append(it) }
+        }
+        val reply = client.get(server, "/v1/library/lyrics?$query")
+        if (reply.code == 404) return null   // none known, or a continuo from before lyrics
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo lyrics failed")
+        return client.decode(LyricsDto.serializer(), reply.body).toDomain()
+    }
+
     override suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery? {
         val reply = client.get(server, "/v1/discover")
         if (reply.code == 404) return null   // a continuo from before discovery
