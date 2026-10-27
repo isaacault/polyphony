@@ -166,6 +166,24 @@ internal data class LibraryTracklistDto(
     val tracks: List<TracklistDto> = emptyList(),
 )
 
+/** `GET /v1/library/lyrics`: a song's lyrics from LRCLIB. */
+@Serializable
+internal data class LyricsDto(
+    val synced: Boolean = false,
+    val lines: List<LyricLineDto> = emptyList(),
+    val instrumental: Boolean = false,
+    val source: String? = null,
+)
+
+@Serializable
+internal data class LyricLineDto(val startMs: Long? = null, val text: String = "")
+
+internal fun LyricsDto.toDomain() = app.polyphony.core.domain.model.Lyrics(
+    lines = lines.map { app.polyphony.core.domain.model.LyricLine(if (synced) it.startMs else null, it.text) },
+    synced = synced && lines.isNotEmpty(),
+    source = if (source == "lrclib") "LRCLIB" else source,
+)
+
 /** `GET /v1/discover`: Home's discovery rows, as search hits. */
 @Serializable
 internal data class DiscoverDto(

@@ -148,6 +148,21 @@ class ContinuoRequestRepositoryTest {
     }
 
     @Test
+    fun `lyrics come as timed lines, and none as null`() = runTest {
+        val body = """{"synced":true,"lines":[{"startMs":1000,"text":"I'm working late"}],"instrumental":false,"source":"lrclib"}"""
+        val fake = FakeContinuo().apply { routes["GET /v1/library/lyrics"] = { _, _ -> 200 to body } }
+        val lyrics = repo(fake, FakeServers(server)).lyrics(server, "Sabrina Carpenter", "Espresso", "Short n' Sweet", 175_000)!!
+        assertTrue(lyrics.synced)
+        assertEquals(1000L, lyrics.lines.single().startMs)
+        assertEquals("LRCLIB", lyrics.source)
+        val sent = fake.seen.last().first.url
+        assertEquals("Espresso", sent.queryParameter("title"))
+        assertEquals("175000", sent.queryParameter("durationMs"))
+        val none = FakeContinuo().apply { routes["GET /v1/library/lyrics"] = { _, _ -> 404 to """{"error":{"code":"no_lyrics"}}""" } }
+        assertNull(repo(none, FakeServers(server)).lyrics(server, "Nobody", "Nothing", null, null))
+    }
+
+    @Test
     fun `a catalogue album comes with its tracklist`() = runTest {
         val body = """{"kind":"album","key":"mb:rg:th","title":"Tomorrow's Harvest","artist":"Boards of Canada","year":2013,"albumType":"Album",
           "ids":{"musicBrainzReleaseGroupId":"th"},"availability":{"state":"requestable"},

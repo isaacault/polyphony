@@ -181,13 +181,16 @@ class PlayerViewModel @Inject constructor(
                         emit(lyricsCache[track.id].toUiState())
                     } else {
                         emit(LyricsUiState.Loading)
-                        val result = try {
+                        val fromLibrary = if (PlayNowIds.streamId(track.id) != null) null else try {
                             libraryRepository.getLyrics(track)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
                             null
                         }
+                        // None in the song's file (most Soulseek copies) or not a library song
+                        // (Play now): continuo asks LRCLIB.
+                        val result = fromLibrary?.takeIf { it.lines.isNotEmpty() } ?: lyricsFromContinuo(track) ?: fromLibrary
                         lyricsCache[track.id] = result
                         emit(result.toUiState())
                     }
@@ -195,6 +198,18 @@ class PlayerViewModel @Inject constructor(
             }
         }
         .asState(LyricsUiState.Hidden)
+
+    private suspend fun lyricsFromContinuo(track: Track): Lyrics? {
+        val server = serverRepository.getActive()?.takeIf { requests.supports(it) } ?: return null
+        val artist = track.artistName?.takeIf { it.isNotBlank() } ?: return null
+        return try {
+            requests.lyrics(server, artist, track.title, track.albumName, track.durationMs.takeIf { it > 0 })
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     private fun Lyrics?.toUiState(): LyricsUiState =
         if (this == null || lines.isEmpty()) LyricsUiState.None else LyricsUiState.Loaded(this)
