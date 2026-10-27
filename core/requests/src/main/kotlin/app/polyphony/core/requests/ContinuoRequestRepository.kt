@@ -46,9 +46,9 @@ class ContinuoRequestRepository internal constructor(
     constructor(clientFactory: ServerHttpClientFactory, json: Json, servers: ServerRepository) :
         this(ContinuoClient({ clientFactory.clientFor(it) }, json, servers))
 
-    override suspend fun search(server: Server, query: String, limit: Int): CatalogResults {
+    override suspend fun search(server: Server, query: String, limit: Int, quick: Boolean): CatalogResults {
         val q = URLEncoder.encode(query.trim(), "UTF-8")
-        val reply = client.get(server, "/v1/search?q=$q&types=album,artist,track&limit=$limit")
+        val reply = client.get(server, "/v1/search?q=$q&types=album,artist,track&limit=$limit" + if (quick) "&quick=true" else "")
         if (reply.code !in 200..299) throw client.serverError(reply, "continuo search failed")
         return client.decode(SearchDto.serializer(), reply.body).toDomain(artworkHost = hostOf(server.baseUrl))
     }

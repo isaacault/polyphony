@@ -508,8 +508,11 @@ private fun scopeLabel(scope: SearchScope): Int = when (scope) {
 }
 
 /** The search button runs the server search and, on a continuo server, the Everything tier too. */
-private fun searchFurtherLabel(state: SearchUiState): Int =
-    if (state.showsEverything) R.string.browse_action_search_everything else R.string.browse_action_search_server
+private fun searchFurtherLabel(state: SearchUiState): Int = when {
+    state.showsEverything && state.everything.quick -> R.string.browse_action_more_results
+    state.showsEverything -> R.string.browse_action_search_everything
+    else -> R.string.browse_action_search_server
+}
 
 /** Catalogue albums that aren't in the library, after the library's own albums. */
 private fun LazyListScope.catalogAlbums(everything: EverythingUi, onRequest: (String) -> Unit, onOpen: (String, String) -> Unit) {

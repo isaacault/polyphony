@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -69,6 +70,8 @@ data class EverythingUi(
     val requesting: ImmutableSet<String> = persistentSetOf(),
     /** Library albums the catalogue only partly matches ([EverythingSection.partials]). */
     val partials: ImmutableMap<String, Availability.Partial> = persistentMapOf(),
+    /** Only the top few, found while typing: the search button brings the rest. */
+    val quick: Boolean = false,
 ) {
     val isEmpty: Boolean get() = artists.isEmpty() && albums.isEmpty() && tracks.isEmpty()
 }
@@ -145,6 +148,8 @@ private data class CatalogState(
     val results: CatalogResults? = null,
     val loading: Boolean = false,
     val failed: Boolean = false,
+    /** The quick search while typing, not the full one ([SearchViewModel.searchQuick]). */
+    val quick: Boolean = false,
 )
 
 @HiltViewModel
@@ -166,6 +171,7 @@ class SearchViewModel @Inject constructor(
     private val filter = MutableStateFlow(LibraryFilter.NONE)
     private var remoteJob: Job? = null
     private var catalogJob: Job? = null
+    private var quickJob: Job? = null
 
     /** The last submitted term: switching scope re-runs the searches that scope needs. */
     private var submitted: String? = null
@@ -234,7 +240,9 @@ class SearchViewModel @Inject constructor(
     private val everythingState: Flow<Triple<Boolean, SearchScope, EverythingUi>> = combine(
         linked, scope, query, catalog, combine(requester.requested, requester.requesting) { r, busy -> r to busy },
     ) { isLinked, s, q, cat, (req, busy) ->
-        val current = cat.forQuery == q.trim()
+        // While typing, the last quick results stay up until the next letter's arrive: "sabr"'s
+        // for "sabri", rather than a blank list between keystrokes.
+        val current = cat.forQuery == q.trim() || (cat.quick && cat.forQuery.isNotEmpty() && q.trim().startsWith(cat.forQuery, ignoreCase = true))
         val results = cat.results?.takeIf { current }
         Triple(
             isLinked,
@@ -243,12 +251,13 @@ class SearchViewModel @Inject constructor(
                 artists = EverythingSection.artists(results).toImmutableList(),
                 albums = EverythingSection.albums(results, req).toImmutableList(),
                 tracks = EverythingSection.tracks(results, req).toImmutableList(),
-                searching = cat.loading && current,
-                searched = results != null,
+                searching = cat.loading && current && !cat.quick,   // quick ones come without a progress bar
+                searched = results != null && !cat.quick,
                 failed = cat.failed && current,
                 catalogDown = results?.catalogAvailable == false,
                 requesting = busy.toImmutableSet(),
                 partials = EverythingSection.partials(results).toImmutableMap(),
+                quick = cat.quick && results != null,
             ),
         )
     }
@@ -266,9 +275,16 @@ class SearchViewModel @Inject constructor(
         val (topAlbums, albums) = split(k.shows(SearchKind.ALBUMS), s.albums) { it.name }
         val (topPlaylists, playlists) = split(k.shows(SearchKind.PLAYLISTS), s.playlists) { it.name }
         val (topTracks, tracks) = split(k.shows(SearchKind.SONGS), s.tracks) { it.title }
-        val (topCatArtists, catArtists) = split(k.shows(SearchKind.ARTISTS), shown.artists) { it.name }
-        val (topCatAlbums, catAlbums) = split(k.shows(SearchKind.ALBUMS), shown.albums) { it.title }
-        val (topCatTracks, catTracks) = split(k.shows(SearchKind.SONGS), shown.tracks) { it.title }
+        // A quick search comes most listened first ("sabrina": Sabrina Carpenter, not a Sabrina):
+        // its order stands, and its first artist is the top result.
+        fun <T> quickSplit(on: Boolean, items: List<T>, top: Boolean): Pair<List<T>, List<T>> =
+            if (!on) emptyList<T>() to emptyList() else if (top && lead) items.take(1) to items.drop(1) else emptyList<T>() to items
+        val (topCatArtists, catArtists) = if (shown.quick) quickSplit(k.shows(SearchKind.ARTISTS), shown.artists, top = true)
+            else split(k.shows(SearchKind.ARTISTS), shown.artists) { it.name }
+        val (topCatAlbums, catAlbums) = if (shown.quick) quickSplit(k.shows(SearchKind.ALBUMS), shown.albums, top = false)
+            else split(k.shows(SearchKind.ALBUMS), shown.albums) { it.title }
+        val (topCatTracks, catTracks) = if (shown.quick) quickSplit(k.shows(SearchKind.SONGS), shown.tracks, top = false)
+            else split(k.shows(SearchKind.SONGS), shown.tracks) { it.title }
         s.copy(
             feedback = fb,
             scopesAvailable = isLinked,
@@ -306,9 +322,38 @@ class SearchViewModel @Inject constructor(
     fun onQueryChange(value: String) {
         query.value = value
         if (value.isBlank()) {
+            quickJob?.cancel()
             remote.value = RemoteState()
             catalog.value = CatalogState()
             submitted = null
+        } else {
+            searchQuick()
+        }
+    }
+
+    /**
+     * Search while typing: a moment after the last letter, the top few from continuo's catalogue
+     * and the library ("bey": Beyoncé), most listened first. The full search (more of everything,
+     * songs from MusicBrainz) is still the search button, and replaces these.
+     */
+    private fun searchQuick() {
+        quickJob?.cancel()
+        val q = query.value.trim()
+        if (q.length < QUICK_MIN_CHARS || !linked.value || effectiveScope() != SearchScope.ALL || filter.value.isActive) return
+        quickJob = viewModelScope.launch {
+            delay(QUICK_DEBOUNCE_MS)
+            if (catalog.value.let { !it.quick && it.forQuery == q }) return@launch    // the full search has it
+            val server = servers.getActive()?.takeIf { requests.supports(it) } ?: return@launch
+            val results = try {
+                requests.search(server, q, limit = QUICK_LIMIT, quick = true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return@launch   // quietly: the search button still searches everything
+            }
+            // A full search started meanwhile wins; a stale quick one doesn't replace a newer query's.
+            if (catalog.value.let { !it.quick && it.forQuery.isNotEmpty() && it.forQuery == q } || query.value.trim() != q) return@launch
+            catalog.value = CatalogState(forQuery = q, results = results, quick = true)
         }
     }
 
@@ -330,9 +375,11 @@ class SearchViewModel @Inject constructor(
             remoteJob?.cancel()
             remote.value = RemoteState()
             catalogJob?.cancel()
+            quickJob?.cancel()
             catalog.value = CatalogState()
         }
         runScopeSearches(force = false)
+        if (submitted == null) searchQuick()
     }
 
     fun setKind(value: SearchKind) {
@@ -388,6 +435,7 @@ class SearchViewModel @Inject constructor(
     private fun searchEverything() {
         val q = query.value.trim()
         if (q.isBlank()) return
+        quickJob?.cancel()
         catalogJob?.cancel()
         catalog.value = CatalogState(forQuery = q, loading = true)
         catalogJob = viewModelScope.launch {
@@ -438,3 +486,8 @@ class SearchViewModel @Inject constructor(
         return (local + remote.filter { seen.add(id(it)) }).toImmutableList()
     }
 }
+
+/** Search while typing: from the second letter, 300 ms after the last one, the top 3 of each. */
+private const val QUICK_MIN_CHARS = 2
+private const val QUICK_DEBOUNCE_MS = 300L
+private const val QUICK_LIMIT = 3

@@ -37,6 +37,8 @@ internal data class ErrorDto(
 internal data class SearchDto(
     val sources: SourcesDto = SourcesDto(),
     val results: List<HitDto> = emptyList(),
+    /** A quick search's top few (continuo 2026-10). */
+    val partial: Boolean = false,
 )
 
 @Serializable
@@ -190,7 +192,8 @@ internal fun SearchDto.toDomain(artworkHost: String?): CatalogResults {
     val artists = results.filter { it.kind == "artist" }.map { it.toCatalogArtist(artworkHost) }
     val albums = results.filter { it.kind == "album" }.map { it.toCatalogAlbum(artworkHost) }
     val tracks = results.filter { it.kind == "track" }.map { it.toCatalogTrack() }
-    return CatalogResults(artists = artists, albums = albums, tracks = tracks, catalogAvailable = sources.catalog != "unavailable")
+    return CatalogResults(artists = artists, albums = albums, tracks = tracks, catalogAvailable = sources.catalog != "unavailable",
+                          partial = partial)
 }
 
 internal fun HitDto.toCatalogArtist(artworkHost: String?) = CatalogArtist(

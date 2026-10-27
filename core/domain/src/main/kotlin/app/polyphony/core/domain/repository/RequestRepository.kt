@@ -29,7 +29,11 @@ interface RequestRepository {
     fun supports(server: Server?): Boolean = server?.options?.get(ServerOptions.CONTINUO) == "true"
 
     /** Library and catalogue hits merged by the server, each with its availability. */
-    suspend fun search(server: Server, query: String, limit: Int = 25): CatalogResults
+    /**
+     * The catalogue and library search; [quick]: only the top few, most listened first, fast
+     * enough to ask while typing (continuo's quick search).
+     */
+    suspend fun search(server: Server, query: String, limit: Int = 25, quick: Boolean = false): CatalogResults
 
     /**
      * The artist's albums, EPs and singles (MusicBrainz artist [artistMbid]), newest first, each

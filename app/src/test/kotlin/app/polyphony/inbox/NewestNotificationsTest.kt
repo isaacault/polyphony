@@ -44,7 +44,7 @@ class NewestNotificationsTest {
             return InboxPage(ids.map { InboxNotification(it, "t", "T$it", null, null, false, null, null, null) }, ids.maxOrNull() ?: since, 3)
         }
 
-        override suspend fun search(server: Server, query: String, limit: Int): CatalogResults = error("unused")
+        override suspend fun search(server: Server, query: String, limit: Int, quick: Boolean): CatalogResults = error("unused")
         override suspend fun artistAlbums(server: Server, artistMbid: String): List<CatalogAlbum> = error("unused")
         override suspend fun catalogAlbum(server: Server, releaseGroupId: String): CatalogAlbumDetail = error("unused")
         override suspend fun findArtist(server: Server, name: String): CatalogArtist? = error("unused")
