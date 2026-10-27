@@ -302,7 +302,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             CatalogRow(
                                 title = track.title,
                                 subtitle = typed(R.string.browse_search_type_song, track.artist),
-                                artworkUrl = null,
+                                artworkUrl = track.artworkUrl,
                                 availability = track.availability,
                                 releaseGroupId = track.albumReleaseGroupId,
                                 busy = track.requestKeys.any { it in state.everything.requesting },
@@ -544,7 +544,7 @@ private fun LazyListScope.catalogTracks(
             CatalogRow(
                 title = track.title,
                 subtitle = listOfNotNull(track.artist, track.albumTitle).joinToString(" · ").ifBlank { null },
-                artworkUrl = null,
+                artworkUrl = track.artworkUrl,
                 availability = track.availability,
                 releaseGroupId = track.albumReleaseGroupId,
                 busy = track.requestKeys.any { it in everything.requesting },
