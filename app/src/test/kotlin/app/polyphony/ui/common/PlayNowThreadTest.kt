@@ -41,6 +41,7 @@ class PlayNowThreadTest {
     private val server = Server("s", ServerType.SUBSONIC, "Continuo", "https://music-api.example", "isaac", "", deviceId = "d",
                                 options = mapOf(ServerOptions.CONTINUO to "true"))
     private val playerThreads = mutableListOf<String>()
+    private val queued = mutableListOf<List<*>>()
 
     @Before fun setUp() = Dispatchers.setMain(main)
 
@@ -71,8 +72,9 @@ class PlayNowThreadTest {
                 else -> error("unexpected $name")
             }
         }
-        val playback = fake<PlaybackController> { name, _ ->
+        val playback = fake<PlaybackController> { name, args ->
             playerThreads += "$name@${Thread.currentThread().name.substringBefore(" @")}"   // without debug mode's " @coroutine#n"
+            if (name == "playTracks") queued += (args!![0] as List<*>)
             Unit
         }
         return PlayNow(servers, requests, playback, CoroutineScope(Dispatchers.Default))
@@ -91,6 +93,19 @@ class PlayNowThreadTest {
         p.play(espresso)
         assertTrue("it played: ${outcome.await()}", outcome.await() is PlayNowEvent.Playing)
         assertEquals(listOf("playTracks@fake-main"), playerThreads)
+    }
+
+    @Test
+    fun `an album played from a song you don't have queues the rest, on the main thread`() = runBlocking {
+        val p = playNow()
+        val outcome = async { withTimeout(5_000) { p.events.first { it !is PlayNowEvent.Finding } } }
+        yield()
+        val mine = app.polyphony.core.domain.model.Track(id = "lib-1", serverId = "s", title = "Visit Croatia")
+        p.playAll(listOf(QueueSong.Fetch(espresso), QueueSong.Fetch(espresso.copy(key = "b")), QueueSong.Have(mine),
+                         QueueSong.Fetch(espresso.copy(key = "c"))), start = 1, queueTitle = "Album")
+        assertTrue("it played: ${outcome.await()}", outcome.await() is PlayNowEvent.Playing)
+        assertEquals(listOf("playTracks@fake-main"), playerThreads)
+        assertEquals("the tapped song, yours, and the one after: not the one before", 3, queued.single().size)
     }
 
     @Test

@@ -12,6 +12,7 @@ import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.navigation.CatalogAlbumRoute
 import app.polyphony.ui.common.PlayNow
+import app.polyphony.ui.common.QueueSong
 import app.polyphony.ui.common.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
@@ -123,8 +124,15 @@ class CatalogAlbumViewModel @Inject constructor(
 
     fun request() = requester.request(route.releaseGroupId)
 
-    /** Play a song of this album now, from Soulseek, while it downloads. */
-    fun playTrack(track: CatalogAlbumTrack) = playNow.play(song(track))
+    /**
+     * Play a song of this album now, from Soulseek, while it downloads, with the rest of the album
+     * after it as the queue, each fetched in its turn.
+     */
+    fun playTrack(track: CatalogAlbumTrack) {
+        val tracks = state.value.discs.flatMap { it.tracks }.ifEmpty { listOf(track) }
+        val start = tracks.indexOf(track).coerceAtLeast(0)
+        playNow.playAll(tracks.map { QueueSong.Fetch(song(it)) }, start, queueTitle = state.value.title)
+    }
 
     /** A song of this album as a catalogue song (its long-press sheet: play next, add to queue). */
     fun song(track: CatalogAlbumTrack): CatalogTrack {
