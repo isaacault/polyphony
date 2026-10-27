@@ -1,6 +1,6 @@
 package app.polyphony.ui.browse.catalog
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -62,11 +62,19 @@ internal fun CatalogRow(
     requestLabel: String,
     onRequest: (String) -> Unit,
     onClick: (() -> Unit)? = null,
+    /** Opens the row's options (a song's: Play now, Play next, Add to queue). */
+    onLongClick: (() -> Unit)? = null,
 ) {
     Row(
         Modifier
             .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(
+                if (onClick != null || onLongClick != null) {
+                    Modifier.combinedClickable(onClick = onClick ?: {}, onLongClick = onLongClick)
+                } else {
+                    Modifier
+                },
+            )
             .padding(start = Dimens.screenPadding, end = Dimens.screenPadding, top = 4.dp, bottom = 4.dp)
             .heightIn(min = 52.dp),
         verticalAlignment = Alignment.CenterVertically,

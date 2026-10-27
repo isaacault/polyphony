@@ -158,6 +158,8 @@ fun PolyphonyShell(
                         if (result == SnackbarResult.ActionPerformed) shellViewModel.keepPlayNow(event.streamId, event.title)
                     }
                     is PlayNowEvent.Kept -> snackbarHostState.showSnackbar(context.getString(R.string.playnow_kept, event.title))
+                    is PlayNowEvent.Queued -> snackbarHostState.showSnackbar(
+                        context.getString(if (event.next) R.string.playnow_queued_next else R.string.playnow_queued_end, event.title))
                     is PlayNowEvent.Failed -> {
                         val track = event.track
                         val result = snackbarHostState.showSnackbar(

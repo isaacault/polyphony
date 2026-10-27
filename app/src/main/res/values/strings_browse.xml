@@ -193,6 +193,9 @@
     <string name="playnow_request">Request</string>
     <string name="playnow_keep_in_library">Keep in your library</string>
     <string name="playnow_kept_short">Kept</string>
+    <string name="playnow_queued_next">%1$s plays next; fetching it from Soulseek</string>
+    <string name="playnow_queued_end">Added %1$s to the queue; fetching it from Soulseek</string>
+    <string name="playnow_action_play">Play now</string>
     <string name="browse_request_sent">Requested. You\'ll be notified when it\'s ready to play.</string>
     <string name="browse_request_song_sent">Requested the song. You\'ll be notified when it\'s ready to play.</string>
     <string name="browse_request_already">Already requested.</string>

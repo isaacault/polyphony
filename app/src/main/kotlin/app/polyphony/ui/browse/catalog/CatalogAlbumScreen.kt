@@ -1,6 +1,6 @@
 package app.polyphony.ui.browse.catalog
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +26,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -38,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.R
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbumTrack
+import app.polyphony.core.domain.model.CatalogTrack
 import app.polyphony.core.ui.components.ErrorState
 import app.polyphony.core.ui.components.HeroHeader
 import app.polyphony.core.ui.components.HeroScaffold
@@ -45,6 +49,7 @@ import app.polyphony.core.ui.components.QualityBadge
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.core.ui.util.formatDuration
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.common.CatalogSongSheet
 import app.polyphony.ui.shell.LocalSnackbarHostState
 
 /** An album that isn't in the library (#145): artwork, tracklist and Request, from the catalogue. */
@@ -56,6 +61,7 @@ fun CatalogAlbumScreen(viewModel: CatalogAlbumViewModel = hiltViewModel()) {
     // itself is a tap away (Open, Add).
     val playable = canPlayNow && state.availability !is Availability.InLibrary && state.availability !is Availability.OnServer
     val navigator = LocalNavigator.current
+    var songForOptions by remember { mutableStateOf<CatalogTrack?>(null) }
     val snackbar = LocalSnackbarHostState.current
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -109,11 +115,17 @@ fun CatalogAlbumScreen(viewModel: CatalogAlbumViewModel = hiltViewModel()) {
                     }
                 }
                 items(disc.tracks, key = { "t-${disc.number}-${it.position}" }, contentType = { "catalog-track" }) { track ->
-                    CatalogTrackLine(track, onPlay = if (playable && track.recordingId != null) ({ viewModel.playTrack(track) }) else null)
+                    val canPlay = playable && track.recordingId != null
+                    CatalogTrackLine(
+                        track,
+                        onPlay = if (canPlay) ({ viewModel.playTrack(track) }) else null,
+                        onOptions = if (canPlay) ({ songForOptions = viewModel.song(track) }) else null,
+                    )
                 }
             }
         }
     }
+    songForOptions?.let { song -> CatalogSongSheet(track = song, onOpenAlbum = null, onDismiss = { songForOptions = null }) }
 }
 
 /**
@@ -172,11 +184,11 @@ private fun AlbumAction(
 
 /** A tracklist line; with [onPlay], tapping it plays the song now (continuo#12). */
 @Composable
-private fun CatalogTrackLine(track: CatalogAlbumTrack, onPlay: (() -> Unit)? = null) {
+private fun CatalogTrackLine(track: CatalogAlbumTrack, onPlay: (() -> Unit)? = null, onOptions: (() -> Unit)? = null) {
     Row(
         Modifier
             .fillMaxWidth()
-            .then(if (onPlay != null) Modifier.clickable(onClick = onPlay) else Modifier)
+            .then(if (onPlay != null) Modifier.combinedClickable(onClick = onPlay, onLongClick = onOptions) else Modifier)
             .heightIn(min = 48.dp)
             .padding(horizontal = Dimens.screenPadding),
         verticalAlignment = Alignment.CenterVertically,

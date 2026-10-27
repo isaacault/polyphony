@@ -124,14 +124,15 @@ class CatalogAlbumViewModel @Inject constructor(
     fun request() = requester.request(route.releaseGroupId)
 
     /** Play a song of this album now, from Soulseek, while it downloads. */
-    fun playTrack(track: CatalogAlbumTrack) {
+    fun playTrack(track: CatalogAlbumTrack) = playNow.play(song(track))
+
+    /** A song of this album as a catalogue song (its long-press sheet: play next, add to queue). */
+    fun song(track: CatalogAlbumTrack): CatalogTrack {
         val s = state.value
-        playNow.play(
-            CatalogTrack(
-                key = "mb:rec:${track.recordingId}", title = track.title, artist = s.artist, durationMs = track.durationMs,
-                albumTitle = s.title, albumReleaseGroupId = route.releaseGroupId, availability = Availability.Requestable,
-                recordingId = track.recordingId,
-            ),
+        return CatalogTrack(
+            key = "mb:rec:${track.recordingId}", title = track.title, artist = s.artist, durationMs = track.durationMs,
+            albumTitle = s.title, albumReleaseGroupId = route.releaseGroupId, availability = Availability.Requestable,
+            recordingId = track.recordingId,
         )
     }
 }
