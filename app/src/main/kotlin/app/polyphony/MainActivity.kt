@@ -13,8 +13,10 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.core.domain.repository.AppSettings
+import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.ui.components.LocalRatingStyle
+import app.polyphony.core.ui.components.LocalUsesRatings
 import app.polyphony.core.ui.theme.PolyphonyTheme
 import app.polyphony.inbox.InboxScheduler
 import app.polyphony.ui.PolyphonyApp
@@ -26,6 +28,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var feedbackRepository: FeedbackRepository
     @Inject lateinit var inboxScheduler: InboxScheduler
 
     /**
@@ -52,13 +55,17 @@ class MainActivity : ComponentActivity() {
             splash.setKeepOnScreenCondition { settings == null }
             val current = settings ?: return@setContent
             val link by deepLink.collectAsStateWithLifecycle()
+            val feedback by feedbackRepository.feedback.collectAsStateWithLifecycle()
             PolyphonyTheme(
                 themeMode = current.appearance.themeMode,
                 dynamicColor = current.appearance.dynamicColor,
                 seedColor = Color(current.appearance.accentSeedArgb),
                 pureBlack = current.appearance.pureBlack,
             ) {
-                CompositionLocalProvider(LocalRatingStyle provides current.appearance.ratingStyle) {
+                CompositionLocalProvider(
+                    LocalRatingStyle provides current.appearance.ratingStyle,
+                    LocalUsesRatings provides feedback.usesRatings,
+                ) {
                     PolyphonyApp(
                         onboardingComplete = current.onboardingComplete,
                         deepLink = link,

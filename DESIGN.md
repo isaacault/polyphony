@@ -36,8 +36,9 @@ feel physical. Everything below is a rule unless marked "prefer".
   compilation's track artist), a quality chip only where the track differs from the album
   (whose quality is in the header). Elsewhere the subtitle is the artist alone: the artwork
   already says which album (rows without artwork keep "artist · album"). Every track row shows
-  your marks where set: a small heart for a favourite, and the star rating just before the
-  duration, ★4 or all five stars with the rating filled (Appearance → Ratings on songs). Long-press opens the options sheet; there is no
+  your mark where set, the one you use (Library → Favourites or Ratings): a small heart for a
+  favourite, or the star rating just before the duration, ★4 or all five stars with the rating
+  filled (Appearance → Ratings on songs). Long-press opens the options sheet; there is no
   overflow button. Explicit/lossless badges are small tonal chips. The playing track shows an
   animated equaliser glyph instead of its number.
 - Song rows outside the queue are wrapped in `TrackSwipeRow`: each physical direction runs the

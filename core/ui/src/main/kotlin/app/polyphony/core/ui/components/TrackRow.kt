@@ -45,6 +45,13 @@ import app.polyphony.core.ui.util.formatDuration
 val LocalRatingStyle = staticCompositionLocalOf { RatingStyle.COMPACT }
 
 /**
+ * Whether you mark songs with ratings (stars) rather than favourites (hearts) (Library →
+ * Favourites or Ratings, as in effect for the server); provided at the app root. Track rows show
+ * the mark you use, not both.
+ */
+val LocalUsesRatings = staticCompositionLocalOf { false }
+
+/**
  * A dense track row. Shows artwork (or the track number inside an album) and
  * swaps in [PlayingIndicator] for the current track.
  */
@@ -150,7 +157,8 @@ fun TrackRow(
                 }
             }
         }
-        if (showFavourite && track.starred) {
+        val usesRatings = LocalUsesRatings.current
+        if (showFavourite && !usesRatings && track.starred) {
             Spacer(Modifier.width(8.dp))
             Icon(
                 imageVector = Icons.Rounded.Favorite,
@@ -159,7 +167,7 @@ fun TrackRow(
                 modifier = Modifier.size(14.dp),
             )
         }
-        if (showRating && track.rating > 0) {
+        if (showRating && usesRatings && track.rating > 0) {
             Spacer(Modifier.width(8.dp))
             RatingMark(track.rating.coerceIn(1, 5), LocalRatingStyle.current)
         }
