@@ -159,6 +159,10 @@
     <string name="settings_playback_stream_cache">Stream cache size</string>
     <string name="settings_playback_preload">Preload next track</string>
     <string name="settings_playback_preload_summary">Start fetching the next track before the current one ends</string>
+    <string name="settings_playback_prefetch">Download ahead in the queue</string>
+    <string name="settings_playback_prefetch_summary">Keep the next ~20 minutes on the phone, so a dropped connection doesn\'t stop the music</string>
+    <string name="settings_playback_prefetch_mobile">Also on mobile data</string>
+    <string name="settings_playback_prefetch_mobile_summary">The next ~8 minutes (1–3 songs); each costs data even if you skip it</string>
     <string name="settings_playback_buffering_note">Streamed audio is cached on this device so replays and skips back don\'t hit the network again.</string>
 
     <!-- Streaming & transcoding -->

@@ -110,6 +110,10 @@ data class PlaybackSettings(
     val scrobbleThreshold: Float = 0.5f,
     val streamCacheSizeMb: Int = 1024,
     val preloadNextTrack: Boolean = true,
+    /** Keep the next songs of the queue fully on the phone, so a network drop doesn't stop the music. */
+    val prefetchQueue: Boolean = true,
+    /** Also on mobile data (fewer songs ahead: each one costs data even if it's skipped). */
+    val prefetchOnMobileData: Boolean = true,
     val previousRestartsAfterMs: Long = 3_000,
     val rememberQueue: Boolean = true,
     val hapticFeedback: Boolean = true,
