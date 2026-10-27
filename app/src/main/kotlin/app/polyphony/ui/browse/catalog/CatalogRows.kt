@@ -153,9 +153,11 @@ internal fun CatalogAlbumCard(
     onRequest: (String) -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Under the title; the year by default (an artist's page, where the artist goes without saying). */
+    subtitle: String = catalogAlbumSubtitle(album),
 ) {
     Box(modifier) {
-        AlbumCard(album = album.asAlbum(), onClick = onClick, subtitle = catalogAlbumSubtitle(album))
+        AlbumCard(album = album.asAlbum(), onClick = onClick, subtitle = subtitle)
         if (requestState(album.availability, album.releaseGroupId, busy) != RequestState.NONE) {
             Surface(
                 shape = CircleShape,
@@ -168,10 +170,10 @@ internal fun CatalogAlbumCard(
     }
 }
 
-/** The year, and where a request stands once there is one. */
+/** The year (or with [byArtist], the artist), and where a request stands once there is one. */
 @Composable
-internal fun catalogAlbumSubtitle(album: CatalogAlbum): String = listOfNotNull(
-    album.year?.toString(),
+internal fun catalogAlbumSubtitle(album: CatalogAlbum, byArtist: Boolean = false): String = listOfNotNull(
+    if (byArtist) album.artist else album.year?.toString(),
     availabilityLabel(album.availability)?.let { stringResource(it) },
 ).joinToString(" · ")
 

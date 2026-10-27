@@ -71,6 +71,7 @@ import app.polyphony.navigation.AlbumListKind
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.ui.browse.catalog.CatalogAlbumCard
 import app.polyphony.ui.browse.catalog.CatalogRow
+import app.polyphony.ui.browse.catalog.catalogAlbumSubtitle
 import app.polyphony.ui.browse.catalog.Discography
 import app.polyphony.ui.browse.catalog.requestTrackLabel
 import app.polyphony.ui.common.AlbumOptionsSheet
@@ -221,6 +222,8 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                                         }
                                     },
                                     modifier = Modifier.width(Dimens.carouselArtwork),
+                                    // Whose it is matters on Home; the year doesn't (they're all new).
+                                    subtitle = catalogAlbumSubtitle(album, byArtist = true),
                                 )
                             }
                         }
