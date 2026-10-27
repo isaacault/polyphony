@@ -85,6 +85,7 @@ fun QueueSheet(
     val playback by viewModel.playback.collectAsStateWithLifecycle()
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsStateWithLifecycle()
     val onPhone by viewModel.onPhone.collectAsStateWithLifecycle()
+    val playNowStatus by viewModel.playNowStatus.collectAsStateWithLifecycle()
     val haptics = rememberHaptics(hapticsEnabled)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackHost = remember { SnackbarHostState() }
@@ -187,6 +188,7 @@ fun QueueSheet(
                                     isCurrent = index == playback.currentIndex,
                                     isPlaying = playback.isPlaying,
                                     onPhone = item.track.id in onPhone,
+                                    status = playNowStatusLabel(playNowStatus[item.track.id]),
                                     elevation = if (isDragging) 6.dp else 0.dp,
                                     onClick = { viewModel.skipToQueueItem(index) },
                                     handleModifier = Modifier.draggableHandle(
@@ -260,6 +262,8 @@ private fun QueueRow(
     isPlaying: Boolean,
     /** It plays without a connection (downloaded, or fetched ahead). */
     onPhone: Boolean,
+    /** A Play now song still on its way: "Downloading 40%". */
+    status: String?,
     elevation: Dp,
     onClick: () -> Unit,
     handleModifier: Modifier,
@@ -310,7 +314,7 @@ private fun QueueRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = track.displayArtist,   // the artwork already says which album
+                    text = listOfNotNull(track.displayArtist, status).joinToString(" · "),   // the artwork already says which album
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
