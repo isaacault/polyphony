@@ -20,6 +20,8 @@ import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.navigation.AlbumRoute
 import app.polyphony.ui.browse.catalog.CatalogArtistPageLogic
 import app.polyphony.ui.browse.catalog.CatalogRequester
+import app.polyphony.ui.common.PlayNow
+import app.polyphony.ui.common.QueueSong
 import app.polyphony.ui.common.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
@@ -68,6 +70,7 @@ class AlbumViewModel @Inject constructor(
     settings: SettingsRepository,
     private val servers: ServerRepository,
     private val requests: RequestRepository,
+    private val playNow: PlayNow,
 ) : ViewModel() {
 
     /** Heart or star in the header. */
@@ -141,6 +144,29 @@ class AlbumViewModel @Inject constructor(
         val s = state.value
         if (s.tracks.isEmpty()) return
         playback.playTracks(s.tracks, startIndex, shuffle, s.album?.name, s.album?.let(PlayContext::album))
+    }
+
+    /**
+     * Play the page from row [index]. Where the library lacks some of the album, the whole album
+     * is the queue: its missing songs as Play now songs, fetched in turn while it plays.
+     */
+    fun playEntry(index: Int) {
+        val s = state.value
+        val entries = s.entries
+        if (entries.none { it is AlbumEntry.Missing } || !playNow.available.value) {
+            // Your songs alone, from this row's (or the next of yours: Play on an album whose
+            // first song you don't have).
+            val track = entries.drop(index).firstNotNullOfOrNull { (it as? AlbumEntry.Have)?.track } ?: s.tracks.firstOrNull() ?: return
+            play(startIndex = s.tracks.indexOf(track).coerceAtLeast(0))
+            return
+        }
+        val songs = entries.map { e ->
+            when (e) {
+                is AlbumEntry.Have -> QueueSong.Have(e.track)
+                is AlbumEntry.Missing -> QueueSong.Fetch(e.track)
+            }
+        }
+        playNow.playAll(songs, index, s.album?.name, s.album?.let(PlayContext::album))
     }
 
     fun playNext() = state.value.tracks.takeIf { it.isNotEmpty() }?.let(playback::playNext)

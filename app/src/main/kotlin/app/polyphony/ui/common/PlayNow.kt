@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import app.polyphony.core.data.di.ApplicationScope
 import app.polyphony.core.domain.model.CatalogTrack
+import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.PlayNowIds
 import app.polyphony.core.domain.model.PlayNowStream
 import app.polyphony.core.domain.model.Server
@@ -17,6 +18,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -42,6 +46,12 @@ sealed interface PlayNowEvent {
     data class Queued(override val title: String, val next: Boolean) : PlayNowEvent
     /** Nobody could send it ([detail] says why); offer to request it instead. */
     data class Failed(override val title: String, val detail: String?, val track: CatalogTrack?) : PlayNowEvent
+}
+
+/** One song of a queue started from an album page: one you have, or one Play now fetches. */
+sealed interface QueueSong {
+    data class Have(val track: Track) : QueueSong
+    data class Fetch(val track: CatalogTrack) : QueueSong
 }
 
 /**
@@ -73,38 +83,90 @@ class PlayNow @Inject constructor(
     // The latest tap wins: finding a second song stops waiting for the first.
     private var finding: Job? = null
 
-    fun play(track: CatalogTrack) {
-        val recording = track.recordingId ?: return
+    fun play(track: CatalogTrack) = playAll(listOf(QueueSong.Fetch(track)), 0, queueTitle = track.title)
+
+    /**
+     * Play an album page's songs as the queue, from [start]: the songs you have as they are, the
+     * others as Play now songs, fetched in turn, soonest needed first, while the queue plays. A
+     * tapped song you don't have plays once it's playable; one you have plays at once. Songs to
+     * fetch before [start] are left out (nothing downloads that the queue isn't heading to); the
+     * library's ones stay, so Previous works.
+     */
+    fun playAll(songs: List<QueueSong>, start: Int, queueTitle: String?, context: PlayContext? = null) {
+        val tapped = songs.getOrNull(start) ?: return
+        if (tapped is QueueSong.Fetch && tapped.track.recordingId == null) return
         finding?.cancel()
         finding = scope.launch {
             val server = servers.getActive()?.takeIf { requests.supports(it) } ?: return@launch
-            _events.emit(PlayNowEvent.Finding(track.title))
+            val title = when (tapped) {
+                is QueueSong.Have -> tapped.track.title
+                is QueueSong.Fetch -> tapped.track.title
+            }
             try {
-                var stream = requests.startPlayNow(server, recording, track.albumReleaseGroupId, track.title,
-                    track.artist.orEmpty(), track.durationMs)
-                var waited = 0L
-                while (!stream.playable && stream.status != "failed" && waited < FIND_TIMEOUT_MS) {
-                    delay(POLL_MS)
-                    waited += POLL_MS
-                    stream = requests.playNowStatus(server, stream.id)
+                // The tapped song first, so it's fetched before the queued ones.
+                val first: Track = when (tapped) {
+                    is QueueSong.Have -> tapped.track
+                    is QueueSong.Fetch -> {
+                        _events.emit(PlayNowEvent.Finding(title))
+                        findPlayable(server, tapped.track) ?: return@launch
+                    }
                 }
-                if (!stream.playable) {
-                    Log.w(TAG, "\"${track.title}\" not playable after ${waited / 1000} s: ${stream.status} ${stream.error.orEmpty()}")
-                    _events.emit(PlayNowEvent.Failed(track.title, stream.error ?: "still ${stream.status} after ${waited / 1000} s", track))
-                    return@launch
+                val later = coroutineScope {
+                    songs.mapIndexed { i, song ->
+                        async {
+                            when {
+                                i == start -> first
+                                song is QueueSong.Have -> song.track
+                                i < start -> null
+                                else -> queued(server, (song as QueueSong.Fetch).track)
+                            }
+                        }
+                    }.awaitAll()
                 }
-                Log.i(TAG, "\"${track.title}\" playable after ${waited / 1000} s (${stream.status}, ${stream.format})")
-                // The player only takes calls on the main thread; this scope runs on Default.
+                val queue = later.filterNotNull()
                 withContext(Dispatchers.Main) {
-                    playback.playTracks(listOf(asTrack(server, stream, track)), 0, queueTitle = track.title)
+                    playback.playTracks(queue, queue.indexOf(first).coerceAtLeast(0), queueTitle = queueTitle, context = context)
                 }
-                _events.emit(PlayNowEvent.Playing(track.title, stream.id))
+                PlayNowIds.streamId(first.id)?.let { _events.emit(PlayNowEvent.Playing(title, it)) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.w(TAG, "Play now of \"${track.title}\" failed", e)
-                _events.emit(PlayNowEvent.Failed(track.title, e.message ?: e.javaClass.simpleName, track))
+                Log.w(TAG, "Play now of \"$title\" failed", e)
+                _events.emit(PlayNowEvent.Failed(title, e.message ?: e.javaClass.simpleName, (tapped as? QueueSong.Fetch)?.track))
             }
+        }
+    }
+
+    /** Start fetching [track] now and wait until it plays; null (and a Failed event) when it can't. */
+    private suspend fun findPlayable(server: Server, track: CatalogTrack): Track? {
+        var stream = requests.startPlayNow(server, track.recordingId!!, track.albumReleaseGroupId, track.title,
+            track.artist.orEmpty(), track.durationMs)
+        var waited = 0L
+        while (!stream.playable && stream.status != "failed" && waited < FIND_TIMEOUT_MS) {
+            delay(POLL_MS)
+            waited += POLL_MS
+            stream = requests.playNowStatus(server, stream.id)
+        }
+        if (!stream.playable) {
+            Log.w(TAG, "\"${track.title}\" not playable after ${waited / 1000} s: ${stream.status} ${stream.error.orEmpty()}")
+            _events.emit(PlayNowEvent.Failed(track.title, stream.error ?: "still ${stream.status} after ${waited / 1000} s", track))
+            return null
+        }
+        Log.i(TAG, "\"${track.title}\" playable after ${waited / 1000} s (${stream.status}, ${stream.format})")
+        return asTrack(server, stream, track)
+    }
+
+    /** A song of a queue, fetched in its turn; null when continuo wouldn't take it. */
+    private suspend fun queued(server: Server, track: CatalogTrack): Track? {
+        val recording = track.recordingId ?: return null
+        return try {
+            asTrack(server, requests.startPlayNow(server, recording, track.albumReleaseGroupId, track.title,
+                track.artist.orEmpty(), track.durationMs, queued = true), track)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Queueing \"${track.title}\" failed", e)
+            null
         }
     }
 

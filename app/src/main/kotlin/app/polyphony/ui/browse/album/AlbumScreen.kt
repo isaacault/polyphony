@@ -221,7 +221,7 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
                             }.joinToString(" · "),
                             belowTitle = {
                                 PlayShuffleButtons(
-                                    onPlay = { viewModel.play() },
+                                    onPlay = { viewModel.playEntry(0) },
                                     onShuffle = { viewModel.play(shuffle = true) },
                                     playLabel = stringResource(R.string.browse_action_play),
                                     shuffleLabel = stringResource(R.string.browse_action_shuffle),
@@ -265,7 +265,8 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
                                         busy = song.requestKeys.any { it in state.requesting },
                                         requestLabel = stringResource(requestTrackLabel(song)),
                                         onRequest = { viewModel.requestTrack(song) },
-                                        onClick = if (canPlayNow && song.recordingId != null) ({ playNow.play(song) }) else null,
+                                        // The album from here: this song, and the rest after it (polyphony: whole-album queue).
+                                        onClick = if (canPlayNow && song.recordingId != null) ({ viewModel.playEntry(state.entries.indexOf(entry)) }) else null,
                                         onLongClick = { songForOptions = song },
                                     )
                                 }
@@ -275,7 +276,7 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
                             TrackSwipeRow(track = track) {
                                 TrackRow(
                                     track = track,
-                                    onClick = { viewModel.play(startIndex = state.tracks.indexOf(track)) },
+                                    onClick = { viewModel.playEntry(state.entries.indexOf(entry)) },
                                     isCurrent = track.id == state.currentTrackId,
                                     isPlaying = state.isPlaying,
                                     showArtwork = !state.showTrackNumbers,
