@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -30,10 +31,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,6 +52,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.R
 import app.polyphony.core.domain.model.Album
+import app.polyphony.core.domain.model.Availability
+import app.polyphony.core.domain.model.CatalogTrack
 import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.RecentContext
 import app.polyphony.core.ui.components.AlbumCard
@@ -63,9 +69,17 @@ import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.core.ui.util.formatBytes
 import app.polyphony.navigation.AlbumListKind
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.browse.catalog.CatalogAlbumCard
+import app.polyphony.ui.browse.catalog.CatalogRow
+import app.polyphony.ui.browse.catalog.Discography
+import app.polyphony.ui.browse.catalog.requestTrackLabel
 import app.polyphony.ui.common.AlbumOptionsSheet
+import app.polyphony.ui.common.CatalogSongSheet
+import app.polyphony.ui.common.CatalogSwipeRow
 import app.polyphony.ui.common.OfflineModeBanner
 import app.polyphony.ui.common.OfflineModeIconButton
+import app.polyphony.ui.common.PlayNowViewModel
+import app.polyphony.ui.shell.LocalSnackbarHostState
 import java.time.LocalTime
 
 @Composable
@@ -90,6 +104,18 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
     val titleRecentlyAdded = stringResource(R.string.browse_home_recently_added)
     val titleMostPlayed = stringResource(R.string.browse_home_most_played)
     val feedback by viewModel.feedback.collectAsStateWithLifecycle()
+    val discovery by viewModel.discovery.collectAsStateWithLifecycle()
+    val playNow = hiltViewModel<PlayNowViewModel>().playNow
+    val canPlayNow by playNow.available.collectAsStateWithLifecycle()
+    var songForOptions by remember { mutableStateOf<CatalogTrack?>(null) }
+    var showAllForYou by remember { mutableStateOf(false) }
+    val snackbar = LocalSnackbarHostState.current
+    val context = LocalContext.current
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { m ->
+            snackbar.showSnackbar(if (m.arg == null) context.getString(m.text) else context.getString(m.text, m.arg))
+        }
+    }
     val titleFavorites = stringResource(if (feedback.usesRatings) R.string.feedback_top_rated else R.string.browse_home_favorites)
 
     Scaffold(
@@ -178,6 +204,59 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                         onAlbum = navigator::openAlbum,
                         onAlbumLong = { albumForOptions = it },
                     )
+                    // Discovery (continuo): albums you don't have yet, and songs you might like.
+                    if (discovery.newReleases.isNotEmpty()) {
+                        item(key = "new-header") { SectionHeader(title = stringResource(R.string.browse_home_new_from_artists)) }
+                        item(key = "new") {
+                            HorizontalCarousel(items = discovery.newReleases, key = { "n-" + it.key }) { album ->
+                                val libraryId = Discography.libraryId(album.availability)
+                                CatalogAlbumCard(
+                                    album = album,
+                                    busy = album.releaseGroupId in discovery.requesting,
+                                    onRequest = viewModel::request,
+                                    onClick = {
+                                        when {
+                                            libraryId != null -> navigator.openAlbum(libraryId)
+                                            album.releaseGroupId != null -> navigator.openCatalogAlbum(album.releaseGroupId!!, album.title)
+                                        }
+                                    },
+                                    modifier = Modifier.width(Dimens.carouselArtwork),
+                                )
+                            }
+                        }
+                    }
+                    if (discovery.forYou.isNotEmpty()) {
+                        val visible = if (showAllForYou) discovery.forYou else discovery.forYou.take(FOR_YOU_SHOWN)
+                        item(key = "foryou-header") { SectionHeader(title = stringResource(R.string.browse_home_for_you)) }
+                        items(visible, key = { "fy-" + it.key }, contentType = { "catalog-track" }) { track ->
+                            val inLibrary = (track.availability as? Availability.InLibrary)?.libraryAlbumId
+                            CatalogSwipeRow(track) {
+                                CatalogRow(
+                                    title = track.title,
+                                    subtitle = track.artist,
+                                    artworkUrl = null,
+                                    availability = track.availability,
+                                    releaseGroupId = track.albumReleaseGroupId,
+                                    busy = track.requestKeys.any { it in discovery.requesting },
+                                    requestLabel = stringResource(requestTrackLabel(track)),
+                                    onRequest = { viewModel.requestTrack(track) },
+                                    onClick = when {
+                                        inLibrary != null -> ({ navigator.openAlbum(inLibrary) })
+                                        canPlayNow && track.recordingId != null -> ({ playNow.play(track) })
+                                        else -> null
+                                    },
+                                    onLongClick = if (inLibrary == null) ({ songForOptions = track }) else null,
+                                )
+                            }
+                        }
+                        if (discovery.forYou.size > FOR_YOU_SHOWN) {
+                            item(key = "foryou-more") {
+                                TextButton(onClick = { showAllForYou = !showAllForYou }, modifier = Modifier.padding(start = 8.dp)) {
+                                    Text(stringResource(if (showAllForYou) R.string.browse_action_show_less else R.string.browse_action_show_more))
+                                }
+                            }
+                        }
+                    }
                     albumShelf(
                         key = "most",
                         title = titleMostPlayed,
@@ -275,7 +354,17 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
         )
     }
     albumForOptions?.let { AlbumOptionsSheet(album = it, onDismiss = { albumForOptions = null }) }
+    songForOptions?.let { song ->
+        CatalogSongSheet(
+            track = song,
+            onOpenAlbum = song.albumReleaseGroupId?.let { rg -> { navigator.openCatalogAlbum(rg, song.albumTitle ?: song.title) } },
+            onDismiss = { songForOptions = null },
+        )
+    }
 }
+
+/** For you's songs shown before Show more. */
+private const val FOR_YOU_SHOWN = 5
 
 @Composable
 private fun ServerChipRow(state: HomeUiState, onClick: () -> Unit) {

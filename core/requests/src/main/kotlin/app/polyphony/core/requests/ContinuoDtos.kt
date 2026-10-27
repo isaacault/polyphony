@@ -155,6 +155,18 @@ internal fun AvailabilityDto.toDomain(fallbackAlbumId: String?): Availability = 
 @Serializable
 internal data class BiographyDto(val text: String = "", val source: String? = null, val url: String? = null)
 
+/** `GET /v1/discover`: Home's discovery rows, as search hits. */
+@Serializable
+internal data class DiscoverDto(
+    val newReleases: List<HitDto> = emptyList(),
+    val forYou: List<HitDto> = emptyList(),
+)
+
+internal fun DiscoverDto.toDomain(artworkHost: String?) = app.polyphony.core.domain.model.Discovery(
+    newReleases = newReleases.filter { it.kind == "album" }.map { it.toCatalogAlbum(artworkHost) },
+    forYou = forYou.filter { it.kind == "track" }.map { it.toCatalogTrack() },
+)
+
 /** `GET /v1/catalog/artists/{mbid}`: an artist's page. */
 @Serializable
 internal data class CatalogArtistDto(

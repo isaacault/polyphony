@@ -47,6 +47,9 @@ interface RequestRepository {
      */
     suspend fun catalogArtist(server: Server, artistMbid: String): CatalogArtistPage?
 
+    /** Home's discovery rows; null from a continuo too old to have them. */
+    suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery?
+
     /**
      * The catalogue artist named [name] (case and punctuation aside), for a library artist the
      * server has no MusicBrainz id for; null when the catalogue has no such artist.

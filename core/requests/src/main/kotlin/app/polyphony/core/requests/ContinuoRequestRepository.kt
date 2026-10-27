@@ -53,6 +53,13 @@ class ContinuoRequestRepository internal constructor(
         return client.decode(SearchDto.serializer(), reply.body).toDomain(artworkHost = hostOf(server.baseUrl))
     }
 
+    override suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery? {
+        val reply = client.get(server, "/v1/discover")
+        if (reply.code == 404) return null   // a continuo from before discovery
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo discover failed")
+        return client.decode(DiscoverDto.serializer(), reply.body).toDomain(artworkHost = hostOf(server.baseUrl))
+    }
+
     override suspend fun catalogArtist(server: Server, artistMbid: String): CatalogArtistPage? {
         val reply = client.get(server, "/v1/catalog/artists/${URLEncoder.encode(artistMbid, "UTF-8")}")
         // 404: an artist the catalogue doesn't know, or a continuo from before artist pages.
