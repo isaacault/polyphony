@@ -112,4 +112,21 @@ class EverythingSectionTest {
         assertFalse(SearchRanking.isExact("Peach Pit Live", "peach pit"))
         assertFalse(SearchRanking.isExact("Anything", "  "))
     }
+
+    @Test
+    fun `the server's best hit leads, the rest keep their order`() {
+        val (lead, rest) = TopHit.byKey(listOf("a", "b", "c"), "b") { it }
+        assertEquals(listOf("b"), lead)
+        assertEquals(listOf("a", "c"), rest)
+        assertEquals(emptyList<String>() to listOf("a"), TopHit.byKey(listOf("a"), null) { it })
+        assertEquals(emptyList<String>() to listOf("a"), TopHit.byKey(listOf("a"), "gone") { it })
+    }
+
+    @Test
+    fun `one of yours whose name starts as typed leads`() {
+        val (lead, rest) = TopHit.startingWith(listOf("Ed Maverick", "Maverick Sabre", "Mavis"), "maverick") { it }
+        assertEquals(listOf("Maverick Sabre"), lead)
+        assertEquals(listOf("Ed Maverick", "Mavis"), rest)
+        assertEquals("a leading The aside", listOf("The Weeknd"), TopHit.startingWith(listOf("The Weeknd"), "weeknd") { it }.first)
+    }
 }

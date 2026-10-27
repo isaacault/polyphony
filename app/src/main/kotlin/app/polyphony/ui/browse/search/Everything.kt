@@ -27,6 +27,9 @@ object SearchRanking {
     /** The name is what was typed (case, punctuation and a leading "The" aside). */
     fun isExact(name: String, query: String): Boolean = loose(query).let { it.isNotEmpty() && loose(name) == it }
 
+    /** The name starts with what was typed ("maverick": Maverick Sabre). */
+    fun startsWith(name: String, query: String): Boolean = loose(query).let { it.isNotEmpty() && loose(name).startsWith(it) }
+
     private fun score(name: String, q: String): Int = when {
         name == q -> 0
         name.startsWith(q) -> 1
@@ -39,6 +42,26 @@ object SearchRanking {
     private fun loose(s: String): String =
         s.lowercase().map { if (it.isLetterOrDigit()) it else ' ' }.joinToString("").trim()
             .replace(Regex("\\s+"), " ").removePrefix("the ")
+}
+
+/**
+ * What leads a search page. One of yours named as typed (Search's exact matches, else an artist
+ * or album of yours whose name starts so: "maverick" is your Maverick Sabre); else, from a
+ * server that ranks its catalogue, the hit it names (continuo's `best`: "espresso" is Sabrina
+ * Carpenter's song, "sabrina" Sabrina Carpenter).
+ */
+object TopHit {
+    /** [items] as the lead (the one keyed [bestKey], if there) and the rest, in their order. */
+    fun <T> byKey(items: List<T>, bestKey: String?, key: (T) -> String): Pair<List<T>, List<T>> {
+        val at = if (bestKey == null) -1 else items.indexOfFirst { key(it) == bestKey }
+        return if (at < 0) emptyList<T>() to items else listOf(items[at]) to items.filterIndexed { i, _ -> i != at }
+    }
+
+    /** [items] as the first whose name starts with what was typed, and the rest. */
+    fun <T> startingWith(items: List<T>, query: String, name: (T) -> String): Pair<List<T>, List<T>> {
+        val at = items.indexOfFirst { SearchRanking.startsWith(name(it), query) }
+        return if (at < 0) emptyList<T>() to items else listOf(items[at]) to items.filterIndexed { i, _ -> i != at }
+    }
 }
 
 /**

@@ -72,6 +72,9 @@ data class EverythingUi(
     val partials: ImmutableMap<String, Availability.Partial> = persistentMapOf(),
     /** Only the top few, found while typing: the search button brings the rest. */
     val quick: Boolean = false,
+    /** The server ranked these (TopHit): their order stands, [bestKey] leads. */
+    val ranked: Boolean = false,
+    val bestKey: String? = null,
 ) {
     val isEmpty: Boolean get() = artists.isEmpty() && albums.isEmpty() && tracks.isEmpty()
 }
@@ -258,6 +261,8 @@ class SearchViewModel @Inject constructor(
                 requesting = busy.toImmutableSet(),
                 partials = EverythingSection.partials(results).toImmutableMap(),
                 quick = cat.quick && results != null,
+                ranked = results?.ranked == true,
+                bestKey = results?.bestKey,
             ),
         )
     }
@@ -271,20 +276,27 @@ class SearchViewModel @Inject constructor(
             if (on) SearchRanking.rank(items, q, name) else emptyList()
         fun <T> split(on: Boolean, items: List<T>, name: (T) -> String): Pair<List<T>, List<T>> =
             ranked(on, items, name).partition { lead && SearchRanking.isExact(name(it), q) }
-        val (topArtists, artists) = split(k.shows(SearchKind.ARTISTS), s.artists) { it.name }
-        val (topAlbums, albums) = split(k.shows(SearchKind.ALBUMS), s.albums) { it.name }
+        var (topArtists, artists) = split(k.shows(SearchKind.ARTISTS), s.artists) { it.name }
+        var (topAlbums, albums) = split(k.shows(SearchKind.ALBUMS), s.albums) { it.name }
         val (topPlaylists, playlists) = split(k.shows(SearchKind.PLAYLISTS), s.playlists) { it.name }
         val (topTracks, tracks) = split(k.shows(SearchKind.SONGS), s.tracks) { it.title }
-        // A quick search comes most listened first ("sabrina": Sabrina Carpenter, not a Sabrina):
-        // its order stands, and its first artist is the top result.
-        fun <T> quickSplit(on: Boolean, items: List<T>, top: Boolean): Pair<List<T>, List<T>> =
-            if (!on) emptyList<T>() to emptyList() else if (top && lead) items.take(1) to items.drop(1) else emptyList<T>() to items
-        val (topCatArtists, catArtists) = if (shown.quick) quickSplit(k.shows(SearchKind.ARTISTS), shown.artists, top = true)
-            else split(k.shows(SearchKind.ARTISTS), shown.artists) { it.name }
-        val (topCatAlbums, catAlbums) = if (shown.quick) quickSplit(k.shows(SearchKind.ALBUMS), shown.albums, top = false)
-            else split(k.shows(SearchKind.ALBUMS), shown.albums) { it.title }
-        val (topCatTracks, catTracks) = if (shown.quick) quickSplit(k.shows(SearchKind.SONGS), shown.tracks, top = false)
-            else split(k.shows(SearchKind.SONGS), shown.tracks) { it.title }
+        // One of yours named as typed leads (TopHit); a ranking server's best leads otherwise.
+        if (lead && shown.ranked && (topArtists + topAlbums + topPlaylists + topTracks).isEmpty()) {
+            TopHit.startingWith(artists, q) { it.name }.let { (t, rest) -> topArtists = t; artists = rest }
+            if (topArtists.isEmpty()) TopHit.startingWith(albums, q) { it.name }.let { (t, rest) -> topAlbums = t; albums = rest }
+        }
+        val yoursLead = (topArtists + topAlbums + topPlaylists + topTracks).isNotEmpty()
+        // A ranked catalogue keeps the server's order (most listened first: "sabrina" is Sabrina
+        // Carpenter, not an artist called Sabrina) and its best hit leads; an older server's is
+        // ordered here, its exact names leading, as before.
+        fun <T> catalog(on: Boolean, items: List<T>, name: (T) -> String, key: (T) -> String): Pair<List<T>, List<T>> = when {
+            !on -> emptyList<T>() to emptyList()
+            shown.ranked -> if (lead && !yoursLead) TopHit.byKey(items, shown.bestKey, key) else emptyList<T>() to items
+            else -> split(true, items, name)
+        }
+        val (topCatArtists, catArtists) = catalog(k.shows(SearchKind.ARTISTS), shown.artists, { it.name }, { it.key })
+        val (topCatAlbums, catAlbums) = catalog(k.shows(SearchKind.ALBUMS), shown.albums, { it.title }, { it.key })
+        val (topCatTracks, catTracks) = catalog(k.shows(SearchKind.SONGS), shown.tracks, { it.title }, { it.key })
         s.copy(
             feedback = fb,
             scopesAvailable = isLinked,
