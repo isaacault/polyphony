@@ -14,6 +14,7 @@ import app.polyphony.core.domain.repository.ServerRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.withContext
 
 sealed interface PlayNowEvent {
     val title: String
@@ -46,6 +48,8 @@ sealed interface PlayNowEvent {
  * Play now (continuo#12), app-wide: tap a song you don't have and continuo fetches the fastest
  * Soulseek copy; it starts playing as soon as the first bytes are in, while it downloads. The
  * outcome shows in the shell (Keep, or Request when nobody has it), whichever screen started it.
+ * Runs on the application scope (Dispatchers.Default): calls into the player hop to the main
+ * thread, the only one Media3's controller accepts.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
@@ -90,7 +94,10 @@ class PlayNow @Inject constructor(
                     return@launch
                 }
                 Log.i(TAG, "\"${track.title}\" playable after ${waited / 1000} s (${stream.status}, ${stream.format})")
-                playback.playTracks(listOf(asTrack(server, stream, track)), 0, queueTitle = track.title)
+                // The player only takes calls on the main thread; this scope runs on Default.
+                withContext(Dispatchers.Main) {
+                    playback.playTracks(listOf(asTrack(server, stream, track)), 0, queueTitle = track.title)
+                }
                 _events.emit(PlayNowEvent.Playing(track.title, stream.id))
             } catch (e: CancellationException) {
                 throw e
@@ -113,7 +120,9 @@ class PlayNow @Inject constructor(
                 val stream = requests.startPlayNow(server, recording, track.albumReleaseGroupId, track.title,
                     track.artist.orEmpty(), track.durationMs, queued = true)
                 val song = asTrack(server, stream, track)
-                if (next) playback.playNext(listOf(song)) else playback.addToQueue(listOf(song))
+                withContext(Dispatchers.Main) {
+                    if (next) playback.playNext(listOf(song)) else playback.addToQueue(listOf(song))
+                }
                 _events.emit(PlayNowEvent.Queued(track.title, next))
             } catch (e: CancellationException) {
                 throw e
