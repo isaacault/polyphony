@@ -149,6 +149,8 @@ class ContinuoRequestRepositoryTest {
         assertEquals(listOf("Gemini", "Reach for the Dead"), detail.tracks.map { it.title })
         assertEquals(172000L, detail.tracks[0].durationMs)
         assertNull(detail.tracks[1].durationMs)
+        assertEquals("the recording, for Play now", "r1", detail.tracks[0].recordingId)
+        assertNull(detail.tracks[1].recordingId)
     }
 
     @Test

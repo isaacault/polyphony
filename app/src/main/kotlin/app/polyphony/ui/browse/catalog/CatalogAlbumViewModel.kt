@@ -7,9 +7,11 @@ import androidx.navigation.toRoute
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbumDetail
 import app.polyphony.core.domain.model.CatalogAlbumTrack
+import app.polyphony.core.domain.model.CatalogTrack
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.navigation.CatalogAlbumRoute
+import app.polyphony.ui.common.PlayNow
 import app.polyphony.ui.common.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
@@ -63,7 +65,11 @@ class CatalogAlbumViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val servers: ServerRepository,
     private val requests: RequestRepository,
+    private val playNow: PlayNow,
 ) : ViewModel() {
+
+    /** Whether this server can play the album's songs before you have them (continuo#12). */
+    val canPlayNow: StateFlow<Boolean> = playNow.available
 
     private val route = savedStateHandle.toRoute<CatalogAlbumRoute>()
     private val detail = MutableStateFlow<CatalogAlbumDetail?>(null)
@@ -116,4 +122,16 @@ class CatalogAlbumViewModel @Inject constructor(
     }
 
     fun request() = requester.request(route.releaseGroupId)
+
+    /** Play a song of this album now, from Soulseek, while it downloads. */
+    fun playTrack(track: CatalogAlbumTrack) {
+        val s = state.value
+        playNow.play(
+            CatalogTrack(
+                key = "mb:rec:${track.recordingId}", title = track.title, artist = s.artist, durationMs = track.durationMs,
+                albumTitle = s.title, albumReleaseGroupId = route.releaseGroupId, availability = Availability.Requestable,
+                recordingId = track.recordingId,
+            ),
+        )
+    }
 }
