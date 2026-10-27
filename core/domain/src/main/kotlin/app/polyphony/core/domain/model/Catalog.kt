@@ -122,6 +122,12 @@ data class CatalogResults(
     val catalogAvailable: Boolean = true,
     /** Only the top few (a quick search, while typing): the full search has more. */
     val partial: Boolean = false,
+    /**
+     * The server ranked these by what people listen to (continuo's ranked search): their order
+     * stands, and [bestKey] is the hit to lead with (null: none clearly).
+     */
+    val ranked: Boolean = false,
+    val bestKey: String? = null,
 )
 
 /**

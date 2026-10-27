@@ -28,6 +28,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -133,6 +134,17 @@ class ContinuoRequestRepositoryTest {
         val sent = fake.seen.last { it.first.url.encodedPath == "/v1/search" }.first.url
         assertEquals("geogaddi", sent.queryParameter("q"))
         assertEquals("album,artist,track", sent.queryParameter("types"))
+    }
+
+    @Test
+    fun `a ranking server says which hit leads, an older one says nothing`() = runTest {
+        val ranked = searchBody.trimEnd().removeSuffix("}") + ""","ranked":true,"best":"mb:artist:ae"}"""
+        val noLead = searchBody.trimEnd().removeSuffix("}") + ""","ranked":true,"best":null}"""
+        suspend fun of(body: String) = repo(FakeContinuo().apply { routes["GET /v1/search"] = { _, _ -> 200 to body } }, FakeServers(server))
+            .search(server, "boards")
+        of(ranked).let { assertTrue(it.ranked); assertEquals("mb:artist:ae", it.bestKey) }
+        of(noLead).let { assertTrue(it.ranked); assertNull(it.bestKey) }
+        of(searchBody).let { assertFalse(it.ranked); assertNull(it.bestKey) }
     }
 
     @Test
