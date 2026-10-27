@@ -163,7 +163,8 @@ fun PolyphonyShell(
                     is PlayNowEvent.Failed -> {
                         val track = event.track
                         val result = snackbarHostState.showSnackbar(
-                            message = context.getString(R.string.playnow_failed, event.title),
+                            message = event.detail?.let { context.getString(R.string.playnow_failed_because, event.title, it) }
+                                ?: context.getString(R.string.playnow_failed, event.title),
                             actionLabel = track?.let { context.getString(R.string.playnow_request) },
                             duration = SnackbarDuration.Long,
                         )

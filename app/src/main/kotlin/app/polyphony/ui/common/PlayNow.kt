@@ -1,5 +1,6 @@
 package app.polyphony.ui.common
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import app.polyphony.core.data.di.ApplicationScope
 import app.polyphony.core.domain.model.CatalogTrack
@@ -84,15 +85,18 @@ class PlayNow @Inject constructor(
                     stream = requests.playNowStatus(server, stream.id)
                 }
                 if (!stream.playable) {
-                    _events.emit(PlayNowEvent.Failed(track.title, stream.error, track))
+                    Log.w(TAG, "\"${track.title}\" not playable after ${waited / 1000} s: ${stream.status} ${stream.error.orEmpty()}")
+                    _events.emit(PlayNowEvent.Failed(track.title, stream.error ?: "still ${stream.status} after ${waited / 1000} s", track))
                     return@launch
                 }
+                Log.i(TAG, "\"${track.title}\" playable after ${waited / 1000} s (${stream.status}, ${stream.format})")
                 playback.playTracks(listOf(asTrack(server, stream, track)), 0, queueTitle = track.title)
                 _events.emit(PlayNowEvent.Playing(track.title, stream.id))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _events.emit(PlayNowEvent.Failed(track.title, e.message, track))
+                Log.w(TAG, "Play now of \"${track.title}\" failed", e)
+                _events.emit(PlayNowEvent.Failed(track.title, e.message ?: e.javaClass.simpleName, track))
             }
         }
     }
@@ -114,7 +118,8 @@ class PlayNow @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _events.emit(PlayNowEvent.Failed(track.title, e.message, track))
+                Log.w(TAG, "Queueing \"${track.title}\" failed", e)
+                _events.emit(PlayNowEvent.Failed(track.title, e.message ?: e.javaClass.simpleName, track))
             }
         }
     }
@@ -160,6 +165,7 @@ class PlayNow @Inject constructor(
     )
 
     private companion object {
+        const val TAG = "PolyphonyPlayNow"
         const val POLL_MS = 1_000L
         const val FIND_TIMEOUT_MS = 90_000L
         const val KEEP_POLL_MS = 3_000L

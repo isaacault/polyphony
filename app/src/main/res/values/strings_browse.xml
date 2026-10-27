@@ -189,7 +189,8 @@
     <string name="playnow_playing">Playing %1$s from Soulseek</string>
     <string name="playnow_keep">Keep</string>
     <string name="playnow_kept">%1$s will be in your library shortly.</string>
-    <string name="playnow_failed">Nobody could send %1$s right now.</string>
+    <string name="playnow_failed">Couldn\'t play %1$s.</string>
+    <string name="playnow_failed_because">Couldn\'t play %1$s: %2$s</string>
     <string name="playnow_request">Request</string>
     <string name="playnow_keep_in_library">Keep in your library</string>
     <string name="playnow_kept_short">Kept</string>
