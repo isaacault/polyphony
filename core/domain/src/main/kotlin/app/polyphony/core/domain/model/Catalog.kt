@@ -116,6 +116,15 @@ data class CatalogResults(
     val partial: Boolean = false,
 )
 
+/**
+ * Home's discovery (continuo's /v1/discover): new releases from the artists in your library, and
+ * songs from artists like them; each playable with Play now or requestable.
+ */
+data class Discovery(
+    val newReleases: List<CatalogAlbum> = emptyList(),
+    val forYou: List<CatalogTrack> = emptyList(),
+)
+
 sealed interface RequestOutcome {
     data class Requested(val requestId: Long) : RequestOutcome
     data class AlreadyRequested(val requestId: Long?) : RequestOutcome

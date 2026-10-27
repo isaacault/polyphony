@@ -3,6 +3,8 @@ package app.polyphony.ui.browse.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.polyphony.core.domain.model.Album
+import app.polyphony.core.domain.model.CatalogAlbum
+import app.polyphony.core.domain.model.CatalogTrack
 import app.polyphony.core.domain.model.Feedback
 import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Playlist
@@ -14,13 +16,24 @@ import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.LibrarySyncManager
 import app.polyphony.core.domain.repository.ListeningHistoryRepository
+import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.SyncState
+import app.polyphony.ui.browse.catalog.CatalogArtistPageLogic
+import app.polyphony.ui.browse.catalog.CatalogRequester
+import app.polyphony.ui.common.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableSet
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +42,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -54,6 +69,14 @@ data class HomeUiState(
         get() = isLoaded && recentlyAdded.isEmpty() && playlists.isEmpty() && continueListening.isEmpty()
 }
 
+/** Home's discovery rows (continuo-linked servers); empty elsewhere, or when it can't say. */
+data class DiscoveryUi(
+    val newReleases: ImmutableList<CatalogAlbum> = persistentListOf(),
+    val forYou: ImmutableList<CatalogTrack> = persistentListOf(),
+    /** Release groups and songs with a request in flight from Home. */
+    val requesting: ImmutableSet<String> = persistentSetOf(),
+)
+
 private data class Shelves(
     val continueListening: List<RecentContext>,
     val recentlyAdded: List<Album>,
@@ -77,6 +100,7 @@ class HomeViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val playback: PlaybackController,
     private val history: ListeningHistoryRepository,
+    private val requests: RequestRepository,
     feedbackRepository: FeedbackRepository,
     downloads: DownloadRepository,
 ) : ViewModel() {
@@ -126,7 +150,47 @@ class HomeViewModel @Inject constructor(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
+    private val messages = Channel<UiMessage>(Channel.BUFFERED)
+    /** Request outcomes, for the snackbar. */
+    val events: Flow<UiMessage> = messages.receiveAsFlow()
+    private val requester = CatalogRequester(viewModelScope, servers, requests, messages)
+    private val discoveryReloads = MutableStateFlow(0)
+
+    /**
+     * New from your artists and For you, from continuo (cached there for hours): fetched when the
+     * active server changes and on pull to refresh. A request made here shows on its row at once.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val discovery: StateFlow<DiscoveryUi> = combine(
+        combine(servers.activeServer.map { it?.id }.distinctUntilChanged(), discoveryReloads) { id, _ -> id }
+            .mapLatest {
+                val server = servers.getActive()?.takeIf { requests.supports(it) } ?: return@mapLatest null
+                try {
+                    requests.discover(server)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+            },
+        requester.requested,
+        requester.requesting,
+    ) { found, requested, busy ->
+        DiscoveryUi(
+            newReleases = found?.newReleases.orEmpty()
+                .map { a -> a.releaseGroupId?.let(requested::get)?.let { a.copy(availability = it) } ?: a }
+                .toImmutableList(),
+            forYou = CatalogArtistPageLogic.topTracks(found?.forYou.orEmpty(), requested).toImmutableList(),
+            requesting = busy.toImmutableSet(),
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiscoveryUi())
+
+    fun request(releaseGroupId: String) = requester.request(releaseGroupId)
+
+    fun requestTrack(track: CatalogTrack) = requester.requestTrack(track)
+
     fun refresh(full: Boolean = false) {
+        discoveryReloads.value++
         if (refreshing.value) return
         viewModelScope.launch {
             refreshing.value = true

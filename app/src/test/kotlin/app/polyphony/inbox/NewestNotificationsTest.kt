@@ -54,6 +54,7 @@ class NewestNotificationsTest {
         override suspend fun removedAlbums(server: Server): List<RemovedAlbum> = error("unused")
         override suspend fun restoreAlbum(server: Server, removedId: Long): Unit = error("unused")
         override suspend fun catalogArtist(server: Server, artistMbid: String): CatalogArtistPage? = error("unused")
+        override suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery? = error("unused")
         override suspend fun requestAlbum(server: Server, releaseGroupId: String): RequestOutcome = error("unused")
         override suspend fun requestTrack(server: Server, recordingId: String, albumReleaseGroupId: String): RequestOutcome = error("unused")
         override suspend fun startPlayNow(server: Server, recordingId: String, albumReleaseGroupId: String?, title: String, artist: String, durationMs: Long?, queued: Boolean): PlayNowStream = error("unused")
