@@ -208,10 +208,10 @@ fun AppearanceSettingsScreen(viewModel: AppearanceViewModel = hiltViewModel()) {
             val tabLabels = LibrarySection.entries.associateWith { stringResource(it.labelRes()) }
             ActionPreference(
                 title = stringResource(R.string.settings_appearance_library_tabs),
-                summary = s.libraryTabs.ifEmpty { LibrarySection.entries }.joinToString(" · ") { tabLabels[it].orEmpty() },
+                summary = s.shownLibraryTabs.joinToString(" · ") { tabLabels[it].orEmpty() },
                 onClick = { tabsSheetOpen = true },
             )
-            val enabledTabs = s.libraryTabs.ifEmpty { LibrarySection.entries }
+            val enabledTabs = s.shownLibraryTabs
             ListPreference(
                 title = stringResource(R.string.settings_appearance_library_default_tab),
                 options = enabledTabs.map { ListOption(it, tabLabels[it].orEmpty()) },
@@ -268,11 +268,12 @@ fun AppearanceSettingsScreen(viewModel: AppearanceViewModel = hiltViewModel()) {
             )
         }
     }
-    val currentTabs = settings?.libraryTabs
+    val currentTabs = settings?.shownLibraryTabs
     if (tabsSheetOpen && currentTabs != null) {
         LibraryTabsSheet(
-            current = currentTabs.ifEmpty { LibrarySection.entries },
-            onChange = { tabs -> viewModel.update { it.copy(libraryTabs = tabs) } },
+            current = currentTabs,
+            // Chosen with every tab in view: none counts as new any more.
+            onChange = { tabs -> viewModel.update { it.copy(libraryTabs = tabs, libraryTabsKnown = LibrarySection.entries) } },
             onDismiss = { tabsSheetOpen = false },
         )
     }
@@ -390,6 +391,7 @@ private fun AccentSwatches(
 }
 
 private fun LibrarySection.labelRes(): Int = when (this) {
+    LibrarySection.EXPLORE -> R.string.browse_tab_explore
     LibrarySection.ARTISTS -> R.string.browse_tab_artists
     LibrarySection.ALBUMS -> R.string.browse_tab_albums
     LibrarySection.SONGS -> R.string.browse_tab_songs
