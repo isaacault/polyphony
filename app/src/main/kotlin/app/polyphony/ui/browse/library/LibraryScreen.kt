@@ -133,6 +133,7 @@ fun LibraryScreen(
             key = { tabs[it].key },
         ) { page ->
             when (tabs[page]) {
+                LibraryTab.EXPLORE -> ExploreTab()
                 LibraryTab.ARTISTS -> ArtistsTab(viewModel)
                 LibraryTab.ALBUMS -> AlbumsTab(viewModel)
                 LibraryTab.SONGS -> SongsTab(viewModel)
@@ -144,6 +145,7 @@ fun LibraryScreen(
 }
 
 private fun LibraryTab.labelRes(): Int = when (this) {
+    LibraryTab.EXPLORE -> R.string.browse_tab_explore
     LibraryTab.ARTISTS -> R.string.browse_tab_artists
     LibraryTab.ALBUMS -> R.string.browse_tab_albums
     LibraryTab.SONGS -> R.string.browse_tab_songs

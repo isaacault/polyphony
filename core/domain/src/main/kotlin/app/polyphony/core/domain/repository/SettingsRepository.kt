@@ -42,7 +42,10 @@ enum class LibraryLayout { LIST, GRID }
 
 /** Library tabs, in the order the user wants them. */
 @Serializable
-enum class LibrarySection { ARTISTS, ALBUMS, SONGS, PLAYLISTS, GENRES }
+enum class LibrarySection { EXPLORE, ARTISTS, ALBUMS, SONGS, PLAYLISTS, GENRES }
+
+/** The Library tabs there were before Explore: what a settings file without [AppearanceSettings.libraryTabsKnown] has seen. */
+private val TABS_BEFORE_EXPLORE = listOf(LibrarySection.ARTISTS, LibrarySection.ALBUMS, LibrarySection.SONGS, LibrarySection.PLAYLISTS, LibrarySection.GENRES)
 
 /** What a horizontal swipe on a song row does once it passes the threshold and is released. */
 @Serializable
@@ -73,6 +76,11 @@ data class AppearanceSettings(
     val playlistsLayout: LibraryLayout = LibraryLayout.LIST,
     /** Enabled Library tabs in display order; an empty list means all, in default order. */
     val libraryTabs: List<LibrarySection> = LibrarySection.entries.toList(),
+    /**
+     * The tabs there were when [libraryTabs] was last chosen: one added since (Explore) shows, first,
+     * until the user chooses again, rather than staying hidden behind a list saved before it existed.
+     */
+    val libraryTabsKnown: List<LibrarySection> = TABS_BEFORE_EXPLORE,
     /** Tab the Library opens on when nothing asks for a specific one; falls back to the first enabled tab. */
     val libraryDefaultTab: LibrarySection = LibrarySection.ALBUMS,
     /** Swipe gestures on song rows, by physical direction (not layout direction). */
@@ -89,7 +97,14 @@ data class AppearanceSettings(
     val albumFilter: LibraryFilter = LibraryFilter.NONE,
     val trackFilter: LibraryFilter = LibraryFilter.NONE,
     val playlistFilter: LibraryFilter = LibraryFilter.NONE,
-)
+) {
+    /** The Library tabs to show, in order: the chosen ones, after any added since they were chosen. */
+    val shownLibraryTabs: List<LibrarySection>
+        get() {
+            val chosen = libraryTabs.ifEmpty { LibrarySection.entries }
+            return LibrarySection.entries.filter { it !in libraryTabsKnown && it !in chosen } + chosen
+        }
+}
 
 @Serializable
 enum class ReplayGainMode { OFF, TRACK, ALBUM, AUTO }

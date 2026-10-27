@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.CatalogAlbum
-import app.polyphony.core.domain.model.CatalogTrack
 import app.polyphony.core.domain.model.Feedback
 import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.Playlist
@@ -18,9 +17,7 @@ import app.polyphony.core.domain.repository.LibrarySyncManager
 import app.polyphony.core.domain.repository.ListeningHistoryRepository
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
-import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.SyncState
-import app.polyphony.ui.browse.catalog.CatalogArtistPageLogic
 import app.polyphony.ui.browse.catalog.CatalogRequester
 import app.polyphony.ui.common.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,14 +37,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.random.Random
 
 data class HomeUiState(
     val isLoaded: Boolean = false,
@@ -57,7 +52,6 @@ data class HomeUiState(
     val continueListening: ImmutableList<RecentContext> = persistentListOf(),
     val recentlyAdded: ImmutableList<Album> = persistentListOf(),
     val mostPlayed: ImmutableList<Album> = persistentListOf(),
-    val randomPicks: ImmutableList<Album> = persistentListOf(),
     val favorites: ImmutableList<Album> = persistentListOf(),
     val playlists: ImmutableList<Playlist> = persistentListOf(),
     val sync: SyncState = SyncState(),
@@ -69,11 +63,10 @@ data class HomeUiState(
         get() = isLoaded && recentlyAdded.isEmpty() && playlists.isEmpty() && continueListening.isEmpty()
 }
 
-/** Home's discovery rows (continuo-linked servers); empty elsewhere, or when it can't say. */
+/** Home's discovery row (continuo-linked servers); empty elsewhere, or when it can't say. */
 data class DiscoveryUi(
     val newReleases: ImmutableList<CatalogAlbum> = persistentListOf(),
-    val forYou: ImmutableList<CatalogTrack> = persistentListOf(),
-    /** Release groups and songs with a request in flight from Home. */
+    /** Release groups with a request in flight from Home. */
     val requesting: ImmutableSet<String> = persistentSetOf(),
 )
 
@@ -81,7 +74,6 @@ private data class Shelves(
     val continueListening: List<RecentContext>,
     val recentlyAdded: List<Album>,
     val mostPlayed: List<Album>,
-    val randomPicks: List<Album>,
     val favorites: List<Album>,
 )
 
@@ -97,7 +89,6 @@ class HomeViewModel @Inject constructor(
     private val library: LibraryRepository,
     private val syncManager: LibrarySyncManager,
     private val servers: ServerRepository,
-    private val settings: SettingsRepository,
     private val playback: PlaybackController,
     private val history: ListeningHistoryRepository,
     private val requests: RequestRepository,
@@ -112,18 +103,12 @@ class HomeViewModel @Inject constructor(
     private val downloadSummary = combine(downloads.downloadedTrackIds(), downloads.storageUsage) { ids, usage -> ids.size to usage.usedBytes }
         .distinctUntilChanged()
 
-    private val randomPicks = settings.settings
-        .map { it.library.randomAlbumSeed }
-        .distinctUntilChanged()
-        .flatMapLatest { seed -> library.randomAlbums(12, seed) }
-
     private val shelves = combine(
         history.recent(20),
         library.recentlyAddedAlbums(20),
         library.mostPlayedAlbums(20),
-        randomPicks,
         library.likedAlbums(),
-    ) { recent, added, played, random, starred -> Shelves(recent, added, played, random, starred.take(20)) }
+    ) { recent, added, played, starred -> Shelves(recent, added, played, starred.take(20)) }
 
     private val meta = combine(
         library.playlists(),
@@ -142,7 +127,6 @@ class HomeViewModel @Inject constructor(
             continueListening = s.continueListening.toImmutableList(),
             recentlyAdded = s.recentlyAdded.toImmutableList(),
             mostPlayed = s.mostPlayed.toImmutableList(),
-            randomPicks = s.randomPicks.toImmutableList(),
             favorites = s.favorites.toImmutableList(),
             playlists = m.playlists.toImmutableList(),
             sync = m.sync,
@@ -157,7 +141,7 @@ class HomeViewModel @Inject constructor(
     private val discoveryReloads = MutableStateFlow(0)
 
     /**
-     * New from your artists and For you, from continuo (cached there for hours): fetched when the
+     * New from your artists, from continuo (cached there for hours): fetched when the
      * active server changes and on pull to refresh. A request made here shows on its row at once.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -180,14 +164,11 @@ class HomeViewModel @Inject constructor(
             newReleases = found?.newReleases.orEmpty()
                 .map { a -> a.releaseGroupId?.let(requested::get)?.let { a.copy(availability = it) } ?: a }
                 .toImmutableList(),
-            forYou = CatalogArtistPageLogic.topTracks(found?.forYou.orEmpty(), requested).toImmutableList(),
             requesting = busy.toImmutableSet(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiscoveryUi())
 
     fun request(releaseGroupId: String) = requester.request(releaseGroupId)
-
-    fun requestTrack(track: CatalogTrack) = requester.requestTrack(track)
 
     fun refresh(full: Boolean = false) {
         discoveryReloads.value++
@@ -199,12 +180,6 @@ class HomeViewModel @Inject constructor(
             } finally {
                 refreshing.value = false
             }
-        }
-    }
-
-    fun reshuffleRandom() {
-        viewModelScope.launch {
-            settings.update { it.copy(library = it.library.copy(randomAlbumSeed = Random.nextLong())) }
         }
     }
 

@@ -22,7 +22,6 @@ import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.LibrarySyncManager
 import app.polyphony.core.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.distinctUntilChanged
-import app.polyphony.core.domain.repository.LibrarySection
 import app.polyphony.core.domain.repository.AppearanceSettings
 import app.polyphony.core.domain.repository.LibraryLayout
 import app.polyphony.core.domain.repository.SyncState
@@ -44,7 +43,7 @@ import javax.inject.Inject
 data class LibraryStart(val tabs: ImmutableList<LibraryTab>, val defaultTab: LibraryTab)
 
 enum class LibraryTab(val key: String) {
-    ARTISTS("artists"), ALBUMS("albums"), SONGS("songs"), PLAYLISTS("playlists"), GENRES("genres");
+    EXPLORE("explore"), ARTISTS("artists"), ALBUMS("albums"), SONGS("songs"), PLAYLISTS("playlists"), GENRES("genres");
 
     companion object {
         fun fromKey(key: String?): LibraryTab? = entries.firstOrNull { it.key == key }
@@ -87,14 +86,14 @@ class LibraryViewModel @Inject constructor(
         .distinctUntilChanged().asState(LibraryFilter.NONE)
     /** Enabled Library tabs in the user's order (Appearance → Library tabs). */
     val libraryTabs: StateFlow<ImmutableList<LibraryTab>> = settings.settings
-        .map { s -> s.appearance.libraryTabs.ifEmpty { LibrarySection.entries }.map { LibraryTab.valueOf(it.name) }.toImmutableList() }
+        .map { s -> s.appearance.shownLibraryTabs.map { LibraryTab.valueOf(it.name) }.toImmutableList() }
         .distinctUntilChanged()
         .asState(LibraryTab.entries.toImmutableList())
 
     /** Tabs plus the one to open first; `null` until settings are loaded so the pager never starts on a guess. */
     val libraryStart: StateFlow<LibraryStart?> = settings.settings
         .map { s ->
-            val tabs = s.appearance.libraryTabs.ifEmpty { LibrarySection.entries }.map { LibraryTab.valueOf(it.name) }
+            val tabs = s.appearance.shownLibraryTabs.map { LibraryTab.valueOf(it.name) }
             val preferred = LibraryTab.valueOf(s.appearance.libraryDefaultTab.name)
             LibraryStart(tabs.toImmutableList(), if (preferred in tabs) preferred else tabs.first())
         }

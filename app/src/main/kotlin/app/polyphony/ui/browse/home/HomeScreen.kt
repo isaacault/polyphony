@@ -20,7 +20,6 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
@@ -31,7 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -52,8 +50,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.R
 import app.polyphony.core.domain.model.Album
-import app.polyphony.core.domain.model.Availability
-import app.polyphony.core.domain.model.CatalogTrack
 import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.RecentContext
 import app.polyphony.core.ui.components.AlbumCard
@@ -70,16 +66,11 @@ import app.polyphony.core.ui.util.formatBytes
 import app.polyphony.navigation.AlbumListKind
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.ui.browse.catalog.CatalogAlbumCard
-import app.polyphony.ui.browse.catalog.CatalogRow
 import app.polyphony.ui.browse.catalog.catalogAlbumSubtitle
 import app.polyphony.ui.browse.catalog.Discography
-import app.polyphony.ui.browse.catalog.requestTrackLabel
 import app.polyphony.ui.common.AlbumOptionsSheet
-import app.polyphony.ui.common.CatalogSongSheet
-import app.polyphony.ui.common.CatalogSwipeRow
 import app.polyphony.ui.common.OfflineModeBanner
 import app.polyphony.ui.common.OfflineModeIconButton
-import app.polyphony.ui.common.PlayNowViewModel
 import app.polyphony.ui.shell.LocalSnackbarHostState
 import java.time.LocalTime
 
@@ -106,10 +97,6 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
     val titleMostPlayed = stringResource(R.string.browse_home_most_played)
     val feedback by viewModel.feedback.collectAsStateWithLifecycle()
     val discovery by viewModel.discovery.collectAsStateWithLifecycle()
-    val playNow = hiltViewModel<PlayNowViewModel>().playNow
-    val canPlayNow by playNow.available.collectAsStateWithLifecycle()
-    var songForOptions by remember { mutableStateOf<CatalogTrack?>(null) }
-    var showAllForYou by remember { mutableStateOf(false) }
     val snackbar = LocalSnackbarHostState.current
     val context = LocalContext.current
     LaunchedEffect(viewModel) {
@@ -228,38 +215,6 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                             }
                         }
                     }
-                    if (discovery.forYou.isNotEmpty()) {
-                        val visible = if (showAllForYou) discovery.forYou else discovery.forYou.take(FOR_YOU_SHOWN)
-                        item(key = "foryou-header") { SectionHeader(title = stringResource(R.string.browse_home_for_you)) }
-                        items(visible, key = { "fy-" + it.key }, contentType = { "catalog-track" }) { track ->
-                            val inLibrary = (track.availability as? Availability.InLibrary)?.libraryAlbumId
-                            CatalogSwipeRow(track) {
-                                CatalogRow(
-                                    title = track.title,
-                                    subtitle = track.artist,
-                                    artworkUrl = null,
-                                    availability = track.availability,
-                                    releaseGroupId = track.albumReleaseGroupId,
-                                    busy = track.requestKeys.any { it in discovery.requesting },
-                                    requestLabel = stringResource(requestTrackLabel(track)),
-                                    onRequest = { viewModel.requestTrack(track) },
-                                    onClick = when {
-                                        inLibrary != null -> ({ navigator.openAlbum(inLibrary) })
-                                        canPlayNow && track.recordingId != null -> ({ playNow.play(track) })
-                                        else -> null
-                                    },
-                                    onLongClick = if (inLibrary == null) ({ songForOptions = track }) else null,
-                                )
-                            }
-                        }
-                        if (discovery.forYou.size > FOR_YOU_SHOWN) {
-                            item(key = "foryou-more") {
-                                TextButton(onClick = { showAllForYou = !showAllForYou }, modifier = Modifier.padding(start = 8.dp)) {
-                                    Text(stringResource(if (showAllForYou) R.string.browse_action_show_less else R.string.browse_action_show_more))
-                                }
-                            }
-                        }
-                    }
                     albumShelf(
                         key = "most",
                         title = titleMostPlayed,
@@ -268,23 +223,6 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                         onAlbum = navigator::openAlbum,
                         onAlbumLong = { albumForOptions = it },
                     )
-                    if (state.randomPicks.isNotEmpty()) {
-                        item(key = "random-header") {
-                            SectionHeader(
-                                title = stringResource(R.string.browse_home_random_picks),
-                                action = {
-                                    IconButton(onClick = viewModel::reshuffleRandom) {
-                                        Icon(Icons.Rounded.Shuffle, contentDescription = stringResource(R.string.browse_action_reshuffle))
-                                    }
-                                },
-                            )
-                        }
-                        item(key = "random") {
-                            HorizontalCarousel(items = state.randomPicks, key = { "r-" + it.id }) { album ->
-                                AlbumCard(album, onClick = { navigator.openAlbum(album.id) }, onLongClick = { albumForOptions = album }, width = Dimens.carouselArtwork)
-                            }
-                        }
-                    }
                     albumShelf(
                         key = "fav",
                         title = titleFavorites,
@@ -357,17 +295,7 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
         )
     }
     albumForOptions?.let { AlbumOptionsSheet(album = it, onDismiss = { albumForOptions = null }) }
-    songForOptions?.let { song ->
-        CatalogSongSheet(
-            track = song,
-            onOpenAlbum = song.albumReleaseGroupId?.let { rg -> { navigator.openCatalogAlbum(rg, song.albumTitle ?: song.title) } },
-            onDismiss = { songForOptions = null },
-        )
-    }
 }
-
-/** For you's songs shown before Show more. */
-private const val FOR_YOU_SHOWN = 5
 
 @Composable
 private fun ServerChipRow(state: HomeUiState, onClick: () -> Unit) {

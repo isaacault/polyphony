@@ -74,6 +74,17 @@ class AppSettingsCompatTest {
     }
 
     @Test
+    fun `explore shows to someone whose tabs were saved before it, until they choose without it`() {
+        val saved = json.decodeFromString(AppSettings.serializer(),
+            """{"appearance":{"libraryTabs":["ALBUMS","ARTISTS","SONGS","PLAYLISTS","GENRES"]}}""")
+        assertEquals(LibrarySection.EXPLORE, saved.appearance.shownLibraryTabs.first())
+        assertEquals(LibrarySection.ALBUMS, saved.appearance.shownLibraryTabs[1])
+        val chosen = saved.appearance.copy(libraryTabs = listOf(LibrarySection.ALBUMS), libraryTabsKnown = LibrarySection.entries)
+        assertEquals(listOf(LibrarySection.ALBUMS), chosen.shownLibraryTabs)
+        assertEquals(LibrarySection.entries, AppearanceSettings().shownLibraryTabs)
+    }
+
+    @Test
     fun `the removed screen transition setting is ignored`() {
         val decoded = json.decodeFromString(AppSettings.serializer(), """{"appearance":{"navTransition":"SLIDE","pureBlack":true}}""")
         assertEquals(true, decoded.appearance.pureBlack)

@@ -43,6 +43,7 @@
     <string name="browse_action_reshuffle">Reshuffle</string>
 
     <!-- library tabs -->
+    <string name="browse_tab_explore">Explore</string>
     <string name="browse_tab_artists">Artists</string>
     <string name="browse_tab_albums">Albums</string>
     <string name="browse_tab_songs">Songs</string>
