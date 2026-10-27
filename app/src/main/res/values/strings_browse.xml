@@ -191,6 +191,8 @@
     <string name="playnow_kept">%1$s will be in your library shortly.</string>
     <string name="playnow_failed">Nobody could send %1$s right now.</string>
     <string name="playnow_request">Request</string>
+    <string name="playnow_keep_in_library">Keep in your library</string>
+    <string name="playnow_kept_short">Kept</string>
     <string name="browse_request_sent">Requested. You\'ll be notified when it\'s ready to play.</string>
     <string name="browse_request_song_sent">Requested the song. You\'ll be notified when it\'s ready to play.</string>
     <string name="browse_request_already">Already requested.</string>

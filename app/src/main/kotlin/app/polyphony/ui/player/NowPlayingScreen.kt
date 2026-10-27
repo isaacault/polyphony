@@ -1,5 +1,7 @@
 package app.polyphony.ui.player
 
+import androidx.compose.material.icons.rounded.LibraryAdd
+import androidx.compose.material.icons.rounded.LibraryAddCheck
 import androidx.compose.ui.text.toUpperCase
 import android.os.Build
 import androidx.compose.animation.Crossfade
@@ -67,8 +69,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.R
+import app.polyphony.core.domain.model.PlayNowIds
 import app.polyphony.ui.common.LikeButton
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.CastState
@@ -81,6 +85,7 @@ import app.polyphony.core.ui.theme.ArtworkTheme
 import app.polyphony.core.ui.theme.NowPlayingTitleStyle
 import app.polyphony.core.ui.util.formatDurationLong
 import app.polyphony.navigation.LocalNavigator
+import app.polyphony.ui.common.PlayNowViewModel
 import app.polyphony.ui.shell.PlayerSheetController
 import coil3.compose.AsyncImage
 import java.util.Locale
@@ -117,6 +122,10 @@ fun NowPlayingScreen(
     val navigator = LocalNavigator.current
     val haptics = rememberHaptics(hapticsEnabled)
     val track = playback.currentTrack
+    // A Play now song (continuo#12) isn't in the library yet: Keep, instead of the like button.
+    val playNow = hiltViewModel<PlayNowViewModel>().playNow
+    val playNowStream = track?.let { PlayNowIds.streamId(it.id) }
+    var kept by remember { mutableStateOf(emptySet<String>()) }
 
     val artworkColors by rememberArtworkColors(if (appearance.artworkColorsInPlayer) track?.artworkUrl else null)
 
@@ -236,6 +245,13 @@ fun NowPlayingScreen(
                             onToggleFavorite = {
                                 haptics.toggle(!isFavorite)
                                 viewModel.toggleFavorite()
+                            },
+                            keep = playNowStream?.let { stream ->
+                                KeepAction(kept = stream in kept) {
+                                    haptics.toggle(true)
+                                    kept = kept + stream
+                                    playNow.keep(stream, track.title)
+                                }
                             },
                         )
                     }
@@ -633,6 +649,7 @@ private fun PlayerTrackInfo(
     onRate: (Int) -> Unit,
     onArtist: () -> Unit,
     onToggleFavorite: () -> Unit,
+    keep: KeepAction? = null,
 ) {
     Row(
         modifier = Modifier
@@ -664,15 +681,28 @@ private fun PlayerTrackInfo(
                     ),
             )
         }
-        LikeButton(
-            usesRatings = usesRatings,
-            starred = isFavorite,
-            rating = rating,
-            onToggleFavourite = onToggleFavorite,
-            onRate = onRate,
-        )
+        if (keep != null) {
+            IconButton(onClick = keep.onKeep, enabled = !keep.kept) {
+                Icon(
+                    if (keep.kept) Icons.Rounded.LibraryAddCheck else Icons.Rounded.LibraryAdd,
+                    contentDescription = stringResource(if (keep.kept) R.string.playnow_kept_short else R.string.playnow_keep_in_library),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        } else {
+            LikeButton(
+                usesRatings = usesRatings,
+                starred = isFavorite,
+                rating = rating,
+                onToggleFavourite = onToggleFavorite,
+                onRate = onRate,
+            )
+        }
     }
 }
+
+/** Keep a Play now song in your library (continuo files the copy once it's downloaded). */
+private class KeepAction(val kept: Boolean, val onKeep: () -> Unit)
 
 @Composable
 private fun PlayerSecondaryRow(
