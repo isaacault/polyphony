@@ -171,7 +171,7 @@ internal data class DiscoverDto(
 
 internal fun DiscoverDto.toDomain(artworkHost: String?) = app.polyphony.core.domain.model.Discovery(
     newReleases = newReleases.filter { it.kind == "album" }.map { it.toCatalogAlbum(artworkHost) },
-    forYou = forYou.filter { it.kind == "track" }.map { it.toCatalogTrack() },
+    forYou = forYou.filter { it.kind == "track" }.map { it.toCatalogTrack(artworkHost) },
 )
 
 /** `GET /v1/catalog/artists/{mbid}`: an artist's page. */
@@ -199,7 +199,7 @@ internal fun CatalogArtistDto.toDomain(artworkHost: String?) = CatalogArtistPage
     disambiguation = disambiguation?.takeIf { it.isNotBlank() },
     biography = biography?.text?.takeIf { it.isNotBlank() },
     biographyUrl = biography?.url,
-    topTracks = topTracks.filter { it.kind == "track" }.map { it.toCatalogTrack() },
+    topTracks = topTracks.filter { it.kind == "track" }.map { it.toCatalogTrack(artworkHost) },
     similarArtists = similarArtists.filter { it.kind == "artist" }.map { it.toCatalogArtist(artworkHost) },
 )
 
@@ -210,7 +210,7 @@ internal fun CatalogArtistDto.toDomain(artworkHost: String?) = CatalogArtistPage
 internal fun SearchDto.toDomain(artworkHost: String?): CatalogResults {
     val artists = results.filter { it.kind == "artist" }.map { it.toCatalogArtist(artworkHost) }
     val albums = results.filter { it.kind == "album" }.map { it.toCatalogAlbum(artworkHost) }
-    val tracks = results.filter { it.kind == "track" }.map { it.toCatalogTrack() }
+    val tracks = results.filter { it.kind == "track" }.map { it.toCatalogTrack(artworkHost) }
     return CatalogResults(artists = artists, albums = albums, tracks = tracks, catalogAvailable = sources.catalog != "unavailable",
                           partial = partial)
 }
@@ -223,7 +223,7 @@ internal fun HitDto.toCatalogArtist(artworkHost: String?) = CatalogArtist(
     availability = availability.toDomain(null),
 )
 
-internal fun HitDto.toCatalogTrack() = CatalogTrack(
+internal fun HitDto.toCatalogTrack(artworkHost: String? = null) = CatalogTrack(
     key = key,
     title = title.orEmpty(),
     artist = artist,
@@ -232,6 +232,7 @@ internal fun HitDto.toCatalogTrack() = CatalogTrack(
     albumReleaseGroupId = album?.musicBrainzReleaseGroupId,
     availability = availability.toDomain(album?.navidromeAlbumId),
     recordingId = key.removePrefix("mb:rec:").takeIf { key.startsWith("mb:rec:") && it.isNotBlank() },
+    artworkUrl = ownArtworkUrl(artwork?.url, artworkHost),
 )
 
 internal fun HitDto.toCatalogAlbum(artworkHost: String?) = CatalogAlbum(

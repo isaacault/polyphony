@@ -86,6 +86,8 @@ data class CatalogTrack(
     val availability: Availability,
     /** The song's MusicBrainz recording: a server with song requests gets just this song. */
     val recordingId: String? = null,
+    /** Its album's cover, served by continuo. */
+    val artworkUrl: String? = null,
 ) {
     /** What requests of this song are keyed by: the song itself, else its album. */
     val requestKeys: List<String> get() = listOfNotNull(recordingId, albumReleaseGroupId)
