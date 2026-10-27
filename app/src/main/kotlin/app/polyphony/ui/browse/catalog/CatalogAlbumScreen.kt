@@ -1,5 +1,6 @@
 package app.polyphony.ui.browse.catalog
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,6 +51,10 @@ import app.polyphony.ui.shell.LocalSnackbarHostState
 @Composable
 fun CatalogAlbumScreen(viewModel: CatalogAlbumViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val canPlayNow by viewModel.canPlayNow.collectAsStateWithLifecycle()
+    // Its songs play now (continuo#12) unless it's yours or on the server already: then the album
+    // itself is a tap away (Open, Add).
+    val playable = canPlayNow && state.availability !is Availability.InLibrary && state.availability !is Availability.OnServer
     val navigator = LocalNavigator.current
     val snackbar = LocalSnackbarHostState.current
     val context = LocalContext.current
@@ -103,7 +108,9 @@ fun CatalogAlbumScreen(viewModel: CatalogAlbumViewModel = hiltViewModel()) {
                         )
                     }
                 }
-                items(disc.tracks, key = { "t-${disc.number}-${it.position}" }, contentType = { "catalog-track" }) { CatalogTrackLine(it) }
+                items(disc.tracks, key = { "t-${disc.number}-${it.position}" }, contentType = { "catalog-track" }) { track ->
+                    CatalogTrackLine(track, onPlay = if (playable && track.recordingId != null) ({ viewModel.playTrack(track) }) else null)
+                }
             }
         }
     }
@@ -163,12 +170,13 @@ private fun AlbumAction(
     }
 }
 
-/** A tracklist line (not playable yet: that's #124). */
+/** A tracklist line; with [onPlay], tapping it plays the song now (continuo#12). */
 @Composable
-private fun CatalogTrackLine(track: CatalogAlbumTrack) {
+private fun CatalogTrackLine(track: CatalogAlbumTrack, onPlay: (() -> Unit)? = null) {
     Row(
         Modifier
             .fillMaxWidth()
+            .then(if (onPlay != null) Modifier.clickable(onClick = onPlay) else Modifier)
             .heightIn(min = 48.dp)
             .padding(horizontal = Dimens.screenPadding),
         verticalAlignment = Alignment.CenterVertically,

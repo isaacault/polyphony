@@ -102,6 +102,8 @@ data class CatalogAlbumTrack(
     val discNumber: Int,
     val title: String,
     val durationMs: Long?,
+    /** The song's MusicBrainz recording: what Play now fetches. */
+    val recordingId: String? = null,
 )
 
 data class CatalogResults(

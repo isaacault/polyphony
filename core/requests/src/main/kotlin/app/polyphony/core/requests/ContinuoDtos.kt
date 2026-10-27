@@ -95,6 +95,7 @@ internal data class TracklistDto(
     val title: String = "",
     val durationMs: Long? = null,
     val discNumber: Int = 1,
+    val musicBrainzRecordingId: String? = null,
 )
 
 @Serializable

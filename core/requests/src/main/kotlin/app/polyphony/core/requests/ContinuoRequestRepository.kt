@@ -91,7 +91,7 @@ class ContinuoRequestRepository internal constructor(
         val hit = client.decode(HitDto.serializer(), reply.body)
         return CatalogAlbumDetail(
             album = hit.toCatalogAlbum(hostOf(server.baseUrl)),
-            tracks = hit.tracks.map { CatalogAlbumTrack(it.position, it.discNumber, it.title, it.durationMs) },
+            tracks = hit.tracks.map { CatalogAlbumTrack(it.position, it.discNumber, it.title, it.durationMs, it.musicBrainzRecordingId) },
         )
     }
 
