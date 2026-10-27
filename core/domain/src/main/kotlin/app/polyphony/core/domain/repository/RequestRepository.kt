@@ -47,6 +47,12 @@ interface RequestRepository {
      */
     suspend fun catalogArtist(server: Server, artistMbid: String): CatalogArtistPage?
 
+    /**
+     * The whole album library album [libraryAlbumId] is of (a single song filed alone, or an
+     * album the library only partly has); null when the catalogue doesn't know it.
+     */
+    suspend fun libraryAlbumTracklist(server: Server, libraryAlbumId: String): app.polyphony.core.domain.model.LibraryAlbumTracklist?
+
     /** Home's discovery rows; null from a continuo too old to have them. */
     suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery?
 

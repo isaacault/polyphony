@@ -25,12 +25,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -39,8 +41,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.polyphony.core.domain.model.CatalogTrack
+import app.polyphony.ui.browse.catalog.CatalogRow
+import app.polyphony.ui.browse.catalog.requestTrackLabel
+import app.polyphony.ui.common.CatalogSongSheet
+import app.polyphony.ui.common.CatalogSwipeRow
 import app.polyphony.ui.common.FilledStar
 import app.polyphony.ui.common.LibraryRemovalViewModel
+import app.polyphony.ui.common.PlayNowViewModel
 import app.polyphony.ui.common.RatingMenu
 import androidx.compose.foundation.layout.Box
 import app.polyphony.R
@@ -63,6 +71,7 @@ import app.polyphony.ui.common.AddToPlaylistSheet
 import app.polyphony.ui.common.CollectionDownloadButton
 import app.polyphony.ui.common.rememberDownloadedIds
 import app.polyphony.ui.common.TrackOptionsSheet
+import app.polyphony.ui.shell.LocalSnackbarHostState
 
 @Composable
 fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
@@ -76,6 +85,16 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
     val album = state.album
     val downloadedIds by rememberDownloadedIds()
     val trackIds = remember(state.tracks) { state.tracks.map { it.id } }
+    val playNow = hiltViewModel<PlayNowViewModel>().playNow
+    val canPlayNow by playNow.available.collectAsStateWithLifecycle()
+    var songForOptions by remember { mutableStateOf<CatalogTrack?>(null) }
+    val snackbar = LocalSnackbarHostState.current
+    val context = LocalContext.current
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { m ->
+            snackbar.showSnackbar(if (m.arg == null) context.getString(m.text) else context.getString(m.text, m.arg))
+        }
+    }
 
     val feedback by viewModel.feedback.collectAsStateWithLifecycle()
     var rateOpen by remember { mutableStateOf(false) }
@@ -165,7 +184,8 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
                 LoadingPlaceholder(PlaceholderStyle.LIST)
             }
             else -> {
-                val groups = remember(state.tracks) { state.tracks.groupBy { it.discNumber ?: 1 }.toSortedMap() }
+                // The library's songs, among the rest of the album where it lacks some (AlbumTracklist).
+                val groups = remember(state.entries) { state.entries.groupBy { it.disc }.toSortedMap() }
                 val multiDisc = groups.size > 1
                 // Shown once in the header; a track's own chip only where it differs.
                 val albumQuality = remember(state.tracks) { AlbumTrackDetails.albumQuality(state.tracks) }
@@ -230,7 +250,28 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
                                 )
                             }
                         }
-                        items(tracks, key = { it.id }, contentType = { "track" }) { track ->
+                        items(tracks, key = { e -> when (e) { is AlbumEntry.Have -> e.track.id; is AlbumEntry.Missing -> "missing-" + e.track.key } },
+                              contentType = { if (it is AlbumEntry.Have) "track" else "catalog-track" }) { entry ->
+                            if (entry is AlbumEntry.Missing) {
+                                val song = entry.track
+                                // Not in the library: Play now plays it, Request fetches it, swipes queue it.
+                                CatalogSwipeRow(song) {
+                                    CatalogRow(
+                                        title = song.title,
+                                        subtitle = null,
+                                        artworkUrl = null,
+                                        availability = song.availability,
+                                        releaseGroupId = song.albumReleaseGroupId,
+                                        busy = song.requestKeys.any { it in state.requesting },
+                                        requestLabel = stringResource(requestTrackLabel(song)),
+                                        onRequest = { viewModel.requestTrack(song) },
+                                        onClick = if (canPlayNow && song.recordingId != null) ({ playNow.play(song) }) else null,
+                                        onLongClick = { songForOptions = song },
+                                    )
+                                }
+                                return@items
+                            }
+                            val track = (entry as AlbumEntry.Have).track
                             TrackSwipeRow(track = track) {
                                 TrackRow(
                                     track = track,
@@ -260,6 +301,7 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
     }
 
     trackForOptions?.let { TrackOptionsSheet(track = it, onDismiss = { trackForOptions = null }) }
+    songForOptions?.let { CatalogSongSheet(track = it, onOpenAlbum = null, onDismiss = { songForOptions = null }) }
     if (showAddToPlaylist && state.tracks.isNotEmpty()) {
         AddToPlaylistSheet(trackIds = state.tracks.map { it.id }, onDismiss = { showAddToPlaylist = false })
     }
