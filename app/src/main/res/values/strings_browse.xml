@@ -117,6 +117,7 @@
     <string name="browse_action_show_less">Show less</string>
     <string name="browse_action_search_server">Search on server</string>
     <string name="browse_action_search_everything">Search everything</string>
+    <string name="browse_action_more_results">More results</string>
 
     <!-- dialogs -->
     <string name="browse_title_new_playlist">New playlist</string>

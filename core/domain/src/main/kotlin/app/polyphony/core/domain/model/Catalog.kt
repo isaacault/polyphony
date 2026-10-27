@@ -112,6 +112,8 @@ data class CatalogResults(
     val tracks: List<CatalogTrack> = emptyList(),
     /** False when the server answered but its catalogue (Lidarr / MusicBrainz) was unreachable. */
     val catalogAvailable: Boolean = true,
+    /** Only the top few (a quick search, while typing): the full search has more. */
+    val partial: Boolean = false,
 )
 
 sealed interface RequestOutcome {
