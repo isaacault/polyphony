@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.ClearAll
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.OfflinePin
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -83,6 +84,7 @@ fun QueueSheet(
 ) {
     val playback by viewModel.playback.collectAsStateWithLifecycle()
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsStateWithLifecycle()
+    val onPhone by viewModel.onPhone.collectAsStateWithLifecycle()
     val haptics = rememberHaptics(hapticsEnabled)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackHost = remember { SnackbarHostState() }
@@ -184,6 +186,7 @@ fun QueueSheet(
                                     track = item.track,
                                     isCurrent = index == playback.currentIndex,
                                     isPlaying = playback.isPlaying,
+                                    onPhone = item.track.id in onPhone,
                                     elevation = if (isDragging) 6.dp else 0.dp,
                                     onClick = { viewModel.skipToQueueItem(index) },
                                     handleModifier = Modifier.draggableHandle(
@@ -255,6 +258,8 @@ private fun QueueRow(
     track: Track,
     isCurrent: Boolean,
     isPlaying: Boolean,
+    /** It plays without a connection (downloaded, or fetched ahead). */
+    onPhone: Boolean,
     elevation: Dp,
     onClick: () -> Unit,
     handleModifier: Modifier,
@@ -310,6 +315,14 @@ private fun QueueRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (onPhone) {
+                Icon(
+                    imageVector = Icons.Rounded.OfflinePin,
+                    contentDescription = stringResource(R.string.queue_on_phone),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp),
                 )
             }
             Text(

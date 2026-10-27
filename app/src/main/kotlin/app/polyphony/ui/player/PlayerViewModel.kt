@@ -20,8 +20,12 @@ import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.ProviderRegistry
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
+import app.polyphony.core.playback.stream.StreamResolver
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +43,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlinx.coroutines.withContext
 
 sealed interface LyricsUiState {
     data object Hidden : LyricsUiState
@@ -57,12 +62,29 @@ class PlayerViewModel @Inject constructor(
     private val serverRepository: ServerRepository,
     private val providerRegistry: ProviderRegistry,
     feedbackRepository: FeedbackRepository,
+    private val streamResolver: StreamResolver,
 ) : ViewModel() {
 
     private fun <T> Flow<T>.asState(initial: T): StateFlow<T> =
         stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)
 
     val playback: StateFlow<PlaybackState> = playbackController.state
+
+    /**
+     * Queue songs that play without a connection: downloaded, or fetched ahead complete into the
+     * stream cache. Rechecked every few seconds while someone's looking (the queue sheet).
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val onPhone: StateFlow<Set<String>> = playbackController.state.map { s -> s.queue.map { it.id } }.distinctUntilChanged()
+        .flatMapLatest { ids ->
+            flow {
+                while (true) {
+                    emit(withContext(Dispatchers.IO) { ids.filterTo(HashSet()) { streamResolver.isOnPhone(it) } })
+                    delay(5_000)
+                }
+            }
+        }
+        .asState(emptySet())
     val cast: StateFlow<CastState> = castController.state
     val position: StateFlow<PlaybackPosition> = playbackController.position.asState(PlaybackPosition())
 
