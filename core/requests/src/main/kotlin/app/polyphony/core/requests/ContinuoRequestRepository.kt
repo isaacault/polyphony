@@ -102,8 +102,9 @@ class ContinuoRequestRepository internal constructor(
         title: String,
         artist: String,
         durationMs: Long?,
+        queued: Boolean,
     ): PlayNowStream {
-        val body = Json.encodeToString(PlayNowBody.serializer(), PlayNowBody(recordingId, albumReleaseGroupId, title, artist, durationMs))
+        val body = Json.encodeToString(PlayNowBody.serializer(), PlayNowBody(recordingId, albumReleaseGroupId, title, artist, durationMs, queued))
         val reply = client.post(server, "/v1/play-now", body)
         if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't play that song")
         return client.decode(PlayNowDto.serializer(), reply.body).toDomain()
@@ -113,6 +114,11 @@ class ContinuoRequestRepository internal constructor(
         val reply = client.get(server, "/v1/play-now/${URLEncoder.encode(streamId, "UTF-8")}")
         if (reply.code !in 200..299) throw client.serverError(reply, "continuo lost that song")
         return client.decode(PlayNowDto.serializer(), reply.body).toDomain()
+    }
+
+    override suspend fun prioritisePlayNow(server: Server, streamIds: List<String>) {
+        val reply = client.post(server, "/v1/play-now/priority", Json.encodeToString(PlayNowPriorityBody.serializer(), PlayNowPriorityBody(streamIds)))
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo couldn't reorder its downloads")
     }
 
     override suspend fun keepPlayNow(server: Server, streamId: String) {

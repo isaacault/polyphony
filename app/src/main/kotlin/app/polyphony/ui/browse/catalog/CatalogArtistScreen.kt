@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -39,6 +40,7 @@ import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogArtist
+import app.polyphony.core.domain.model.CatalogTrack
 import app.polyphony.core.ui.components.ArtistCard
 import app.polyphony.core.ui.components.ArtworkImage
 import app.polyphony.core.ui.components.ErrorState
@@ -50,6 +52,7 @@ import app.polyphony.core.ui.theme.ArtworkShapes
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.navigation.PolyphonyNavigator
+import app.polyphony.ui.common.CatalogSongSheet
 import app.polyphony.ui.common.PlayNowViewModel
 import app.polyphony.ui.shell.LocalSnackbarHostState
 
@@ -69,6 +72,7 @@ fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
     val listState = rememberLazyListState()
     var bioExpanded by rememberSaveable { mutableStateOf(false) }
     var showAllTop by rememberSaveable { mutableStateOf(false) }
+    var songForOptions by remember { mutableStateOf<CatalogTrack?>(null) }
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { m ->
@@ -146,6 +150,7 @@ fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
                             track.albumReleaseGroupId != null -> ({ navigator.openCatalogAlbum(track.albumReleaseGroupId!!, track.albumTitle ?: track.title) })
                             else -> null
                         },
+                        onLongClick = if (inLibrary == null) ({ songForOptions = track }) else null,
                     )
                 }
                 if (state.topTracks.size > 5) {
@@ -188,6 +193,13 @@ fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
             }
             item(key = "footer") { Spacer(Modifier.height(Dimens.sectionSpacing)) }
         }
+    }
+    songForOptions?.let { song ->
+        CatalogSongSheet(
+            track = song,
+            onOpenAlbum = song.albumReleaseGroupId?.let { rg -> { navigator.openCatalogAlbum(rg, song.albumTitle ?: song.title) } },
+            onDismiss = { songForOptions = null },
+        )
     }
 }
 

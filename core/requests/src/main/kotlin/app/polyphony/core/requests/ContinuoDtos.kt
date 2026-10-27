@@ -108,7 +108,11 @@ internal data class PlayNowBody(
     val title: String,
     val artist: String,
     val durationMs: Long? = null,
+    val queued: Boolean = false,
 )
+
+@Serializable
+internal data class PlayNowPriorityBody(val ids: List<String>)
 
 @Serializable
 internal data class PlayNowDto(

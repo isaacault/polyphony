@@ -31,6 +31,7 @@ import app.polyphony.core.domain.model.ItemKind
 import app.polyphony.core.domain.model.PlayContext
 import app.polyphony.core.domain.model.PlayNowIds
 import app.polyphony.core.domain.model.RecentContext
+import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.DlnaRenderer
 import app.polyphony.core.domain.repository.AppSettings
@@ -39,6 +40,7 @@ import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.ListeningHistoryRepository
 import app.polyphony.core.domain.repository.NetworkMonitor
 import app.polyphony.core.domain.repository.PlaybackSettings
+import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.transcode.TranscodeDecision
 import app.polyphony.core.playback.audio.HeadsetMonitor
@@ -84,6 +86,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import java.util.concurrent.Executors
@@ -107,6 +110,7 @@ class PlaybackService : MediaLibraryService() {
     @Inject lateinit var queuePersistence: QueuePersistence
     @Inject lateinit var streamCache: StreamCache
     @Inject lateinit var streamResolver: StreamResolver
+    @Inject lateinit var requestRepository: RequestRepository
     @Inject lateinit var engine: TranscodeDecisionEngine
     @Inject lateinit var latencyMonitor: LatencyMonitor
     @Inject lateinit var castManager: CastManager
@@ -147,6 +151,10 @@ class PlaybackService : MediaLibraryService() {
     private var awaitingNetwork = false
     private var slowRetryJob: Job? = null
     private var saveJob: Job? = null
+    private var playNowOrderJob: Job? = null
+    private var keepGoingJob: Job? = null
+    /** Play now streams' playability, briefly remembered: streamId to (playable, checked at). */
+    private val playNowChecks = HashMap<String, Pair<Boolean, Long>>()
     private var audioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
 
     override fun onCreate() {
@@ -362,6 +370,7 @@ class PlaybackService : MediaLibraryService() {
                     reporter.onPlayingTick(1_000)
                     // Every 15 s while playing (and at once after a start): the next songs on the phone.
                     if (ticks % 15 == 0) refreshPrefetch()
+                    keepMusicGoing()
                     if (++ticks % 10 == 0) {
                         saveQueue()
                         recordContextProgress()
@@ -400,26 +409,92 @@ class PlaybackService : MediaLibraryService() {
         prefetcher.update(upcoming.filter { it.first.trackId in picked }.map { it.second })
     }
 
-    /** The queue after the current song, in play order (shuffle and repeat-all included). */
-    private fun upcomingSongs(max: Int): List<Pair<PrefetchPlan.Upcoming, QueuePrefetcher.Song>> {
+    /**
+     * Tell continuo the order the queue will play its Play now songs in (polyphony#164), so it
+     * fetches them soonest needed first; sent shortly after the queue or the current song changes.
+     */
+    private fun syncPlayNowOrder() {
+        val items = listOfNotNull(localPlayer.currentMediaItem) + upcomingItems(PLAY_NOW_LOOKAHEAD)
+        val streams = items.mapNotNull { item -> PlayNowIds.streamId(item.mediaId)?.let { it to MediaItemFactory.serverIdFrom(item) } }
+        val serverId = streams.firstNotNullOfOrNull { it.second } ?: return
+        playNowOrderJob?.cancel()
+        playNowOrderJob = scope.launch {
+            delay(500)
+            val server = serverLookup.providerFor(serverId)?.server ?: return@launch
+            withContext(Dispatchers.IO) { runCatching { requestRepository.prioritisePlayNow(server, streams.map { it.first }) } }
+        }
+    }
+
+    /**
+     * The queue as a suggestion (polyphony#164): near the end of a song, when the next one is a
+     * Play now song still downloading, the nearest song that's ready moves in front of it, so the
+     * music keeps going; the other plays once it's ready. Not with shuffle or repeat-one, where
+     * "next" isn't the queue's.
+     */
+    private fun keepMusicGoing() {
+        if (keepGoingJob?.isActive == true) return
+        if (player !== basePlayer || player.isRemotePlayback() || player.shuffleModeEnabled || player.repeatMode == Player.REPEAT_MODE_ONE) return
+        val duration = player.duration
+        if (duration <= 0 || duration - player.currentPosition > KEEP_GOING_AHEAD_MS) return
+        val current = player.currentMediaItemIndex
+        val nextIndex = current + 1
+        if (nextIndex >= player.mediaItemCount) return
+        val next = player.getMediaItemAt(nextIndex)
+        val nextStream = PlayNowIds.streamId(next.mediaId) ?: return
+        val serverId = MediaItemFactory.serverIdFrom(next) ?: return
+        val later = (nextIndex + 1 until minOf(player.mediaItemCount, nextIndex + 1 + KEEP_GOING_LOOKAHEAD)).map(player::getMediaItemAt)
+        keepGoingJob = scope.launch {
+            val server = serverLookup.providerFor(serverId)?.server ?: return@launch
+            if (playNowPlayable(server, nextStream)) return@launch
+            val online = networkMonitor.state.value.isOnline
+            val ready = later.firstOrNull { item ->
+                val stream = PlayNowIds.streamId(item.mediaId)
+                if (stream == null) online || withContext(Dispatchers.IO) { streamResolver.isOnPhone(item.mediaId) } else playNowPlayable(server, stream)
+            } ?: return@launch
+            // The queue may have changed while continuo was asked.
+            if (player.currentMediaItemIndex != current || nextIndex >= player.mediaItemCount ||
+                player.getMediaItemAt(nextIndex).mediaId != next.mediaId) return@launch
+            val at = (nextIndex + 1 until player.mediaItemCount).firstOrNull { player.getMediaItemAt(it).mediaId == ready.mediaId } ?: return@launch
+            Log.i(TAG, "\"${next.mediaMetadata.title}\" is still downloading; \"${ready.mediaMetadata.title}\" plays first")
+            player.moveMediaItem(at, nextIndex)
+        }
+    }
+
+    private suspend fun playNowPlayable(server: Server, streamId: String): Boolean {
+        val now = System.currentTimeMillis()
+        playNowChecks[streamId]?.let { (playable, at) -> if (playable || now - at < 5_000) return playable }
+        val playable = withContext(Dispatchers.IO) {
+            runCatching { requestRepository.playNowStatus(server, streamId).playable }.getOrDefault(false)
+        }
+        playNowChecks[streamId] = playable to now
+        if (playNowChecks.size > 64) playNowChecks.keys.first().let(playNowChecks::remove)
+        return playable
+    }
+
+    /** The queue's items after the current song, in play order (shuffle and repeat-all included). */
+    private fun upcomingItems(max: Int): List<MediaItem> {
         val timeline = localPlayer.currentTimeline
         if (timeline.isEmpty) return emptyList()
         val repeat = if (localPlayer.repeatMode == Player.REPEAT_MODE_ONE) Player.REPEAT_MODE_OFF else localPlayer.repeatMode
         var index = localPlayer.currentMediaItemIndex
         val seen = hashSetOf(index)
-        val out = mutableListOf<Pair<PrefetchPlan.Upcoming, QueuePrefetcher.Song>>()
+        val out = mutableListOf<MediaItem>()
         while (out.size < max) {
             index = timeline.getNextWindowIndex(index, repeat, localPlayer.shuffleModeEnabled)
             if (index == C.INDEX_UNSET || !seen.add(index)) break
-            val item = localPlayer.getMediaItemAt(index)
-            val serverId = MediaItemFactory.serverIdFrom(item) ?: continue
-            val trackId = item.mediaId
-            val durationMs = queueStore.get(trackId)?.durationMs ?: 0L
-            out += PrefetchPlan.Upcoming(trackId, durationMs, fetchable = PlayNowIds.streamId(trackId) == null) to
-                QueuePrefetcher.Song(serverId, trackId)
+            out += localPlayer.getMediaItemAt(index)
         }
         return out
     }
+
+    /** The queue after the current song, in play order, as [PrefetchPlan] and the fetching see it. */
+    private fun upcomingSongs(max: Int): List<Pair<PrefetchPlan.Upcoming, QueuePrefetcher.Song>> =
+        upcomingItems(max).mapNotNull { item ->
+            val serverId = MediaItemFactory.serverIdFrom(item) ?: return@mapNotNull null
+            val trackId = item.mediaId
+            PrefetchPlan.Upcoming(trackId, queueStore.get(trackId)?.durationMs ?: 0L, fetchable = PlayNowIds.streamId(trackId) == null) to
+                QueuePrefetcher.Song(serverId, trackId)
+        }
 
     /**
      * Reacts to a changed transcoding decision. A change of output target is already handled by
@@ -640,6 +715,7 @@ class PlaybackService : MediaLibraryService() {
             ) {
                 scheduleSave()
                 updateButtons()
+                syncPlayNowOrder()
             }
             if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
                 queueStore.retain(currentItems().map { it.mediaId })
@@ -878,6 +954,11 @@ class PlaybackService : MediaLibraryService() {
         /** A Play now song ahead of its download waits up to 3 minutes for it, every 3 s. */
         private const val PLAY_NOW_WAITS = 60
         private const val PLAY_NOW_WAIT_MS = 3_000L
+        /** How far ahead of the queue continuo hears the Play now order. */
+        private const val PLAY_NOW_LOOKAHEAD = 50
+        /** The ready song moves up this close to the end of the current one, from the next 10. */
+        private const val KEEP_GOING_AHEAD_MS = 15_000L
+        private const val KEEP_GOING_LOOKAHEAD = 10
         private const val SLOW_RETRY_ATTEMPTS = 12
         private const val SLOW_RETRY_INTERVAL_MS = 15_000L
         const val SESSION_ID = "polyphony"

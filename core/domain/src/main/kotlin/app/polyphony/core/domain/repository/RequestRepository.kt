@@ -77,9 +77,14 @@ interface RequestRepository {
         title: String,
         artist: String,
         durationMs: Long?,
+        /** True: fetched in turn behind the account's other queued Play now songs, not at once. */
+        queued: Boolean = false,
     ): PlayNowStream
 
     suspend fun playNowStatus(server: Server, streamId: String): PlayNowStream
+
+    /** The order the queue will play its Play now songs in, soonest first: continuo fetches in it. */
+    suspend fun prioritisePlayNow(server: Server, streamIds: List<String>)
 
     /** Keep a played-now song: continuo files its copy into your library (nothing downloads again). */
     suspend fun keepPlayNow(server: Server, streamId: String)

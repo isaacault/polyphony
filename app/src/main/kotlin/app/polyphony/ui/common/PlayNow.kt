@@ -35,6 +35,8 @@ sealed interface PlayNowEvent {
     data class Finding(override val title: String) : PlayNowEvent
     data class Playing(override val title: String, val streamId: String) : PlayNowEvent
     data class Kept(override val title: String) : PlayNowEvent
+    /** Queued to play [next] or at the end; continuo fetches it in turn (polyphony#164). */
+    data class Queued(override val title: String, val next: Boolean) : PlayNowEvent
     /** Nobody could send it ([detail] says why); offer to request it instead. */
     data class Failed(override val title: String, val detail: String?, val track: CatalogTrack?) : PlayNowEvent
 }
@@ -87,6 +89,28 @@ class PlayNow @Inject constructor(
                 }
                 playback.playTracks(listOf(asTrack(server, stream, track)), 0, queueTitle = track.title)
                 _events.emit(PlayNowEvent.Playing(track.title, stream.id))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _events.emit(PlayNowEvent.Failed(track.title, e.message, track))
+            }
+        }
+    }
+
+    /**
+     * Put a song you don't have in the queue, to play next or at the end (polyphony#164):
+     * continuo fetches it in its turn, nearest first, while the queue plays.
+     */
+    fun queue(track: CatalogTrack, next: Boolean) {
+        val recording = track.recordingId ?: return
+        scope.launch {
+            val server = servers.getActive()?.takeIf { requests.supports(it) } ?: return@launch
+            try {
+                val stream = requests.startPlayNow(server, recording, track.albumReleaseGroupId, track.title,
+                    track.artist.orEmpty(), track.durationMs, queued = true)
+                val song = asTrack(server, stream, track)
+                if (next) playback.playNext(listOf(song)) else playback.addToQueue(listOf(song))
+                _events.emit(PlayNowEvent.Queued(track.title, next))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

@@ -115,6 +115,9 @@ class StreamResolver @Inject constructor(
             .build()
     }
 
+    /** True when the song plays without a connection: downloaded, or complete in the stream cache. */
+    fun isOnPhone(trackId: String): Boolean = isDownloaded(trackId) || streamCache.completeKey(trackId) != null
+
     private fun isDownloaded(trackId: String): Boolean =
         runBlocking { runCatching { downloadRepository.localFile(trackId) }.getOrNull() }?.filePath?.let { File(it).exists() } == true
 

@@ -87,6 +87,7 @@ import app.polyphony.ui.browse.catalog.CatalogRow
 import app.polyphony.ui.browse.catalog.PartialBadge
 import app.polyphony.ui.browse.LibraryFilterRow
 import app.polyphony.ui.browse.catalog.requestTrackLabel
+import app.polyphony.ui.common.CatalogSongSheet
 import app.polyphony.ui.common.PlayNowViewModel
 import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.AlbumOptionsSheet
@@ -109,6 +110,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
     val focusRequester = remember { FocusRequester() }
     var trackForOptions by remember { mutableStateOf<Track?>(null) }
     var albumForOptions by remember { mutableStateOf<Album?>(null) }
+    var songForOptions by remember { mutableStateOf<CatalogTrack?>(null) }
     val downloadedIds by rememberDownloadedIds()
     val listState = rememberLazyListState()
     // Results arrive in waves (cache, server, catalogue) and a list keeps its first visible row
@@ -306,6 +308,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             onRequest = { viewModel.requestTrack(track) },
                             onClick = playSong?.takeIf { track.recordingId != null }?.let { play -> { play(track) } }
                                 ?: track.albumReleaseGroupId?.let { rg -> { navigator.openCatalogAlbum(rg, track.albumTitle ?: track.title) } },
+                            onLongClick = { songForOptions = track },
                         )
                     }
                 }
@@ -356,7 +359,8 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             )
                         }
                     }
-                    catalogTracks(state.everything, onRequest = viewModel::requestTrack, onOpen = navigator::openCatalogAlbum, onPlay = playSong)
+                    catalogTracks(state.everything, onRequest = viewModel::requestTrack, onOpen = navigator::openCatalogAlbum, onPlay = playSong,
+                        onOptions = { songForOptions = it })
                 }
                 if (state.showsEverything) everythingStatus(state.everything)
                 item(key = "remote") {
@@ -388,6 +392,13 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
         }
     }
     trackForOptions?.let { TrackOptionsSheet(track = it, onDismiss = { trackForOptions = null }) }
+    songForOptions?.let { song ->
+        CatalogSongSheet(
+            track = song,
+            onOpenAlbum = song.albumReleaseGroupId?.let { rg -> { navigator.openCatalogAlbum(rg, song.albumTitle ?: song.title) } },
+            onDismiss = { songForOptions = null },
+        )
+    }
     albumForOptions?.let { AlbumOptionsSheet(album = it, onDismiss = { albumForOptions = null }) }
 }
 
@@ -520,6 +531,7 @@ private fun LazyListScope.catalogTracks(
     onRequest: (CatalogTrack) -> Unit,
     onOpen: (String, String) -> Unit,
     onPlay: ((CatalogTrack) -> Unit)? = null,
+    onOptions: ((CatalogTrack) -> Unit)? = null,
 ) {
     items(everything.tracks, key = { "e-t-" + it.key }, contentType = { "everything" }) { track ->
         CatalogRow(
@@ -534,6 +546,7 @@ private fun LazyListScope.catalogTracks(
             // A song plays now where the server can (continuo#12), else opens its album.
             onClick = onPlay?.takeIf { track.recordingId != null }?.let { play -> { play(track) } }
                 ?: track.albumReleaseGroupId?.let { rg -> { onOpen(rg, track.albumTitle ?: track.title) } },
+            onLongClick = onOptions?.let { options -> { options(track) } },
         )
     }
 }
