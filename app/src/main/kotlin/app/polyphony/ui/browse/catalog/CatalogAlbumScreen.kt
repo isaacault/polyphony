@@ -50,6 +50,7 @@ import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.core.ui.util.formatDuration
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.ui.common.CatalogSongSheet
+import app.polyphony.ui.common.CatalogSwipeRow
 import app.polyphony.ui.shell.LocalSnackbarHostState
 
 /** An album that isn't in the library (#145): artwork, tracklist and Request, from the catalogue. */
@@ -116,11 +117,15 @@ fun CatalogAlbumScreen(viewModel: CatalogAlbumViewModel = hiltViewModel()) {
                 }
                 items(disc.tracks, key = { "t-${disc.number}-${it.position}" }, contentType = { "catalog-track" }) { track ->
                     val canPlay = playable && track.recordingId != null
-                    CatalogTrackLine(
-                        track,
-                        onPlay = if (canPlay) ({ viewModel.playTrack(track) }) else null,
-                        onOptions = if (canPlay) ({ songForOptions = viewModel.song(track) }) else null,
-                    )
+                    val line: @Composable () -> Unit = {
+                        CatalogTrackLine(
+                            track,
+                            onPlay = if (canPlay) ({ viewModel.playTrack(track) }) else null,
+                            onOptions = if (canPlay) ({ songForOptions = viewModel.song(track) }) else null,
+                        )
+                    }
+                    // Swipes queue it through Play now (polyphony#164).
+                    if (canPlay) CatalogSwipeRow(viewModel.song(track)) { line() } else line()
                 }
             }
         }
