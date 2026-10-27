@@ -97,6 +97,12 @@ data class CatalogAlbumDetail(
     val tracks: List<CatalogAlbumTrack>,
 )
 
+/** The whole album a library album is of (continuo's catalogue): for showing what it lacks. */
+data class LibraryAlbumTracklist(
+    val releaseGroupId: String,
+    val tracks: List<CatalogAlbumTrack>,
+)
+
 data class CatalogAlbumTrack(
     val position: Int,
     val discNumber: Int,

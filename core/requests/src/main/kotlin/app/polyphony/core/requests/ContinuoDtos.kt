@@ -155,6 +155,13 @@ internal fun AvailabilityDto.toDomain(fallbackAlbumId: String?): Availability = 
 @Serializable
 internal data class BiographyDto(val text: String = "", val source: String? = null, val url: String? = null)
 
+/** `GET /v1/library/albums/{id}/tracklist`: the whole album a library album is of. */
+@Serializable
+internal data class LibraryTracklistDto(
+    val musicBrainzReleaseGroupId: String,
+    val tracks: List<TracklistDto> = emptyList(),
+)
+
 /** `GET /v1/discover`: Home's discovery rows, as search hits. */
 @Serializable
 internal data class DiscoverDto(

@@ -53,6 +53,17 @@ class ContinuoRequestRepository internal constructor(
         return client.decode(SearchDto.serializer(), reply.body).toDomain(artworkHost = hostOf(server.baseUrl))
     }
 
+    override suspend fun libraryAlbumTracklist(server: Server, libraryAlbumId: String): app.polyphony.core.domain.model.LibraryAlbumTracklist? {
+        val reply = client.get(server, "/v1/library/albums/${URLEncoder.encode(libraryAlbumId, "UTF-8")}/tracklist")
+        if (reply.code == 404) return null   // no release group known, or a continuo from before
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo tracklist failed")
+        val dto = client.decode(LibraryTracklistDto.serializer(), reply.body)
+        return app.polyphony.core.domain.model.LibraryAlbumTracklist(
+            releaseGroupId = dto.musicBrainzReleaseGroupId,
+            tracks = dto.tracks.map { CatalogAlbumTrack(it.position, it.discNumber, it.title, it.durationMs, it.musicBrainzRecordingId) },
+        )
+    }
+
     override suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery? {
         val reply = client.get(server, "/v1/discover")
         if (reply.code == 404) return null   // a continuo from before discovery
