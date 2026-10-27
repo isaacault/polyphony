@@ -29,6 +29,7 @@ import app.polyphony.core.dlna.DlnaSessionListener
 import app.polyphony.core.dlna.player.DlnaPlayer
 import app.polyphony.core.domain.model.ItemKind
 import app.polyphony.core.domain.model.PlayContext
+import app.polyphony.core.domain.model.PlayNowIds
 import app.polyphony.core.domain.model.RecentContext
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.DlnaRenderer
@@ -59,6 +60,8 @@ import app.polyphony.core.playback.reporting.PlaybackReporter
 import app.polyphony.core.playback.session.CustomCommands
 import app.polyphony.core.playback.session.PlayContextCodec
 import app.polyphony.core.playback.session.PolyphonySessionCallback
+import app.polyphony.core.playback.stream.PrefetchPlan
+import app.polyphony.core.playback.stream.QueuePrefetcher
 import app.polyphony.core.playback.transcode.AppliedQuality
 import app.polyphony.core.playback.transcode.QualityChangeRule
 import app.polyphony.core.playback.session.SessionActions
@@ -124,6 +127,9 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var reporter: PlaybackReporter
     private lateinit var headset: HeadsetMonitor
     private lateinit var latencyListener: LatencyPlayerListener
+    /** The streaming HTTP source, shared by the player and the queue's fetching ahead. */
+    private lateinit var streamingUpstream: OkHttpDataSource.Factory
+    private lateinit var prefetcher: QueuePrefetcher
 
     private var settings: PlaybackSettings = PlaybackSettings()
     private var queueTitle: String? = null
@@ -152,6 +158,7 @@ class PlaybackService : MediaLibraryService() {
         settings = initial.playback
 
         localPlayer = buildLocalPlayer(initial.playback)
+        prefetcher = QueuePrefetcher(scope, streamResolver, streamCache, streamingUpstream)
         val players = PlayerFactory.create(this, localPlayer, castManager.isSupported, converter)
         basePlayer = players.session
         player = basePlayer
@@ -211,6 +218,7 @@ class PlaybackService : MediaLibraryService() {
             dlnaManager.disconnect()
         }
         closeAudioEffectSession()
+        prefetcher.stop()
         headset.setEnabled(false)
         sleepTimer.cancel()
         session?.release()
@@ -234,6 +242,7 @@ class PlaybackService : MediaLibraryService() {
             .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
             .build()
         val upstream = OkHttpDataSource.Factory(streamingClient)
+        streamingUpstream = upstream
         val cached = CacheDataSource.Factory()
             .setCache(cache)
             .setUpstreamDataSourceFactory(upstream)
@@ -318,6 +327,9 @@ class PlaybackService : MediaLibraryService() {
                 }
             }
         }
+        scope.launch {
+            networkMonitor.state.map { it.isOnline to it.isMetered }.distinctUntilChanged().collect { refreshPrefetch() }
+        }
         scope.launch { latencyMonitor.degraded.collect { publishExtras() } }
         scope.launch { sleepTimer.endsAtEpochMs.collect { publishExtras() } }
         scope.launch { feedbackRepository.feedback.collect { updateButtons() } }
@@ -348,6 +360,8 @@ class PlaybackService : MediaLibraryService() {
                 delay(1_000)
                 if (player.isPlaying) {
                     reporter.onPlayingTick(1_000)
+                    // Every 15 s while playing (and at once after a start): the next songs on the phone.
+                    if (ticks % 15 == 0) refreshPrefetch()
                     if (++ticks % 10 == 0) {
                         saveQueue()
                         recordContextProgress()
@@ -367,6 +381,44 @@ class PlaybackService : MediaLibraryService() {
         reporter.threshold = new.scrobbleThreshold
         headset.setEnabled(new.resumeOnConnect)
         applyReplayGain()
+        if (old.prefetchQueue != new.prefetchQueue || old.prefetchOnMobileData != new.prefetchOnMobileData) refreshPrefetch()
+    }
+
+    /**
+     * Fetch the next songs of the queue fully into the stream cache (see [PrefetchPlan] for how
+     * many), so a network drop doesn't stop the music at the next song. Only for this phone's own
+     * player: a Cast or DLNA receiver streams for itself.
+     */
+    private fun refreshPrefetch() {
+        val budget = PrefetchPlan.budget(networkMonitor.state.value, settings.prefetchQueue, settings.prefetchOnMobileData)
+        if (budget == null || player !== basePlayer || player.isRemotePlayback() || localPlayer.mediaItemCount == 0) {
+            prefetcher.stop()
+            return
+        }
+        val upcoming = upcomingSongs(budget.maxSongs)
+        val picked = PrefetchPlan.pick(upcoming.map { it.first }, budget).toSet()
+        prefetcher.update(upcoming.filter { it.first.trackId in picked }.map { it.second })
+    }
+
+    /** The queue after the current song, in play order (shuffle and repeat-all included). */
+    private fun upcomingSongs(max: Int): List<Pair<PrefetchPlan.Upcoming, QueuePrefetcher.Song>> {
+        val timeline = localPlayer.currentTimeline
+        if (timeline.isEmpty) return emptyList()
+        val repeat = if (localPlayer.repeatMode == Player.REPEAT_MODE_ONE) Player.REPEAT_MODE_OFF else localPlayer.repeatMode
+        var index = localPlayer.currentMediaItemIndex
+        val seen = hashSetOf(index)
+        val out = mutableListOf<Pair<PrefetchPlan.Upcoming, QueuePrefetcher.Song>>()
+        while (out.size < max) {
+            index = timeline.getNextWindowIndex(index, repeat, localPlayer.shuffleModeEnabled)
+            if (index == C.INDEX_UNSET || !seen.add(index)) break
+            val item = localPlayer.getMediaItemAt(index)
+            val serverId = MediaItemFactory.serverIdFrom(item) ?: continue
+            val trackId = item.mediaId
+            val durationMs = queueStore.get(trackId)?.durationMs ?: 0L
+            out += PrefetchPlan.Upcoming(trackId, durationMs, fetchable = PlayNowIds.streamId(trackId) == null) to
+                QueuePrefetcher.Song(serverId, trackId)
+        }
+        return out
     }
 
     /**

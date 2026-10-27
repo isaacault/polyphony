@@ -6,6 +6,7 @@ import androidx.media3.datasource.ResolvingDataSource
 import app.polyphony.core.domain.model.PlayNowIds
 import app.polyphony.core.domain.repository.DownloadRepository
 import app.polyphony.core.domain.repository.LibraryRepository
+import app.polyphony.core.domain.repository.NetworkMonitor
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.transcode.TranscodeProfile
@@ -40,6 +41,8 @@ class StreamResolver @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val settingsRepository: SettingsRepository,
     private val requestRepository: RequestRepository,
+    private val streamCache: StreamCache,
+    private val networkMonitor: NetworkMonitor,
 ) : ResolvingDataSource.Resolver {
 
     /** Session memory of transcodes this server could not deliver. */
@@ -65,12 +68,23 @@ class StreamResolver @Inject constructor(
     }
 
     @Throws(IOException::class)
-    override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
+    override fun resolveDataSpec(dataSpec: DataSpec): DataSpec = resolve(dataSpec, ahead = false)!!
+
+    /**
+     * What [resolveDataSpec] would play, for fetching a queued song ahead into the stream cache
+     * (QueuePrefetcher); null when there's nothing to fetch (a downloaded or Play now song).
+     * Records nothing: the song isn't playing.
+     */
+    @Throws(IOException::class)
+    fun resolveAhead(dataSpec: DataSpec): DataSpec? = resolve(dataSpec, ahead = true)
+
+    private fun resolve(dataSpec: DataSpec, ahead: Boolean): DataSpec? {
         val (serverId, trackId) = MediaItemFactory.parseUri(dataSpec.uri) ?: return dataSpec
-        PlayNowIds.streamId(trackId)?.let { return resolvePlayNow(serverId, trackId, it, dataSpec) }
+        PlayNowIds.streamId(trackId)?.let { return if (ahead) null else resolvePlayNow(serverId, trackId, it, dataSpec) }
         val track = queueStore.get(trackId)
             ?: runBlocking { runCatching { libraryRepository.getTrack(trackId) }.getOrNull() }
             ?: throw IOException("Unknown track $trackId")
+        if (ahead && isDownloaded(trackId)) return null
         resolveDownloaded(trackId, dataSpec)?.let { return it }
         val provider = serverLookup.providerFor(serverId)
             ?: runBlocking { serverLookup.awaitProvider(serverId) }
@@ -86,13 +100,23 @@ class StreamResolver @Inject constructor(
             if (adjusted !== decision.profile) decision = decision.copy(profile = adjusted)
         }
         val request = provider.streamRequest(track, decision.profile)
-        record(trackId, decision)
+        var key = "$trackId|${decision.profile.fingerprint}"
+        // Offline or on mobile data, a complete copy already on the phone beats none or another
+        // download, whatever quality it was cached at (a song fetched ahead on Wi-Fi, say).
+        val network = networkMonitor.state.value
+        if (!ahead && (!network.isOnline || network.isMetered) && !streamCache.isComplete(key)) {
+            streamCache.completeKey(trackId)?.let { key = it }
+        }
+        if (!ahead) record(trackId, decision)
         return dataSpec.buildUpon()
             .setUri(Uri.parse(request.url))
             .setHttpRequestHeaders(dataSpec.httpRequestHeaders + request.headers)
-            .setKey("$trackId|${decision.profile.fingerprint}")
+            .setKey(key)
             .build()
     }
+
+    private fun isDownloaded(trackId: String): Boolean =
+        runBlocking { runCatching { downloadRepository.localFile(trackId) }.getOrNull() }?.filePath?.let { File(it).exists() } == true
 
     /**
      * A Play now song (continuo#12): continuo serves it while it downloads, untranscoded; the
