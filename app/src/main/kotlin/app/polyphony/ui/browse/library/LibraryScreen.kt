@@ -131,7 +131,7 @@ fun LibraryScreen(
                 )
                 OfflineModeBanner()
                 PrimaryScrollableTabRow(
-                    selectedTabIndex = pagerState.currentPage,
+                    selectedTabIndex = pagerState.currentPage.coerceIn(0, (tabs.size - 1).coerceAtLeast(0)),
                     edgePadding = 8.dp,
                     divider = {},
                 ) {
@@ -155,9 +155,12 @@ fun LibraryScreen(
                 .fillMaxSize()
                 .padding(padding),
             beyondViewportPageCount = 1,
-            key = { tabs[it].key },
+            // The tab list can shrink (a tab turned off) while the pager still holds the old last
+            // page for a frame: an out-of-range page draws nothing instead of crashing (alpha.18's
+            // IndexOutOfBounds "index: 4, size: 4").
+            key = { tabs.getOrNull(it)?.key ?: "gone-$it" },
         ) { page ->
-            when (tabs[page]) {
+            when (tabs.getOrNull(page) ?: return@HorizontalPager) {
                 LibraryTab.EXPLORE -> ExploreTab()
                 LibraryTab.ARTISTS -> ArtistsTab(viewModel)
                 LibraryTab.ALBUMS -> AlbumsTab(viewModel)
