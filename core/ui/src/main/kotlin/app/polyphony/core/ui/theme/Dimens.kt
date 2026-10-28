@@ -15,7 +15,7 @@ object Dimens {
     val minGridTile = 148.dp
 
     val miniPlayerHeight = 56.dp
-    val bottomBarHeight = 62.dp
+    val bottomBarHeight = 56.dp
     val playerControlSize = 72.dp
     val playerSecondaryControlSize = 48.dp
 }
