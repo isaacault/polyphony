@@ -55,6 +55,8 @@ fun AlbumGrid(
     state: LazyGridState = rememberLazyGridState(),
     contentPadding: PaddingValues = listContentPadding(top = 4.dp, horizontal = 12.dp),
     header: (@Composable () -> Unit)? = null,
+    /** Under the last item: how many there are ("214 albums"). */
+    footer: String? = null,
 ) {
     LazyVerticalGrid(
         columns = gridCells(columns),
@@ -70,6 +72,7 @@ fun AlbumGrid(
         items(albums, key = { it.id }, contentType = { "album" }) { album ->
             AlbumCard(album = album, onClick = { onAlbum(album) }, onLongClick = { onAlbumLong(album) })
         }
+        if (footer != null) item(key = "footer", span = { GridItemSpan(maxLineSpan) }, contentType = "footer") { CountFooter(footer) }
     }
 }
 
@@ -82,12 +85,15 @@ fun AlbumList(
     state: LazyListState = rememberLazyListState(),
     contentPadding: PaddingValues = listContentPadding(top = 4.dp),
     header: (@Composable () -> Unit)? = null,
+    /** Under the last item: how many there are ("214 albums"). */
+    footer: String? = null,
 ) {
     LazyColumn(state = state, modifier = modifier.fillMaxSize(), contentPadding = contentPadding) {
         if (header != null) item(key = "header", contentType = "header") { header() }
         items(albums, key = { it.id }, contentType = { "album" }) { album ->
             AlbumRow(album = album, onClick = { onAlbum(album) }, onLongClick = { onAlbumLong(album) }, onMoreClick = { onAlbumLong(album) })
         }
+        if (footer != null) item(key = "footer", contentType = "footer") { CountFooter(footer) }
     }
 }
 
@@ -100,6 +106,8 @@ fun ArtistGrid(
     state: LazyGridState = rememberLazyGridState(),
     contentPadding: PaddingValues = listContentPadding(top = 4.dp, horizontal = 12.dp),
     header: (@Composable () -> Unit)? = null,
+    /** Under the last item: how many there are ("214 albums"). */
+    footer: String? = null,
 ) {
     LazyVerticalGrid(
         columns = gridCells(columns),
@@ -115,6 +123,7 @@ fun ArtistGrid(
         items(artists, key = { it.id }, contentType = { "artist" }) { artist ->
             ArtistCard(artist = artist, onClick = { onArtist(artist) })
         }
+        if (footer != null) item(key = "footer", span = { GridItemSpan(maxLineSpan) }, contentType = "footer") { CountFooter(footer) }
     }
 }
 
@@ -126,13 +135,28 @@ fun ArtistList(
     state: LazyListState = rememberLazyListState(),
     contentPadding: PaddingValues = listContentPadding(top = 4.dp),
     header: (@Composable () -> Unit)? = null,
+    /** Under the last item: how many there are ("214 albums"). */
+    footer: String? = null,
 ) {
     LazyColumn(state = state, modifier = modifier.fillMaxSize(), contentPadding = contentPadding) {
         if (header != null) item(key = "header", contentType = "header") { header() }
         items(artists, key = { it.id }, contentType = { "artist" }) { artist ->
             ArtistRow(artist = artist, onClick = { onArtist(artist) })
         }
+        if (footer != null) item(key = "footer", contentType = "footer") { CountFooter(footer) }
     }
+}
+
+/** A list's count, under its last item. */
+@Composable
+fun CountFooter(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+    )
 }
 
 /** The sticky row above a library list: sort control on the left, view toggles on the right. */

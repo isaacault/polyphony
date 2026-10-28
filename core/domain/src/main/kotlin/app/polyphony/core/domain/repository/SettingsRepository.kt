@@ -42,7 +42,7 @@ enum class LibraryLayout { LIST, GRID }
 
 /** Library tabs, in the order the user wants them. */
 @Serializable
-enum class LibrarySection { EXPLORE, ARTISTS, ALBUMS, SONGS, PLAYLISTS, GENRES }
+enum class LibrarySection { EXPLORE, ARTISTS, ALBUMS, PLAYLISTS, SONGS, GENRES }
 
 /** The Library tabs there were before Explore: what a settings file without [AppearanceSettings.libraryTabsKnown] has seen. */
 private val TABS_BEFORE_EXPLORE = listOf(LibrarySection.ARTISTS, LibrarySection.ALBUMS, LibrarySection.SONGS, LibrarySection.PLAYLISTS, LibrarySection.GENRES)
@@ -81,6 +81,8 @@ data class AppearanceSettings(
      * until the user chooses again, rather than staying hidden behind a list saved before it existed.
      */
     val libraryTabsKnown: List<LibrarySection> = TABS_BEFORE_EXPLORE,
+    /** The user arranged [libraryTabs] themselves; until then they show in the default order. */
+    val libraryTabsArranged: Boolean = false,
     /** Tab the Library opens on when nothing asks for a specific one; falls back to the first enabled tab. */
     val libraryDefaultTab: LibrarySection = LibrarySection.ALBUMS,
     /** Swipe gestures on song rows, by physical direction (not layout direction). */
@@ -101,7 +103,7 @@ data class AppearanceSettings(
     /** The Library tabs to show, in order: the chosen ones, after any added since they were chosen. */
     val shownLibraryTabs: List<LibrarySection>
         get() {
-            val chosen = libraryTabs.ifEmpty { LibrarySection.entries }
+            val chosen = libraryTabs.ifEmpty { LibrarySection.entries }.let { if (libraryTabsArranged) it else it.sortedBy(LibrarySection::ordinal) }
             return LibrarySection.entries.filter { it !in libraryTabsKnown && it !in chosen } + chosen
         }
 }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -34,7 +35,9 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemContentType
 import androidx.paging.compose.itemKey
+import app.polyphony.core.domain.model.FilterField
 import app.polyphony.core.ui.components.TrackRowPlaceholder
+import app.polyphony.ui.browse.CountFooter
 import kotlinx.collections.immutable.toImmutableList
 import app.polyphony.R
 import app.polyphony.core.domain.model.Album
@@ -48,7 +51,6 @@ import app.polyphony.core.domain.model.sortKey
 import app.polyphony.core.ui.components.EmptyState
 import app.polyphony.core.ui.components.FastScroller
 import app.polyphony.core.ui.components.GenreRow
-import app.polyphony.core.ui.components.GridListToggle
 import app.polyphony.core.ui.components.LoadingPlaceholder
 import app.polyphony.core.ui.components.LocalContentBottomPadding
 import app.polyphony.core.ui.components.PlaceholderStyle
@@ -67,7 +69,6 @@ import app.polyphony.ui.browse.AlbumList
 import app.polyphony.ui.browse.ArtistGrid
 import app.polyphony.ui.browse.ArtistList
 import app.polyphony.ui.browse.LibraryFilterRow
-import app.polyphony.ui.browse.ListControlsRow
 import app.polyphony.ui.browse.ScrollToTopOnReorder
 import app.polyphony.ui.browse.ScrollerHost
 import app.polyphony.ui.browse.gridCells
@@ -103,12 +104,10 @@ internal fun ArtistsTab(vm: LibraryViewModel) {
         ).toImmutableList()
     }
     Column(Modifier.fillMaxSize()) {
-        ListControlsRow(
-            countLabel = artists?.let { pluralStringResource(R.plurals.browse_count_artists, it.size, it.size) },
-            start = { SortMenu(sortOptions, sort, ascending = true, onChange = { s, _ -> vm.setArtistSort(s) }, showDirection = false) },
-            end = { GridListToggle(isGrid = grid, onToggle = vm::setArtistsGrid) },
-        )
-        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.ARTIST)), vm::setArtistFilter)
+        // Sort leads the filter row; the count is under the last artist; grid or list is in the ⋮ menu.
+        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.ARTIST)) - FilterField.GENRE, vm::setArtistFilter,
+            leading = { SortMenu(sortOptions, sort, ascending = true, onChange = { s, _ -> vm.setArtistSort(s) }, showDirection = false) })
+        val artistCount = artists?.let { pluralStringResource(R.plurals.browse_count_artists, it.size, it.size) }
         ScrollToTopOnReorder(order = sort to filter, content = artists) { if (grid) gridState.scrollToItem(0) else listState.scrollToItem(0) }
         val list = artists
         when {
@@ -128,8 +127,8 @@ internal fun ArtistsTab(vm: LibraryViewModel) {
                     }
                 } else null,
             ) {
-                if (grid) ArtistGrid(list, columns, onArtist = { navigator.openArtist(it.id) }, state = gridState)
-                else ArtistList(list, onArtist = { navigator.openArtist(it.id) }, state = listState)
+                if (grid) ArtistGrid(list, columns, onArtist = { navigator.openArtist(it.id) }, state = gridState, footer = artistCount)
+                else ArtistList(list, onArtist = { navigator.openArtist(it.id) }, state = listState, footer = artistCount)
             }
         }
     }
@@ -166,12 +165,9 @@ internal fun AlbumsTab(vm: LibraryViewModel) {
         ).toImmutableList()
     }
     Column(Modifier.fillMaxSize()) {
-        ListControlsRow(
-            countLabel = albums?.let { pluralStringResource(R.plurals.browse_count_albums, it.size, it.size) },
-            start = { SortMenu(sortOptions, sort, ascending, onChange = vm::setAlbumSort) },
-            end = { GridListToggle(isGrid = grid, onToggle = vm::setAlbumsGrid) },
-        )
-        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.ALBUM)), vm::setAlbumFilter, genres = genres, years = years)
+        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.ALBUM)) - FilterField.GENRE, vm::setAlbumFilter,
+            genres = genres, years = years, leading = { SortMenu(sortOptions, sort, ascending, onChange = vm::setAlbumSort) })
+        val albumCount = albums?.let { pluralStringResource(R.plurals.browse_count_albums, it.size, it.size) }
         ScrollToTopOnReorder(order = Triple(sort, ascending, filter), content = albums) { if (grid) gridState.scrollToItem(0) else listState.scrollToItem(0) }
         val list = albums
         when {
@@ -196,8 +192,8 @@ internal fun AlbumsTab(vm: LibraryViewModel) {
                         }
                     } else null,
                 ) {
-                    if (grid) AlbumGrid(list, columns, onAlbum = { navigator.openAlbum(it.id) }, onAlbumLong = { albumForOptions = it }, state = gridState)
-                    else AlbumList(list, onAlbum = { navigator.openAlbum(it.id) }, onAlbumLong = { albumForOptions = it }, state = listState)
+                    if (grid) AlbumGrid(list, columns, onAlbum = { navigator.openAlbum(it.id) }, onAlbumLong = { albumForOptions = it }, state = gridState, footer = albumCount)
+                    else AlbumList(list, onAlbum = { navigator.openAlbum(it.id) }, onAlbumLong = { albumForOptions = it }, state = listState, footer = albumCount)
                 }
             }
         }
@@ -236,16 +232,9 @@ internal fun SongsTab(vm: LibraryViewModel) {
     val currentId = playback.currentTrack?.id
     val downloadedIds by rememberDownloadedIds()
     Column(Modifier.fillMaxSize()) {
-        ListControlsRow(
-            countLabel = count?.let { pluralStringResource(R.plurals.browse_count_songs, it, it) },
-            start = { SortMenu(sortOptions, sort, ascending, onChange = vm::setTrackSort) },
-            end = {
-                IconButton(onClick = { vm.playAllSongs(shuffle = true) }) {
-                    Icon(Icons.Rounded.Shuffle, contentDescription = stringResource(R.string.browse_action_shuffle_all))
-                }
-            },
-        )
-        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.TRACK)), vm::setTrackFilter, genres = genres, years = years)
+        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.TRACK)) - FilterField.GENRE, vm::setTrackFilter,
+            genres = genres, years = years, leading = { SortMenu(sortOptions, sort, ascending, onChange = vm::setTrackSort) })
+        val songCount = count?.let { pluralStringResource(R.plurals.browse_count_songs, it, it) }
         // The Play/Shuffle header is item 0 with a fixed key, so the top stays put as the new order loads.
         ScrollToTopOnReorder(order = Triple(sort, ascending, filter), content = null) { listState.scrollToItem(0) }
         val loading = items.loadState.refresh is LoadState.Loading
@@ -301,6 +290,7 @@ internal fun SongsTab(vm: LibraryViewModel) {
                                 }
                             }
                         }
+                        if (songCount != null) item(key = "footer", contentType = "footer") { CountFooter(songCount) }
                     }
                 }
             }
@@ -322,11 +312,8 @@ internal fun PlaylistsTab(vm: LibraryViewModel) {
     var showCreate by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            ListControlsRow(
-                countLabel = playlists?.let { pluralStringResource(R.plurals.browse_count_playlists, it.size, it.size) },
-                end = { GridListToggle(isGrid = grid, onToggle = vm::setPlaylistsGrid) },
-            )
-            LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.PLAYLIST)), vm::setPlaylistFilter)
+            LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.PLAYLIST)) - FilterField.GENRE, vm::setPlaylistFilter)
+            val playlistCount = playlists?.let { pluralStringResource(R.plurals.browse_count_playlists, it.size, it.size) }
             val list = playlists
             when {
                 list == null -> LoadingPlaceholder(PlaceholderStyle.LIST)
@@ -347,11 +334,13 @@ internal fun PlaylistsTab(vm: LibraryViewModel) {
                     gridItems(list, key = { it.id }, contentType = { "playlist" }) { playlist ->
                         PlaylistCard(playlist = playlist, onClick = { navigator.openPlaylist(playlist.id) })
                     }
+                    if (playlistCount != null) item(key = "footer", span = { GridItemSpan(maxLineSpan) }) { CountFooter(playlistCount) }
                 }
                 else -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = listContentPadding(top = 4.dp, extraBottom = 96.dp)) {
                     items(list, key = { it.id }, contentType = { "playlist" }) { playlist ->
                         PlaylistRow(playlist = playlist, onClick = { navigator.openPlaylist(playlist.id) })
                     }
+                    if (playlistCount != null) item(key = "footer") { CountFooter(playlistCount) }
                 }
             }
         }
