@@ -5,6 +5,7 @@ import app.polyphony.core.domain.model.TrackSort
 import app.polyphony.core.domain.repository.DownloadRule
 import app.polyphony.core.domain.repository.DownloadRuleTarget
 import app.polyphony.core.domain.repository.LibraryRepository
+import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.SyncState
 import app.polyphony.core.domain.repository.TranscodeProfileRepository
@@ -32,6 +33,7 @@ class DownloadRuleEvaluator @Inject constructor(
     private val downloadDao: DownloadDao,
     private val engine: DownloadEngine,
     private val library: LibraryRepository,
+    private val serverRepository: ServerRepository,
     private val settingsRepository: SettingsRepository,
     private val profileRepository: TranscodeProfileRepository,
     private val json: Json,
@@ -42,6 +44,9 @@ class DownloadRuleEvaluator @Inject constructor(
 
     suspend fun evaluate(serverId: String) {
         mutex.withLock {
+            // The rules' songs come from the active server's library: evaluated for another server
+            // (or after a switch mid-run) they'd mark that server's downloads unwanted and delete them.
+            if (!isActive(serverId)) return
             _state.value = _state.value.copy(status = SyncState.Status.RUNNING, progress = null, phase = "Checking download rules", lastError = null)
             try {
                 val settings = settingsRepository.current().downloads
@@ -59,6 +64,10 @@ class DownloadRuleEvaluator @Inject constructor(
                     // likelier a vanished target or a library mid-sync than a wish to delete them.
                     if (tracks == null || (tracks.isEmpty() && rule.id in owning)) held += rule.id
                     perRule += rule to tracks.orEmpty()
+                }
+                if (!isActive(serverId)) {
+                    _state.value = _state.value.copy(status = SyncState.Status.IDLE, progress = null, phase = null)
+                    return
                 }
                 val desired = RuleDiff.mergeDesired(perRule, settings.defaultProfileId, profiles)
                 val plan = RuleDiff.compute(desired, current, settings.removeWhenRuleNoLongerMatches, profiles, held)
@@ -88,6 +97,8 @@ class DownloadRuleEvaluator @Inject constructor(
             }
         }
     }
+
+    private suspend fun isActive(serverId: String) = serverRepository.getActive()?.id == serverId
 
     private suspend fun tracksFor(rule: DownloadRule): List<Track> {
         val tracks = when (val t = rule.target) {

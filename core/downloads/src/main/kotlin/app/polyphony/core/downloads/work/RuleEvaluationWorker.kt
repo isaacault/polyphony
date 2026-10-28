@@ -9,7 +9,7 @@ import app.polyphony.core.downloads.engine.DownloadRuleEvaluator
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
-/** Periodic re-evaluation of download rules for the active server. */
+/** Periodic re-evaluation of download rules for the active server (rules read its library). */
 @HiltWorker
 class RuleEvaluationWorker @AssistedInject constructor(
     @Assisted context: Context,
