@@ -7,6 +7,7 @@ import app.polyphony.navigation.AlbumListRoute
 import app.polyphony.navigation.AlbumRoute
 import app.polyphony.navigation.ArtistRoute
 import app.polyphony.navigation.CatalogAlbumRoute
+import app.polyphony.navigation.DiscoveryPlaylistRoute
 import app.polyphony.navigation.CatalogArtistRoute
 import app.polyphony.navigation.DownloadsRoute
 import app.polyphony.navigation.FavoritesRoute
@@ -44,6 +45,7 @@ fun NavGraphBuilder.browseGraph(navigator: PolyphonyNavigator) {
     composable<ArtistRoute> { ArtistScreen() }
     composable<CatalogArtistRoute> { CatalogArtistScreen() }
     composable<CatalogAlbumRoute> { CatalogAlbumScreen() }
+    composable<DiscoveryPlaylistRoute> { app.polyphony.ui.browse.library.DiscoveryPlaylistScreen() }
     composable<PlaylistRoute> { PlaylistScreen() }
     composable<GenreRoute> { GenreScreen() }
     composable<FavoritesRoute> { FavoritesScreen() }

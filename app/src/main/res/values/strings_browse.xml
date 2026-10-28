@@ -44,6 +44,12 @@
 
     <!-- library tabs -->
     <string name="browse_tab_explore">Explore</string>
+    <string name="explore_new_releases">New releases</string>
+    <string name="explore_artists">Artists for you</string>
+    <string name="explore_albums">Albums for you</string>
+    <string name="explore_playlists">Playlists for you</string>
+    <string name="explore_playlist_source">From ListenBrainz</string>
+    <string name="explore_playlist_failed">Couldn\'t load this playlist from ListenBrainz.</string>
     <string name="browse_tab_artists">Artists</string>
     <string name="browse_tab_albums">Albums</string>
     <string name="browse_tab_songs">Songs</string>

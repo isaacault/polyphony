@@ -59,3 +59,5 @@ enum class AlbumListKind { RECENTLY_ADDED, RECENTLY_PLAYED, MOST_PLAYED, RANDOM,
 
 /** Routes that show the bottom navigation bar and mini player. */
 val TopLevelRoutes: List<Route> = listOf(HomeRoute, LibraryRoute(), SearchRoute)
+
+@Serializable data class DiscoveryPlaylistRoute(val id: String, val title: String) : Route

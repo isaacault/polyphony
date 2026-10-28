@@ -76,6 +76,9 @@ interface RequestRepository {
     /** Scrobble a Play now song: a finished listen at [listenedAtMs], or (null) playing now. */
     suspend fun scrobblePlayNow(server: Server, streamId: String, listenedAtMs: Long?)
 
+    /** One of discovery's ListenBrainz playlists as songs; null when it's gone. */
+    suspend fun discoveryPlaylist(server: Server, id: String): app.polyphony.core.domain.model.DiscoveryPlaylistPage?
+
     /** Home's discovery rows; null from a continuo too old to have them. */
     suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery?
 
