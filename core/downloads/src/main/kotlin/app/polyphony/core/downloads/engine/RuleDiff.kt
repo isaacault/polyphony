@@ -60,6 +60,23 @@ object RuleDiff {
     }
 
     /**
+     * The first of [items] (best-first) that fit in [budgetBytes] at [estimateBytes] each. With a
+     * storage cap, rules queue only what fits, so the cap's eviction doesn't delete songs a rule
+     * then downloads again at its next run, over and over.
+     */
+    fun withinBudget(items: List<EnqueueItem>, budgetBytes: Long, estimateBytes: Long): List<EnqueueItem> {
+        if (estimateBytes <= 0) return items
+        val fits = (budgetBytes / estimateBytes).coerceIn(0L, items.size.toLong()).toInt()
+        return items.take(fits)
+    }
+
+    /** What a new download will likely take: the average finished one, or [fallback] before any. */
+    fun estimateBytes(current: List<DownloadedTrack>, fallback: Long = 10L * 1024 * 1024): Long {
+        val sizes = current.filter { it.isComplete && it.sizeBytes > 0 }.map { it.sizeBytes }
+        return if (sizes.isEmpty()) fallback else sizes.sum() / sizes.size
+    }
+
+    /**
      * [held] rules couldn't say what they want this time (their lookup failed, or came back empty
      * while they still own downloads: a deleted playlist, or a library mid-sync), so nothing of
      * theirs is removed. Deleting the rule is how its files go.

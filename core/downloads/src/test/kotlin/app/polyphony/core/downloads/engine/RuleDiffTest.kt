@@ -98,4 +98,22 @@ class RuleDiffTest {
         val plan = RuleDiff.compute(desired, current, removeWhenRuleNoLongerMatches = true, profiles, held = setOf("r1"))
         assertEquals(listOf("c"), plan.remove)
     }
+
+    @Test
+    fun `with a storage cap, rules queue only what fits`() {
+        val items = listOf("a", "b", "c").map { EnqueueItem(track(it), "r1", TranscodeProfile.ORIGINAL_ID) }
+        assertEquals(listOf("a", "b"), RuleDiff.withinBudget(items, budgetBytes = 25, estimateBytes = 10).map { it.track.id })
+        assertTrue(RuleDiff.withinBudget(items, budgetBytes = -5, estimateBytes = 10).isEmpty())
+        assertEquals(3, RuleDiff.withinBudget(items, budgetBytes = 1_000, estimateBytes = 10).size)
+    }
+
+    @Test
+    fun `a new download is estimated at the average finished one`() {
+        val current = listOf(
+            have("a").copy(sizeBytes = 6), have("b").copy(sizeBytes = 10),
+            have("q", status = DownloadStatus.QUEUED).copy(sizeBytes = 0),
+        )
+        assertEquals(8, RuleDiff.estimateBytes(current))
+        assertEquals(42, RuleDiff.estimateBytes(emptyList(), fallback = 42))
+    }
 }
