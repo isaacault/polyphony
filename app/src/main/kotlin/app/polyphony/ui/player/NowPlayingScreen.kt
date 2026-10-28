@@ -262,6 +262,7 @@ fun NowPlayingScreen(
                             position = position,
                             onSeek = viewModel::seekTo,
                             modifier = Modifier.padding(horizontal = 20.dp),
+                            downloaded = playNowStatus[track.id]?.let { (it.percent / 100.0).toFloat() },
                         )
                     }
                     val controls: @Composable () -> Unit = {
