@@ -263,6 +263,9 @@
     <!-- Library and search filters -->
     <string name="browse_filter_favourites">Favourites</string>
     <string name="browse_filter_downloaded">Downloaded</string>
+    <string name="browse_filter_single_songs">Single songs</string>
+    <string name="browse_empty_single_songs">No single songs</string>
+    <string name="browse_empty_single_songs_hint">Songs you request or keep on their own, without their album, show here.</string>
     <string name="browse_filter_rating_any">Rating</string>
     <string name="browse_filter_rating_at_least">%1$d★ and up</string>
     <string name="browse_filter_rating_five">5★ only</string>

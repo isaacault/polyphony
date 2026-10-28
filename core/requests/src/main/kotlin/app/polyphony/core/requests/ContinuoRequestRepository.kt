@@ -125,6 +125,13 @@ class ContinuoRequestRepository internal constructor(
         return client.decode(DiscoveryPlaylistPageDto.serializer(), reply.body).toDomain(artworkHost = hostOf(server.baseUrl))
     }
 
+    override suspend fun singleSongAlbums(server: Server): Set<String>? {
+        val reply = client.get(server, "/v1/library/singles")
+        if (reply.code == 404) return null   // a continuo from before (#73)
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo singles failed")
+        return client.decode(SinglesDto.serializer(), reply.body).albums.map { it.navidromeAlbumId }.toSet()
+    }
+
     override suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery? {
         val reply = client.get(server, "/v1/discover")
         if (reply.code == 404) return null   // a continuo from before discovery

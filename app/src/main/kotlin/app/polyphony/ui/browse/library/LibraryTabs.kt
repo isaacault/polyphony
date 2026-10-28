@@ -38,6 +38,7 @@ import androidx.paging.compose.itemKey
 import app.polyphony.core.domain.model.FilterField
 import app.polyphony.core.ui.components.TrackRowPlaceholder
 import app.polyphony.ui.browse.CountFooter
+import app.polyphony.ui.common.rememberContinuoLinked
 import kotlinx.collections.immutable.toImmutableList
 import app.polyphony.R
 import app.polyphony.core.domain.model.Album
@@ -105,7 +106,7 @@ internal fun ArtistsTab(vm: LibraryViewModel) {
     }
     Column(Modifier.fillMaxSize()) {
         // Sort leads the filter row; the count is under the last artist; grid or list is in the ⋮ menu.
-        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.ARTIST)) - FilterField.GENRE, vm::setArtistFilter,
+        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.ARTIST)) - FilterField.GENRE + singlesField(), vm::setArtistFilter,
             leading = { SortMenu(sortOptions, sort, ascending = true, onChange = { s, _ -> vm.setArtistSort(s) }, showDirection = false) })
         val artistCount = artists?.let { pluralStringResource(R.plurals.browse_count_artists, it.size, it.size) }
         ScrollToTopOnReorder(order = sort to filter, content = artists) { if (grid) gridState.scrollToItem(0) else listState.scrollToItem(0) }
@@ -165,7 +166,7 @@ internal fun AlbumsTab(vm: LibraryViewModel) {
         ).toImmutableList()
     }
     Column(Modifier.fillMaxSize()) {
-        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.ALBUM)) - FilterField.GENRE, vm::setAlbumFilter,
+        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.ALBUM)) - FilterField.GENRE + singlesField(), vm::setAlbumFilter,
             genres = genres, years = years, leading = { SortMenu(sortOptions, sort, ascending, onChange = vm::setAlbumSort) })
         val albumCount = albums?.let { pluralStringResource(R.plurals.browse_count_albums, it.size, it.size) }
         ScrollToTopOnReorder(order = Triple(sort, ascending, filter), content = albums) { if (grid) gridState.scrollToItem(0) else listState.scrollToItem(0) }
@@ -232,13 +233,36 @@ internal fun SongsTab(vm: LibraryViewModel) {
     val currentId = playback.currentTrack?.id
     val downloadedIds by rememberDownloadedIds()
     Column(Modifier.fillMaxSize()) {
-        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.TRACK)) - FilterField.GENRE, vm::setTrackFilter,
+        LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.TRACK)) - FilterField.GENRE + singlesField(), vm::setTrackFilter,
             genres = genres, years = years, leading = { SortMenu(sortOptions, sort, ascending, onChange = vm::setTrackSort) })
         val songCount = count?.let { pluralStringResource(R.plurals.browse_count_songs, it, it) }
         // The Play/Shuffle header is item 0 with a fixed key, so the top stays put as the new order loads.
         ScrollToTopOnReorder(order = Triple(sort, ascending, filter), content = null) { listState.scrollToItem(0) }
         val loading = items.loadState.refresh is LoadState.Loading
-        when {
+        val singleSongs by vm.singleSongTracks.collectAsStateWithLifecycle()
+        if (filter.singleSongs) {
+            // Just the songs you have on their own (not as part of an album), in title order.
+            if (singleSongs.isEmpty()) {
+                EmptyState(title = stringResource(R.string.browse_empty_single_songs), body = stringResource(R.string.browse_empty_single_songs_hint))
+            } else {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = listContentPadding(top = 4.dp)) {
+                    items(singleSongs, key = { "s-" + it.id }, contentType = { "track" }) { track ->
+                        TrackSwipeRow(track = track) {
+                            TrackRow(
+                                track = track,
+                                onClick = { vm.playSingleSongs(track) },
+                                isCurrent = track.id == currentId,
+                                isPlaying = playback.isPlaying,
+                                isDownloaded = track.id in downloadedIds,
+                                onLongClick = { trackForOptions = track },
+                                onMoreClick = { trackForOptions = track },
+                            )
+                        }
+                    }
+                    item(key = "footer") { CountFooter(pluralStringResource(R.plurals.browse_count_songs, singleSongs.size, singleSongs.size)) }
+                }
+            }
+        } else when {
             items.itemCount == 0 && (loading || count == null) -> LoadingPlaceholder(PlaceholderStyle.LIST)
             items.itemCount == 0 && filter.isActive -> NoFilterMatches { vm.setTrackFilter(LibraryFilter.NONE) }
             items.itemCount == 0 -> EmptyState(title = stringResource(R.string.browse_empty_songs), body = stringResource(R.string.browse_empty_library_hint))
@@ -393,4 +417,11 @@ internal fun GenresTab(vm: LibraryViewModel) {
             }
         }
     }
+}
+
+/** Single songs only exist on a continuo server (song requests, Keep): the chip only shows there. */
+@Composable
+private fun singlesField(): Set<FilterField> {
+    val linked by rememberContinuoLinked()
+    return if (linked) setOf(FilterField.SINGLES) else emptySet()
 }

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -105,6 +106,14 @@ fun LibraryFilterRow(
                     }
                 }
             }
+        }
+        if (FilterField.SINGLES in fields) {
+            FilterChip(
+                selected = filter.singleSongs,
+                onClick = { onChange(filter.copy(singleSongs = !filter.singleSongs)) },
+                label = { Text(stringResource(R.string.browse_filter_single_songs)) },
+                leadingIcon = { ChipIcon(Icons.Rounded.MusicNote) },
+            )
         }
         if (FilterField.DOWNLOADED in fields) {
             FilterChip(
