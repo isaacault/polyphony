@@ -3,21 +3,23 @@ package app.polyphony.ui.browse.library
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.DownloadForOffline
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.LibraryAdd
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
@@ -63,6 +65,9 @@ fun LibraryScreen(
     val sync by viewModel.syncState.collectAsStateWithLifecycle()
     var menuOpen by remember { mutableStateOf(false) }
     val continuoLinked by rememberContinuoLinked()
+    val artistsGrid by viewModel.artistsGrid.collectAsStateWithLifecycle()
+    val albumsGrid by viewModel.albumsGrid.collectAsStateWithLifecycle()
+    val playlistsGrid by viewModel.playlistsGrid.collectAsStateWithLifecycle()
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -71,19 +76,37 @@ fun LibraryScreen(
             Column {
                 TopAppBar(
                     title = { Text(stringResource(R.string.browse_nav_library)) },
+                    // Search has its tab (with a Library scope); grid or list is in the menu.
                     actions = {
-                        IconButton(onClick = viewModel::shuffleLibrary) {
-                            Icon(Icons.Rounded.Shuffle, contentDescription = stringResource(R.string.browse_action_shuffle_all))
-                        }
-                        IconButton(onClick = { navigator.openSearch() }) {
-                            Icon(Icons.Rounded.Search, contentDescription = stringResource(R.string.browse_nav_search))
-                        }
                         OfflineModeIconButton()
                         Box {
                             IconButton(onClick = { menuOpen = true }) {
                                 Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(R.string.browse_action_more))
                             }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                val current = tabs.getOrNull(pagerState.currentPage)
+                                val isGrid = when (current) {
+                                    LibraryTab.ARTISTS -> artistsGrid
+                                    LibraryTab.ALBUMS -> albumsGrid
+                                    LibraryTab.PLAYLISTS -> playlistsGrid
+                                    else -> null
+                                }
+                                if (isGrid != null) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(if (isGrid) R.string.browse_action_show_list else R.string.browse_action_show_grid)) },
+                                        leadingIcon = {
+                                            Icon(if (isGrid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView, contentDescription = null)
+                                        },
+                                        onClick = {
+                                            menuOpen = false
+                                            when (current) {
+                                                LibraryTab.ARTISTS -> viewModel.setArtistsGrid(!isGrid)
+                                                LibraryTab.ALBUMS -> viewModel.setAlbumsGrid(!isGrid)
+                                                else -> viewModel.setPlaylistsGrid(!isGrid)
+                                            }
+                                        },
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.dl_title)) },
                                     leadingIcon = { Icon(Icons.Rounded.DownloadForOffline, contentDescription = null) },
@@ -113,10 +136,12 @@ fun LibraryScreen(
                     divider = {},
                 ) {
                     tabs.forEachIndexed { index, tab ->
+                        // Lower than Material's 48 dp tabs: the bar under the title stays slim.
                         Tab(
                             selected = pagerState.currentPage == index,
                             onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
-                            text = { Text(stringResource(tab.labelRes())) },
+                            text = { Text(stringResource(tab.labelRes()), style = MaterialTheme.typography.labelLarge) },
+                            modifier = Modifier.height(38.dp),
                         )
                     }
                 }

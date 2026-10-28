@@ -10,6 +10,8 @@
     <string name="browse_link_server_missing">That album is on %1$s, which isn\'t one of your servers.</string>
     <string name="browse_action_manage_servers">Manage servers</string>
     <string name="browse_action_back">Back</string>
+    <string name="browse_action_show_grid">Show as grid</string>
+    <string name="browse_action_show_list">Show as list</string>
     <string name="browse_action_more">More options</string>
     <string name="browse_action_see_all">See all</string>
 

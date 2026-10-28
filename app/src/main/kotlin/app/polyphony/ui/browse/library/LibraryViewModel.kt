@@ -43,7 +43,7 @@ import javax.inject.Inject
 data class LibraryStart(val tabs: ImmutableList<LibraryTab>, val defaultTab: LibraryTab)
 
 enum class LibraryTab(val key: String) {
-    EXPLORE("explore"), ARTISTS("artists"), ALBUMS("albums"), SONGS("songs"), PLAYLISTS("playlists"), GENRES("genres");
+    EXPLORE("explore"), ARTISTS("artists"), ALBUMS("albums"), PLAYLISTS("playlists"), SONGS("songs"), GENRES("genres");
 
     companion object {
         fun fromKey(key: String?): LibraryTab? = entries.firstOrNull { it.key == key }

@@ -78,9 +78,12 @@ class AppSettingsCompatTest {
         val saved = json.decodeFromString(AppSettings.serializer(),
             """{"appearance":{"libraryTabs":["ALBUMS","ARTISTS","SONGS","PLAYLISTS","GENRES"]}}""")
         assertEquals(LibrarySection.EXPLORE, saved.appearance.shownLibraryTabs.first())
-        assertEquals(LibrarySection.ALBUMS, saved.appearance.shownLibraryTabs[1])
+        assertEquals("the default order until arranged", LibrarySection.ARTISTS, saved.appearance.shownLibraryTabs[1])
         val chosen = saved.appearance.copy(libraryTabs = listOf(LibrarySection.ALBUMS), libraryTabsKnown = LibrarySection.entries)
         assertEquals(listOf(LibrarySection.ALBUMS), chosen.shownLibraryTabs)
+        val arranged = saved.appearance.copy(libraryTabs = listOf(LibrarySection.SONGS, LibrarySection.ALBUMS),
+                                             libraryTabsKnown = LibrarySection.entries, libraryTabsArranged = true)
+        assertEquals("an arranged order stands", listOf(LibrarySection.SONGS, LibrarySection.ALBUMS), arranged.shownLibraryTabs)
         assertEquals(LibrarySection.entries, AppearanceSettings().shownLibraryTabs)
     }
 

@@ -273,7 +273,7 @@ fun AppearanceSettingsScreen(viewModel: AppearanceViewModel = hiltViewModel()) {
         LibraryTabsSheet(
             current = currentTabs,
             // Chosen with every tab in view: none counts as new any more.
-            onChange = { tabs -> viewModel.update { it.copy(libraryTabs = tabs, libraryTabsKnown = LibrarySection.entries) } },
+            onChange = { tabs -> viewModel.update { it.copy(libraryTabs = tabs, libraryTabsKnown = LibrarySection.entries, libraryTabsArranged = true) } },
             onDismiss = { tabsSheetOpen = false },
         )
     }
