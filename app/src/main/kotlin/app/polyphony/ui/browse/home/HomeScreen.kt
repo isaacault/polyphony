@@ -34,7 +34,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,7 +41,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,13 +63,9 @@ import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.core.ui.util.formatBytes
 import app.polyphony.navigation.AlbumListKind
 import app.polyphony.navigation.LocalNavigator
-import app.polyphony.ui.browse.catalog.CatalogAlbumCard
-import app.polyphony.ui.browse.catalog.catalogAlbumSubtitle
-import app.polyphony.ui.browse.catalog.Discography
 import app.polyphony.ui.common.AlbumOptionsSheet
 import app.polyphony.ui.common.OfflineModeBanner
 import app.polyphony.ui.common.OfflineModeIconButton
-import app.polyphony.ui.shell.LocalSnackbarHostState
 import java.time.LocalTime
 
 @Composable
@@ -96,14 +90,6 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
     val titleRecentlyAdded = stringResource(R.string.browse_home_recently_added)
     val titleMostPlayed = stringResource(R.string.browse_home_most_played)
     val feedback by viewModel.feedback.collectAsStateWithLifecycle()
-    val discovery by viewModel.discovery.collectAsStateWithLifecycle()
-    val snackbar = LocalSnackbarHostState.current
-    val context = LocalContext.current
-    LaunchedEffect(viewModel) {
-        viewModel.events.collect { m ->
-            snackbar.showSnackbar(if (m.arg == null) context.getString(m.text) else context.getString(m.text, m.arg))
-        }
-    }
     val titleFavorites = stringResource(if (feedback.usesRatings) R.string.feedback_top_rated else R.string.browse_home_favorites)
 
     Scaffold(
@@ -186,29 +172,6 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                         onAlbum = navigator::openAlbum,
                         onAlbumLong = { albumForOptions = it },
                     )
-                    // Discovery (continuo): albums you don't have yet, and songs you might like.
-                    if (discovery.newReleases.isNotEmpty()) {
-                        item(key = "new-header") { SectionHeader(title = stringResource(R.string.browse_home_new_from_artists)) }
-                        item(key = "new") {
-                            HorizontalCarousel(items = discovery.newReleases, key = { "n-" + it.key }) { album ->
-                                val libraryId = Discography.libraryId(album.availability)
-                                CatalogAlbumCard(
-                                    album = album,
-                                    busy = album.releaseGroupId in discovery.requesting,
-                                    onRequest = viewModel::request,
-                                    onClick = {
-                                        when {
-                                            libraryId != null -> navigator.openAlbum(libraryId)
-                                            album.releaseGroupId != null -> navigator.openCatalogAlbum(album.releaseGroupId!!, album.title)
-                                        }
-                                    },
-                                    modifier = Modifier.width(Dimens.carouselArtwork),
-                                    // Whose it is matters on Home; the year doesn't (they're all new).
-                                    subtitle = catalogAlbumSubtitle(album, byArtist = true),
-                                )
-                            }
-                        }
-                    }
                     albumShelf(
                         key = "most",
                         title = titleMostPlayed,
