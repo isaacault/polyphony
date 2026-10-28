@@ -48,6 +48,7 @@ import app.polyphony.core.ui.components.LoadingPlaceholder
 import app.polyphony.core.ui.components.MediaRow
 import app.polyphony.core.ui.components.PlaceholderStyle
 import app.polyphony.core.ui.components.SectionHeader
+import app.polyphony.core.ui.components.shimmer
 import app.polyphony.core.ui.components.listContentPadding
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.navigation.LocalNavigator
@@ -75,7 +76,10 @@ internal fun ExploreTab(viewModel: ExploreViewModel = hiltViewModel()) {
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = listContentPadding(top = 4.dp, extraBottom = 96.dp)) {
         if (state.loading) {
-            item(key = "loading") { LoadingPlaceholder(PlaceholderStyle.CAROUSEL) }
+            // The page's shape while continuo answers: tiles, a grid of artists, a list of albums.
+            item(key = "loading-new") { LoadingPlaceholder(PlaceholderStyle.CAROUSEL, modifier = Modifier.padding(vertical = 12.dp)) }
+            item(key = "loading-artists") { ArtistGridSkeleton() }
+            item(key = "loading-albums") { LoadingPlaceholder(PlaceholderStyle.LIST, count = 4, modifier = Modifier.padding(top = 12.dp)) }
         }
         if (state.newReleases.isNotEmpty()) {
             item(key = "new-header") { SectionHeader(title = stringResource(R.string.explore_new_releases)) }
@@ -195,6 +199,21 @@ private fun ArtistGrid(artists: List<CatalogArtist>, onClick: (CatalogArtist) ->
                     }
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** [ArtistGrid]'s shape, shimmering. */
+@Composable
+private fun ArtistGridSkeleton() {
+    val tone = MaterialTheme.colorScheme.surfaceContainerHigh
+    Column(Modifier.padding(horizontal = Dimens.screenPadding), verticalArrangement = Arrangement.spacedBy(TILE_GAP)) {
+        repeat(3) {
+            Row(horizontalArrangement = Arrangement.spacedBy(TILE_GAP)) {
+                repeat(2) {
+                    Spacer(Modifier.weight(1f).height(TILE_HEIGHT).clip(RoundedCornerShape(TILE_RADIUS)).shimmer(tone))
+                }
             }
         }
     }

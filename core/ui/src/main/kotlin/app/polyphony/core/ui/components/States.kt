@@ -99,7 +99,7 @@ fun ErrorState(
 
 enum class PlaceholderStyle { LIST, GRID, CAROUSEL }
 
-/** Static tonal shapes that stand in for content while the first emission arrives. */
+/** Shimmering tonal shapes that stand in for content while the first emission arrives. */
 @Composable
 fun LoadingPlaceholder(
     style: PlaceholderStyle = PlaceholderStyle.LIST,
@@ -121,12 +121,12 @@ fun LoadingPlaceholder(
                         Modifier
                             .size(Dimens.listArtwork)
                             .clip(ArtworkShapes.listThumb)
-                            .background(tone),
+                            .shimmer(tone),
                     )
                     Spacer(Modifier.width(Dimens.itemSpacing))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Box(Modifier.fillMaxWidth(0.6f).height(14.dp).clip(RoundedCornerShape(7.dp)).background(tone))
-                        Box(Modifier.fillMaxWidth(0.4f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(toneSoft))
+                        Box(Modifier.fillMaxWidth(0.6f).height(14.dp).clip(RoundedCornerShape(7.dp)).shimmer(tone))
+                        Box(Modifier.fillMaxWidth(0.4f).height(12.dp).clip(RoundedCornerShape(6.dp)).shimmer(toneSoft))
                     }
                 }
             }
@@ -136,9 +136,9 @@ fun LoadingPlaceholder(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     repeat(2) {
                         Column(Modifier.weight(1f).padding(4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(ArtworkShapes.gridTile).background(tone))
-                            Box(Modifier.fillMaxWidth(0.7f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(tone))
-                            Box(Modifier.fillMaxWidth(0.4f).height(10.dp).clip(RoundedCornerShape(5.dp)).background(toneSoft))
+                            Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(ArtworkShapes.gridTile).shimmer(tone))
+                            Box(Modifier.fillMaxWidth(0.7f).height(12.dp).clip(RoundedCornerShape(6.dp)).shimmer(tone))
+                            Box(Modifier.fillMaxWidth(0.4f).height(10.dp).clip(RoundedCornerShape(5.dp)).shimmer(toneSoft))
                         }
                     }
                 }
@@ -152,8 +152,8 @@ fun LoadingPlaceholder(
         ) {
             repeat(3) {
                 Column(Modifier.width(Dimens.carouselArtwork), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.size(Dimens.carouselArtwork).clip(ArtworkShapes.gridTile).background(tone))
-                    Box(Modifier.fillMaxWidth(0.7f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(tone))
+                    Box(Modifier.size(Dimens.carouselArtwork).clip(ArtworkShapes.gridTile).shimmer(tone))
+                    Box(Modifier.fillMaxWidth(0.7f).height(12.dp).clip(RoundedCornerShape(6.dp)).shimmer(tone))
                 }
             }
         }
@@ -185,12 +185,12 @@ fun TrackRowPlaceholder(modifier: Modifier = Modifier) {
             Modifier
                 .size(Dimens.listArtwork)
                 .clip(ArtworkShapes.listThumb)
-                .background(tone),
+                .shimmer(tone),
         )
         Spacer(Modifier.width(Dimens.itemSpacing))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.fillMaxWidth(0.55f).height(14.dp).clip(RoundedCornerShape(7.dp)).background(tone))
-            Box(Modifier.fillMaxWidth(0.35f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(toneSoft))
+            Box(Modifier.fillMaxWidth(0.55f).height(14.dp).clip(RoundedCornerShape(7.dp)).shimmer(tone))
+            Box(Modifier.fillMaxWidth(0.35f).height(12.dp).clip(RoundedCornerShape(6.dp)).shimmer(toneSoft))
         }
     }
 }

@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.R
+import app.polyphony.core.ui.components.LoadingPlaceholder
+import app.polyphony.core.ui.components.PlaceholderStyle
 import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
@@ -165,7 +167,7 @@ fun CatalogArtistScreen(viewModel: CatalogArtistViewModel = hiltViewModel()) {
                     }
                 }
             }
-            if (state.loading) item(key = "loading") { CatalogNote(R.string.browse_catalog_loading) }
+            if (state.loading) item(key = "loading") { LoadingPlaceholder(PlaceholderStyle.GRID, count = 4) }
             if (state.isEmpty) item(key = "empty") { CatalogNote(R.string.browse_catalog_empty) }
             // Releases continuo matched to the library under another artist name: yours, so first and not dimmed.
             if (state.inLibrary.isNotEmpty()) {
