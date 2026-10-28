@@ -27,11 +27,14 @@ import app.polyphony.core.network.ServerHttpClientFactory
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -84,6 +87,13 @@ class DownloadWorker @AssistedInject constructor(
 
         var networkFailure = false
         val semaphore = Semaphore(settings.concurrentDownloads.coerceIn(1, 4))
+        // Progress only reports while bytes arrive: this keeps the speed honest through a stall.
+        val ticker = CoroutineScope(coroutineContext).launch {
+            while (true) {
+                delay(RATE_TICK_MS)
+                rates.publish(meter.sample(overallProgress()))
+            }
+        }
         try {
             while (!isStopped) {
                 val queued = dao.getQueued()
@@ -104,6 +114,7 @@ class DownloadWorker @AssistedInject constructor(
                 }
             }
         } finally {
+            ticker.cancel()
             notifications.cancel()
             rates.publish(null)
         }
@@ -235,15 +246,21 @@ class DownloadWorker @AssistedInject constructor(
         publishProgress(force = true)
     }
 
+    private fun overallProgress(): Float =
+        ((done.get() + active.values.sum()) / total.get().coerceAtLeast(1)).coerceIn(0f, 1f)
+
     private fun publishProgress(force: Boolean = false) {
-        val t = total.get().coerceAtLeast(1)
-        val overall = ((done.get() + active.values.sum()) / t).coerceIn(0f, 1f)
+        val overall = overallProgress()
         val emit = synchronized(notifyThrottle) { notifyThrottle.shouldEmit(overall, force) }
         if (emit) {
             val rate = meter.sample(overall)
             rates.publish(rate)
             notifications.update(notifications.build(done.get(), total.get(), overall, indeterminate = false, cancelIntent = cancelIntent, rate = rate))
         }
+    }
+
+    private companion object {
+        const val RATE_TICK_MS = 2_000L
     }
 
     private fun parseContentRangeTotal(header: String?): Long? =
