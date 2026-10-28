@@ -60,6 +60,10 @@ internal class ContinuoClient(
         Request.Builder().url(server.baseUrl.trimEnd('/') + path).post(jsonBody.toRequestBody(JSON))
     }
 
+    suspend fun put(server: Server, path: String, jsonBody: String): Reply = send(server) {
+        Request.Builder().url(server.baseUrl.trimEnd('/') + path).put(jsonBody.toRequestBody(JSON))
+    }
+
     suspend fun delete(server: Server, path: String): Reply = send(server) {
         Request.Builder().url(server.baseUrl.trimEnd('/') + path).delete()
     }

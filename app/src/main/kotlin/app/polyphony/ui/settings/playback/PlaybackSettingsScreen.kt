@@ -219,6 +219,7 @@ fun PlaybackSettingsScreen(viewModel: PlaybackSettingsViewModel = hiltViewModel(
                 onSelected = { t -> viewModel.update { it.copy(scrobbleThreshold = t) } },
                 enabled = s.scrobble,
             )
+            PlayNowScrobbling()
         }
 
         preferenceCategory(key = "streaming", titleRes = R.string.settings_playback_buffering) {
