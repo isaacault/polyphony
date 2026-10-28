@@ -12,13 +12,13 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Dns
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -113,14 +113,10 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
             Column {
                 TopAppBar(
                     title = { Text(greeting, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    // The server, and Downloaded only; Search has its tab, Settings sits at the end of Home.
                     actions = {
+                        ServerChip(state, onClick = { showServerSwitcher = true })
                         OfflineModeIconButton()
-                        IconButton(onClick = { navigator.openSearch() }) {
-                            Icon(Icons.Rounded.Search, contentDescription = stringResource(R.string.browse_nav_search))
-                        }
-                        IconButton(onClick = { navigator.openSettings() }) {
-                            Icon(Icons.Rounded.Settings, contentDescription = stringResource(R.string.browse_nav_settings))
-                        }
                     },
                     scrollBehavior = scrollBehavior,
                 )
@@ -143,7 +139,6 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                     item { LoadingPlaceholder(PlaceholderStyle.CAROUSEL) }
                 }
                 state.isLibraryEmpty -> LazyColumn(contentPadding = listContentPadding(top = 8.dp)) {
-                    item { ServerChipRow(state, onClick = { showServerSwitcher = true }) }
                     item {
                         EmptyState(
                             title = stringResource(R.string.browse_home_empty_title),
@@ -159,7 +154,6 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = listContentPadding(top = 4.dp),
                 ) {
-                    item(key = "server") { ServerChipRow(state, onClick = { showServerSwitcher = true }) }
 
                     if (state.continueListening.isNotEmpty()) {
                         // Quick picks sit right under the greeting, like Spotify: no header, wide tiles.
@@ -245,6 +239,16 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                             }
                         }
                     }
+                    item(key = "settings") {
+                        ListItem(
+                            headlineContent = { Text(stringResource(R.string.browse_nav_settings)) },
+                            leadingContent = { Icon(Icons.Rounded.Settings, contentDescription = null) },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            modifier = Modifier
+                                .padding(top = Dimens.sectionSpacing)
+                                .clickable { navigator.openSettings() },
+                        )
+                    }
                     item(key = "bottom") { Spacer(Modifier.height(Dimens.sectionSpacing)) }
                 }
             }
@@ -297,17 +301,16 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
     albumForOptions?.let { AlbumOptionsSheet(album = it, onDismiss = { albumForOptions = null }) }
 }
 
+/** The active server, in the top bar: tap to switch servers. */
 @Composable
-private fun ServerChipRow(state: HomeUiState, onClick: () -> Unit) {
+private fun ServerChip(state: HomeUiState, onClick: () -> Unit) {
     val server = state.activeServer ?: return
-    Row(Modifier.fillMaxWidth().padding(horizontal = Dimens.screenPadding, vertical = 4.dp)) {
-        AssistChip(
-            onClick = onClick,
-            label = { Text(server.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            leadingIcon = { Icon(Icons.Rounded.Dns, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize)) },
-            shape = MaterialTheme.shapes.small,
-        )
-    }
+    AssistChip(
+        onClick = onClick,
+        label = { Text(server.name, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 120.dp)) },
+        leadingIcon = { Icon(Icons.Rounded.Dns, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize)) },
+        shape = MaterialTheme.shapes.small,
+    )
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.albumShelf(
