@@ -286,12 +286,13 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun addCurrentToPlaylist(playlist: Playlist, onDone: (String) -> Unit) {
+    /** [onDone] gets the playlist's name and whether the song was added (false: it was already in). */
+    fun addCurrentToPlaylist(playlist: Playlist, onDone: (String, Boolean) -> Unit) {
         val track = playback.value.currentTrack ?: return
         viewModelScope.launch {
             try {
-                libraryRepository.addToPlaylist(playlist.id, listOf(track.id))
-                onDone(playlist.name)
+                val added = libraryRepository.addToPlaylist(playlist.id, listOf(track.id))
+                onDone(playlist.name, added > 0)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

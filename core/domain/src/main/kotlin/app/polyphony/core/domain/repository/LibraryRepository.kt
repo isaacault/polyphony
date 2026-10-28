@@ -134,7 +134,8 @@ interface LibraryRepository {
     suspend fun setRating(id: String, kind: ItemKind, rating: Int)
     suspend fun createPlaylist(name: String, trackIds: List<String> = emptyList()): Playlist
     suspend fun renamePlaylist(id: String, name: String)
-    suspend fun addToPlaylist(playlistId: String, trackIds: List<String>)
+    /** Adds the songs not already in the playlist (once each); how many it added. */
+    suspend fun addToPlaylist(playlistId: String, trackIds: List<String>): Int
     suspend fun removeFromPlaylist(playlistId: String, indices: List<Int>)
     suspend fun deletePlaylist(id: String)
     /** Record a local play so "recently played" works before the server catches up. */

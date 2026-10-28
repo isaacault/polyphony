@@ -136,6 +136,7 @@ fun NowPlayingScreen(
     val snackbarHost = remember { SnackbarHostState() }
 
     val addedTemplate = stringResource(R.string.playlist_added)
+    val alreadyTemplate = stringResource(R.string.playlist_already_in)
     val savedTemplate = stringResource(R.string.queue_saved)
     val sleepSet = stringResource(R.string.sleep_timer_set)
     val sleepCleared = stringResource(R.string.sleep_timer_cleared)
@@ -398,7 +399,9 @@ fun NowPlayingScreen(
             PlayerDialog.AddToPlaylist -> AddToPlaylistDialog(
                 playlists = playlists,
                 onPick = { playlist ->
-                    viewModel.addCurrentToPlaylist(playlist) { name -> viewModel.showMessage(addedTemplate.format(name)) }
+                    viewModel.addCurrentToPlaylist(playlist) { name, added ->
+                        viewModel.showMessage((if (added) addedTemplate else alreadyTemplate).format(name))
+                    }
                 },
                 onCreate = { name ->
                     viewModel.createPlaylistWithCurrent(name) { created -> viewModel.showMessage(addedTemplate.format(created)) }
