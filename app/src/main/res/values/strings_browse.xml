@@ -145,6 +145,7 @@
     <string name="browse_disc_header">Disc %1$d</string>
     <string name="browse_artist_top_songs">Top songs</string>
     <string name="browse_artist_similar">Similar artists</string>
+    <string name="browse_artist_appears_on">Appears on</string>
     <string name="browse_playlist_public">Public</string>
     <string name="browse_playlist_private">Private</string>
 
