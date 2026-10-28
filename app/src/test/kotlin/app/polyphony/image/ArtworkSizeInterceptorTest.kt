@@ -26,4 +26,10 @@ class ArtworkSizeInterceptorTest {
         assertNull(reduced("http://host/rest/stream?id=tr-1&size=600"))
         assertNull(reduced("http://host/rest/getCoverArt?id=al-1"))
     }
+
+    @Test
+    fun `continuo's catalogue artwork asks for the small size`() {
+        assertEquals("https://music-api.example/v1/artwork?src=x&size=320", reduced("https://music-api.example/v1/artwork?src=x"))
+        assertEquals("https://music-api.example/v1/artwork?src=x&size=320", reduced("https://music-api.example/v1/artwork?src=x&size=1200"))
+    }
 }

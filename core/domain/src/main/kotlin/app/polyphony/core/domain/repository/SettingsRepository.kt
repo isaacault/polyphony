@@ -63,6 +63,7 @@ data class AppearanceSettings(
     /** Tint the Now Playing screen with colours extracted from the artwork. */
     val artworkColorsInPlayer: Boolean = true,
     /** On a metered/cellular connection, request smaller cover art to save data. */
+    /** No longer a choice: artwork is always smaller on mobile data. Kept so saved settings read. */
     val reduceImageDataOnMobile: Boolean = true,
     /** 0 = automatic based on width. */
     val gridColumns: Int = 0,

@@ -4,9 +4,10 @@ import coil3.intercept.Interceptor
 import coil3.request.ImageResult
 
 /**
- * While the data saver is active, shrink the `size` of `getCoverArt` requests so the server sends a
- * smaller image. Stored artwork URLs bake in a 600 px size; this rewrites them per request without
- * disturbing the cache of the full-size variant.
+ * On mobile data, ask for smaller artwork: shrink the `size` of `getCoverArt` requests (stored
+ * artwork URLs bake in 600 px), and give continuo's catalogue artwork (`/v1/artwork`) a `size`,
+ * so the server sends a smaller image. Per request, without disturbing the cache of the full-size
+ * variant.
  */
 class ArtworkSizeInterceptor : Interceptor {
     override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
@@ -21,7 +22,8 @@ class ArtworkSizeInterceptor : Interceptor {
 
         /** The URL with its cover `size` capped at [maxEdge], or null when it is not a shrinkable cover URL. */
         fun reducedUrl(url: String, maxEdge: Int): String? {
-            if (!url.contains("getCoverArt")) return null
+            if (url.contains("/v1/artwork?") && SIZE.find(url) == null) return "$url&size=$maxEdge"
+            if (!url.contains("getCoverArt") && !url.contains("/v1/artwork?")) return null
             val match = SIZE.find(url) ?: return null
             val current = match.groupValues[1].toIntOrNull() ?: return null
             if (current <= maxEdge) return null
