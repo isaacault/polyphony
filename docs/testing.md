@@ -132,7 +132,10 @@ or `CI_SKIP=1`. `--no-wait` gives any run the same skip-if-busy behaviour (exit 
 `local-ci` commit status, which is what a PR shows as its check. A PR must be green on its current
 head before it merges: `scripts/merge_when_green.sh <pr>` squash-merges only when `local-ci` is
 `success` on that exact commit (the merge is pinned to it), runs `ci.sh --status` itself in a
-throwaway worktree when the head has no status yet, and refuses on a failed or missing one.
+throwaway worktree when the head has no status yet, and refuses on a failed or missing one. A merge
+gives the commits new ids; when `main` then has exactly the tree that passed (it hadn't moved),
+the script carries the `success` over to `main`'s new head, so `release.sh` doesn't run the same
+full CI again. Any other tree gets no status, and `release.sh` runs CI on it.
 
 GitHub Actions now runs `Build` only for pull requests from forks and on manual dispatch, so outside
 contributors still get CI without spending minutes on everyday work.
