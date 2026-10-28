@@ -41,13 +41,16 @@ import kotlin.math.abs
 
 /**
  * Thin seek bar with a buffered segment. While dragging, the labels follow the finger; the actual
- * seek happens on release and the bar holds the target until the player catches up.
+ * seek happens on release and the bar holds the target until the player catches up. [downloaded]
+ * (a Play now song still downloading, 0..1) widens the segment to what continuo has: the player
+ * buffers only so far ahead, but it can be scrubbed to anything that's downloaded.
  */
 @Composable
 fun PlayerSlider(
     position: PlaybackPosition,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    downloaded: Float? = null,
 ) {
     val duration = position.durationMs.coerceAtLeast(0L)
     var scrubFraction by remember { mutableStateOf<Float?>(null) }
@@ -73,7 +76,7 @@ fun PlayerSlider(
     Column(modifier) {
         SeekBar(
             fraction = displayFraction,
-            buffered = position.bufferedProgress,
+            buffered = maxOf(position.bufferedProgress, downloaded ?: 0f),
             enabled = duration > 0,
             scrubbing = scrubFraction != null,
             onScrub = { scrubFraction = it },
