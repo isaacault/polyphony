@@ -19,6 +19,7 @@ import app.polyphony.core.downloads.db.track
 import app.polyphony.core.downloads.engine.ProgressThrottle
 import app.polyphony.core.downloads.engine.ResumeDecision
 import app.polyphony.core.downloads.engine.ResumePolicy
+import app.polyphony.core.downloads.engine.TransferMeter
 import app.polyphony.core.downloads.internal.await
 import app.polyphony.core.downloads.storage.DownloadPaths
 import app.polyphony.core.downloads.storage.DownloadStorage
@@ -58,6 +59,7 @@ class DownloadWorker @AssistedInject constructor(
     private val settingsRepository: SettingsRepository,
     private val httpFactory: ServerHttpClientFactory,
     private val notifications: DownloadNotifications,
+    private val rates: DownloadRates,
     private val json: Json,
 ) : CoroutineWorker(context, params) {
 
@@ -65,6 +67,7 @@ class DownloadWorker @AssistedInject constructor(
     private val done = AtomicInteger(0)
     private val total = AtomicInteger(0)
     private val notifyThrottle = ProgressThrottle(minIntervalMs = 500)
+    private val meter = TransferMeter()
     private val cancelIntent by lazy { WorkManager.getInstance(applicationContext).createCancelPendingIntent(id) }
 
     override suspend fun getForegroundInfo() =
@@ -102,6 +105,7 @@ class DownloadWorker @AssistedInject constructor(
             }
         } finally {
             notifications.cancel()
+            rates.publish(null)
         }
         if (isStopped) return Result.retry()
         return if (networkFailure && dao.getQueued().isNotEmpty()) Result.retry() else Result.success()
@@ -172,6 +176,7 @@ class DownloadWorker @AssistedInject constructor(
                                 if (read < 0) break
                                 out.write(buffer, 0, read)
                                 bytes += read
+                                meter.add(read.toLong())
                                 if (expectedTotal > 0) {
                                     val p = (bytes.toFloat() / expectedTotal).coerceIn(0f, 0.999f)
                                     if (throttle.shouldEmit(p)) {
@@ -235,7 +240,9 @@ class DownloadWorker @AssistedInject constructor(
         val overall = ((done.get() + active.values.sum()) / t).coerceIn(0f, 1f)
         val emit = synchronized(notifyThrottle) { notifyThrottle.shouldEmit(overall, force) }
         if (emit) {
-            notifications.update(notifications.build(done.get(), total.get(), overall, indeterminate = false, cancelIntent = cancelIntent))
+            val rate = meter.sample(overall)
+            rates.publish(rate)
+            notifications.update(notifications.build(done.get(), total.get(), overall, indeterminate = false, cancelIntent = cancelIntent, rate = rate))
         }
     }
 

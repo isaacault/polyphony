@@ -3,6 +3,7 @@ package app.polyphony.core.domain.repository
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.transcode.TranscodeProfile
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.Serializable
 
 enum class DownloadStatus { QUEUED, DOWNLOADING, COMPLETED, FAILED, PAUSED }
@@ -99,6 +100,9 @@ data class DownloadSettings(
     val concurrentDownloads: Int = 2,
 )
 
+/** A running batch's speed, and its time left once progress has moved (null before that). */
+data class TransferRate(val bytesPerSecond: Long, val secondsLeft: Long?)
+
 data class StorageUsage(
     val usedBytes: Long,
     val limitBytes: Long,
@@ -114,6 +118,8 @@ interface DownloadRepository {
     fun downloadState(trackId: String): Flow<DownloadedTrack?>
     fun collectionState(trackIds: List<String>): Flow<CollectionDownloadState>
     val storageUsage: Flow<StorageUsage>
+    /** How fast downloads are going right now; null when none is. */
+    val transferRate: Flow<TransferRate?> get() = flowOf(null)
 
     suspend fun download(tracks: List<Track>, profileId: String? = null, pinned: Boolean = true, ruleId: String? = null)
     suspend fun remove(trackIds: List<String>)

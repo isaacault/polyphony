@@ -1,7 +1,7 @@
 package app.polyphony.core.downloads.work
 
-import android.annotation.SuppressLint
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -14,7 +14,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.work.ForegroundInfo
+import app.polyphony.core.domain.repository.TransferRate
 import app.polyphony.core.downloads.R
+import app.polyphony.core.downloads.engine.TransferMeter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,10 +36,21 @@ class DownloadNotifications @Inject constructor(@ApplicationContext private val 
         }
     }
 
-    fun build(done: Int, total: Int, progress: Float, indeterminate: Boolean, cancelIntent: PendingIntent?): Notification {
+    fun build(
+        done: Int,
+        total: Int,
+        progress: Float,
+        indeterminate: Boolean,
+        cancelIntent: PendingIntent?,
+        rate: TransferRate? = null,
+    ): Notification {
         val pct = (progress * 100).toInt().coerceIn(0, 100)
         val title = if (total > 0) "Downloading $done of $total" else "Downloading"
-        val text = if (indeterminate) "Starting…" else "$pct%"
+        val text = when {
+            indeterminate -> "Starting…"
+            rate != null -> "$pct% · ${TransferMeter.describe(rate)}"
+            else -> "$pct%"
+        }
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_download)
             .setContentTitle(title)
