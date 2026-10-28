@@ -22,6 +22,12 @@ sealed interface DeepLink {
     data object Shuffle : DeepLink
 
     /**
+     * `polyphony://resume`: the most recent collection where it was left, like Home's first
+     * Continue listening card (the dynamic launcher shortcut, ResumeShortcut).
+     */
+    data object Resume : DeepLink
+
+    /**
      * `polyphony://album/{server}/{albumId}`: an album on one of the configured servers. {server} is
      * the host of that server's address (continuo's "Ready to play" notification sends e.g.
      * `music-api.ault.me`) or a Polyphony server id.
@@ -53,6 +59,7 @@ sealed interface DeepLink {
                 "player" -> Player
                 "search" -> Search
                 "shuffle" -> Shuffle
+                "resume" -> Resume
                 "inbox" -> Inbox.takeIf { segments.isEmpty() }
                 "album" -> segments.takeIf { it.size == 2 }?.let { (server, albumId) -> Album(server, albumId) }
                 "requests" -> when (segments.size) {

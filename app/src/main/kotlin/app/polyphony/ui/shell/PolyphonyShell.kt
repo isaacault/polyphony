@@ -185,6 +185,7 @@ fun PolyphonyShell(
                 DeepLink.Player -> if (playback.isActive) sheetState.expand()
                 DeepLink.Search -> navigator.openSearch()
                 DeepLink.Shuffle -> shellViewModel.shuffleLibrary()
+                DeepLink.Resume -> shellViewModel.resumeLatest()
                 is DeepLink.Album -> if (!onOnboarding) {
                     if (shellViewModel.activateServerFor(link)) {
                         sheetState.snapCollapsed()

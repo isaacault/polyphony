@@ -10,4 +10,6 @@
     <string name="shortcut_shuffle_long">Shuffle all</string>
     <string name="shortcut_player_short">Player</string>
     <string name="shortcut_player_long">Open player</string>
+    <!-- The dynamic shortcut for the last collection played, e.g. "Resume Parachutes". -->
+    <string name="shortcut_resume_long">Resume %1$s</string>
 </resources>

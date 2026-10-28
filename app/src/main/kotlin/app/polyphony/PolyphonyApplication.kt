@@ -19,6 +19,7 @@ import app.polyphony.diagnostics.CrashRecorder
 import app.polyphony.image.ArtworkSizeInterceptor
 import app.polyphony.image.DataSaver
 import app.polyphony.inbox.InboxScheduler
+import app.polyphony.shortcuts.ResumeShortcut
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,12 +48,16 @@ class PolyphonyApplication : Application(), Configuration.Provider, SingletonIma
     /** Keeps the continuo inbox poll scheduled while a continuo-linked server exists (#118). */
     @Inject lateinit var inboxScheduler: InboxScheduler
 
+    /** The "Resume <last collection>" launcher shortcut. */
+    @Inject lateinit var resumeShortcut: ResumeShortcut
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
         super.onCreate()
         CrashRecorder.install(this)
         inboxScheduler.start(appScope)
+        resumeShortcut.start(appScope)
         // Smaller artwork whenever the network is metered (mobile data).
         appScope.launch {
             networkMonitor.state.map { it.isMetered }.distinctUntilChanged()

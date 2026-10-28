@@ -9,6 +9,7 @@ import app.polyphony.core.domain.playback.CastState
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.playback.PlaybackState
 import app.polyphony.core.domain.repository.LibraryRepository
+import app.polyphony.core.domain.repository.ListeningHistoryRepository
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
@@ -41,6 +42,7 @@ class ShellViewModel @Inject constructor(
     private val inboxBadges: InboxBadges,
     private val libraryRemoval: LibraryRemoval,
     private val playNow: PlayNow,
+    private val history: ListeningHistoryRepository,
 ) : ViewModel() {
 
     /** Play now outcomes (continuo#12), wherever the song was tapped. */
@@ -85,6 +87,14 @@ class ShellViewModel @Inject constructor(
      * the `polyphony://shuffle` launcher shortcut behaves exactly like "Shuffle all" in Library:
      * a server-side random pick when online, a cached random sample otherwise.
      */
+    /** The most recent collection where it was left (the "Resume" launcher shortcut). */
+    fun resumeLatest() {
+        viewModelScope.launch {
+            val latest = runCatching { history.recent(1).first().firstOrNull() }.getOrNull() ?: return@launch
+            playbackController.resumeContext(latest.context)
+        }
+    }
+
     fun shuffleLibrary() {
         viewModelScope.launch {
             val remote = runCatching { libraryRepository.getRandomTracks(SHUFFLE_CAP) }.getOrDefault(emptyList())
