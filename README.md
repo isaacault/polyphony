@@ -9,13 +9,18 @@
 Polyphony is an open-source Android music player for people who self-host their music. It is
 built to be artwork-forward, fast and smooth, and unapologetically open: GPL-3.0, no accounts, no analytics, your traffic goes only to your own server.
 
-| Home | Album | Now Playing | Queue |
-|------|-------|-------------|-------|
-| ![Home](docs/screenshots/home.png) | ![Album](docs/screenshots/album.png) | ![Now Playing](docs/screenshots/now-playing.png) | ![Queue](docs/screenshots/queue.png) |
-
-| Library | Search | Streaming rules | Now Playing (dark) |
-|---------|--------|-----------------|--------------------|
-| ![Library](docs/screenshots/library.png) | ![Search](docs/screenshots/search.png) | ![Streaming settings](docs/screenshots/streaming-settings.png) | ![Now Playing, dark theme](docs/screenshots/now-playing-dark.png) |
+<p align="center">
+  <img src="docs/screenshots/home.png" alt="Home" width="200">
+  <img src="docs/screenshots/album.png" alt="Album" width="200">
+  <img src="docs/screenshots/now-playing.png" alt="Now Playing" width="200">
+  <img src="docs/screenshots/queue.png" alt="Queue" width="200">
+</p>
+<p align="center">
+  <img src="docs/screenshots/library.png" alt="Library" width="200">
+  <img src="docs/screenshots/search.png" alt="Search" width="200">
+  <img src="docs/screenshots/streaming-settings.png" alt="Streaming rules" width="200">
+  <img src="docs/screenshots/now-playing-dark.png" alt="Now Playing, dark theme" width="200">
+</p>
 
 <sub>Screenshots from the debug build on an Android 16 emulator against a local Navidrome test library (generated tones with solid-colour covers, hence the flat artwork).</sub>
 
