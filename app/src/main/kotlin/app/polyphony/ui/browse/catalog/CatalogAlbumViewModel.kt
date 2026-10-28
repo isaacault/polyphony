@@ -140,7 +140,7 @@ class CatalogAlbumViewModel @Inject constructor(
         return CatalogTrack(
             key = "mb:rec:${track.recordingId}", title = track.title, artist = s.artist, durationMs = track.durationMs,
             albumTitle = s.title, albumReleaseGroupId = route.releaseGroupId, availability = Availability.Requestable,
-            recordingId = track.recordingId,
+            recordingId = track.recordingId, artworkUrl = s.artworkUrl,
         )
     }
 }

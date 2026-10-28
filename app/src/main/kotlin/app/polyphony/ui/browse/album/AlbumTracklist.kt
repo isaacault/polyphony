@@ -25,7 +25,8 @@ sealed interface AlbumEntry {
  */
 object AlbumTracklist {
 
-    fun entries(library: List<Track>, whole: LibraryAlbumTracklist?, artist: String?, albumTitle: String?): List<AlbumEntry> {
+    fun entries(library: List<Track>, whole: LibraryAlbumTracklist?, artist: String?, albumTitle: String?,
+                artworkUrl: String? = null): List<AlbumEntry> {
         val own = library.map { AlbumEntry.Have(it, it.discNumber ?: 1) }
         if (whole == null || whole.tracks.isEmpty() || whole.tracks.size <= library.size) return own
         val byTitle = library.groupBy { key(it.title) }.mapValues { it.value.toMutableList() }
@@ -36,7 +37,7 @@ object AlbumTracklist {
                 used += have.id
                 AlbumEntry.Have(have, t.discNumber)
             } else {
-                AlbumEntry.Missing(t.asCatalogTrack(whole.releaseGroupId, artist, albumTitle), t.discNumber)
+                AlbumEntry.Missing(t.asCatalogTrack(whole.releaseGroupId, artist, albumTitle, artworkUrl), t.discNumber)
             }
         }
         if (used.isEmpty() && library.isNotEmpty()) return own
@@ -50,7 +51,7 @@ object AlbumTracklist {
 
     private val FEATURING = Regex("""\s*[(\[](?:feat|ft|featuring|with)\b[^)\]]*[)\]]""")
 
-    private fun CatalogAlbumTrack.asCatalogTrack(releaseGroupId: String, artist: String?, albumTitle: String?) = CatalogTrack(
+    private fun CatalogAlbumTrack.asCatalogTrack(releaseGroupId: String, artist: String?, albumTitle: String?, artworkUrl: String?) = CatalogTrack(
         key = recordingId?.let { "mb:rec:$it" } ?: "rg:$releaseGroupId:$discNumber:$position",
         title = title,
         artist = artist,
@@ -59,5 +60,6 @@ object AlbumTracklist {
         albumReleaseGroupId = releaseGroupId,
         availability = Availability.Requestable,
         recordingId = recordingId,
+        artworkUrl = artworkUrl,
     )
 }
