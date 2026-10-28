@@ -451,8 +451,17 @@ class SearchViewModel @Inject constructor(
         if (submitted == null) searchQuick()
     }
 
+    /**
+     * A type chip: that section alone. Asking for one kind says the top few aren't enough, so
+     * the full search runs at once (more of that kind from the server), as pressing search would.
+     */
     fun setKind(value: SearchKind) {
         kind.value = value
+        val q = query.value.trim()
+        if (value != SearchKind.ALL && value != SearchKind.PLAYLISTS && q.isNotBlank() && submitted != q) {
+            submitted = q
+            runScopeSearches(force = false)
+        }
     }
 
     fun setFilter(value: LibraryFilter) {
