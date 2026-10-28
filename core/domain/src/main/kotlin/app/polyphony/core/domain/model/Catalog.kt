@@ -146,7 +146,18 @@ data class CatalogResults(
 data class Discovery(
     val newReleases: List<CatalogAlbum> = emptyList(),
     val forYou: List<CatalogTrack> = emptyList(),
+    /** Artists like yours that you don't have (Explore). */
+    val artists: List<CatalogArtist> = emptyList(),
+    /** Their most listened albums (Explore). */
+    val albums: List<CatalogAlbum> = emptyList(),
+    /** ListenBrainz's playlists made for you (Weekly Jams…), for the linked ListenBrainz account. */
+    val playlists: List<DiscoveryPlaylist> = emptyList(),
 )
+
+data class DiscoveryPlaylist(val id: String, val title: String, val description: String?)
+
+/** One of ListenBrainz's playlists, as songs to play now or request. */
+data class DiscoveryPlaylistPage(val id: String, val title: String, val description: String?, val tracks: List<CatalogTrack>)
 
 sealed interface RequestOutcome {
     data class Requested(val requestId: Long) : RequestOutcome

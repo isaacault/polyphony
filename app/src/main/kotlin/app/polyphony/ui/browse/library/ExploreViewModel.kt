@@ -3,12 +3,14 @@ package app.polyphony.ui.browse.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.polyphony.core.domain.model.Album
-import app.polyphony.core.domain.model.CatalogTrack
+import app.polyphony.core.domain.model.CatalogAlbum
+import app.polyphony.core.domain.model.CatalogArtist
+import app.polyphony.core.domain.model.Discovery
+import app.polyphony.core.domain.model.DiscoveryPlaylist
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
-import app.polyphony.ui.browse.catalog.CatalogArtistPageLogic
 import app.polyphony.ui.browse.catalog.CatalogRequester
 import app.polyphony.ui.common.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,18 +38,27 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.random.Random
 
+/** One row of Explore's albums: one you don't have, or one of yours you may have forgotten. */
+sealed interface ExploreAlbum {
+    data class New(val album: CatalogAlbum) : ExploreAlbum
+    data class Yours(val album: Album) : ExploreAlbum
+}
+
 data class ExploreUiState(
-    /** Songs from artists like yours (continuo); empty off continuo. Null while it's asked. */
-    val forYou: ImmutableList<CatalogTrack>? = null,
-    /** Songs with a request in flight from here. */
+    /** Null while continuo is asked (or empty off continuo). */
+    val loading: Boolean = true,
+    val newReleases: ImmutableList<CatalogAlbum> = persistentListOf(),
+    val artists: ImmutableList<CatalogArtist> = persistentListOf(),
+    val albums: ImmutableList<ExploreAlbum> = persistentListOf(),
+    val playlists: ImmutableList<DiscoveryPlaylist> = persistentListOf(),
+    /** Release groups with a request in flight from here. */
     val requesting: ImmutableSet<String> = persistentSetOf(),
-    /** Albums of the library picked at random; Reshuffle picks again. */
-    val randomPicks: ImmutableList<Album> = persistentListOf(),
 )
 
 /**
- * The Library's Explore tab: For you (songs you don't have from artists like yours, to play now
- * or request) and Random picks (albums of yours you might not have played in a while).
+ * The Library's Explore tab, artists, albums and playlists rather than songs: new releases from
+ * your artists, artists like yours, albums (theirs, mixed with forgotten ones of yours) and
+ * ListenBrainz's playlists for you (continuo's discovery).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -69,39 +80,54 @@ class ExploreViewModel @Inject constructor(
         .distinctUntilChanged()
         .flatMapLatest { seed -> library.randomAlbums(RANDOM_PICKS, seed) }
 
-    private val forYou = combine(servers.activeServer.map { it?.id }.distinctUntilChanged(), reloads) { id, _ -> id }
+    private val discovery = combine(servers.activeServer.map { it?.id }.distinctUntilChanged(), reloads) { id, _ -> id }
         .mapLatest {
-            val server = servers.getActive()?.takeIf { requests.supports(it) } ?: return@mapLatest emptyList()
+            val server = servers.getActive()?.takeIf { requests.supports(it) } ?: return@mapLatest Discovery()
             try {
-                requests.discover(server)?.forYou.orEmpty()
+                requests.discover(server) ?: Discovery()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                emptyList()
+                Discovery()
             }
         }
 
-    val state: StateFlow<ExploreUiState> = combine(forYou, requester.requested, requester.requesting, randomPicks) { songs, requested, busy, picks ->
+    val state: StateFlow<ExploreUiState> = combine(discovery, requester.requested, requester.requesting, randomPicks) { d, requested, busy, picks ->
+        fun CatalogAlbum.withRequest() = releaseGroupId?.let(requested::get)?.let { copy(availability = it) } ?: this
         ExploreUiState(
-            forYou = CatalogArtistPageLogic.topTracks(songs, requested).toImmutableList(),
+            loading = false,
+            newReleases = d.newReleases.map { it.withRequest() }.toImmutableList(),
+            artists = d.artists.toImmutableList(),
+            albums = mix(d.albums.map { it.withRequest() }, picks).toImmutableList(),
+            playlists = d.playlists.toImmutableList(),
             requesting = busy.toImmutableSet(),
-            randomPicks = picks.toImmutableList(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ExploreUiState())
 
-    fun requestTrack(track: CatalogTrack) = requester.requestTrack(track)
+    fun request(releaseGroupId: String) = requester.request(releaseGroupId)
 
     fun reload() {
         reloads.value++
     }
 
+    /** New random albums of yours. */
     fun reshuffle() {
         viewModelScope.launch {
             settings.update { it.copy(library = it.library.copy(randomAlbumSeed = Random.nextLong())) }
         }
     }
 
-    private companion object {
-        const val RANDOM_PICKS = 24
+    companion object {
+        private const val RANDOM_PICKS = 10
+
+        /** Albums you don't have and ones of yours, taking turns. */
+        fun mix(new: List<CatalogAlbum>, yours: List<Album>): List<ExploreAlbum> {
+            val out = ArrayList<ExploreAlbum>(new.size + yours.size)
+            for (i in 0 until maxOf(new.size, yours.size)) {
+                new.getOrNull(i)?.let { out += ExploreAlbum.New(it) }
+                yours.getOrNull(i)?.let { out += ExploreAlbum.Yours(it) }
+            }
+            return out
+        }
     }
 }

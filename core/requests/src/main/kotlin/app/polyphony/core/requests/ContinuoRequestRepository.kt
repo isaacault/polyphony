@@ -118,6 +118,13 @@ class ContinuoRequestRepository internal constructor(
         if (reply.code !in 200..299 && reply.code !in setOf(404, 405)) throw client.serverError(reply, "scrobble failed")
     }
 
+    override suspend fun discoveryPlaylist(server: Server, id: String): app.polyphony.core.domain.model.DiscoveryPlaylistPage? {
+        val reply = client.get(server, "/v1/discover/playlists/${URLEncoder.encode(id, "UTF-8")}")
+        if (reply.code == 404) return null
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo playlist failed")
+        return client.decode(DiscoveryPlaylistPageDto.serializer(), reply.body).toDomain(artworkHost = hostOf(server.baseUrl))
+    }
+
     override suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery? {
         val reply = client.get(server, "/v1/discover")
         if (reply.code == 404) return null   // a continuo from before discovery

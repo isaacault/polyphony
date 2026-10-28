@@ -209,11 +209,34 @@ internal fun LyricsDto.toDomain() = app.polyphony.core.domain.model.Lyrics(
 internal data class DiscoverDto(
     val newReleases: List<HitDto> = emptyList(),
     val forYou: List<HitDto> = emptyList(),
+    val artists: List<HitDto> = emptyList(),
+    val albums: List<HitDto> = emptyList(),
+    val playlists: List<DiscoveryPlaylistDto> = emptyList(),
+)
+
+@Serializable
+internal data class DiscoveryPlaylistDto(val id: String, val title: String = "", val description: String? = null)
+
+@Serializable
+internal data class DiscoveryPlaylistPageDto(
+    val id: String,
+    val title: String = "",
+    val description: String? = null,
+    val tracks: List<HitDto> = emptyList(),
 )
 
 internal fun DiscoverDto.toDomain(artworkHost: String?) = app.polyphony.core.domain.model.Discovery(
     newReleases = newReleases.filter { it.kind == "album" }.map { it.toCatalogAlbum(artworkHost) },
     forYou = forYou.filter { it.kind == "track" }.map { it.toCatalogTrack(artworkHost) },
+    artists = artists.filter { it.kind == "artist" }.map { it.toCatalogArtist(artworkHost) },
+    albums = albums.filter { it.kind == "album" }.map { it.toCatalogAlbum(artworkHost) },
+    playlists = playlists.filter { it.title.isNotBlank() }
+        .map { app.polyphony.core.domain.model.DiscoveryPlaylist(it.id, it.title, it.description) },
+)
+
+internal fun DiscoveryPlaylistPageDto.toDomain(artworkHost: String?) = app.polyphony.core.domain.model.DiscoveryPlaylistPage(
+    id = id, title = title, description = description,
+    tracks = tracks.filter { it.kind == "track" }.map { it.toCatalogTrack(artworkHost) },
 )
 
 /** `GET /v1/catalog/artists/{mbid}`: an artist's page. */
