@@ -78,6 +78,7 @@
     <string name="playlist_name">Playlist name</string>
     <string name="playlist_none">No playlists yet</string>
     <string name="playlist_added">Added to %1$s</string>
+    <string name="playlist_already_in">Already in %1$s</string>
     <string name="playlist_error">Couldn’t update playlist</string>
     <string name="favorite_error">Couldn’t update favourite</string>
 

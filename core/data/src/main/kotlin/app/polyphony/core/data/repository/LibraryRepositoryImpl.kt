@@ -685,17 +685,28 @@ class LibraryRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun addToPlaylist(playlistId: String, trackIds: List<String>) {
-        if (trackIds.isEmpty()) return
+    override suspend fun addToPlaylist(playlistId: String, trackIds: List<String>): Int {
+        if (trackIds.isEmpty()) return 0
         val sid = requireServerId()
-        val members = playlistDao.getMembers(sid, playlistId)
+        // A playlist never opened has no members cached yet: fetch them, or nothing counts as present.
+        val cached = playlistDao.getMembers(sid, playlistId)
+        val members = if (cached.isEmpty()) {
+            attempt { refreshPlaylist(playlistId) }
+            playlistDao.getMembers(sid, playlistId)
+        } else {
+            cached
+        }
+        // Adding an album to a playlist that has some of it doubled those songs: only the new ones go in.
+        val present = members.mapTo(HashSet()) { it.trackId }
+        val fresh = trackIds.distinct().filter { it !in present }
+        if (fresh.isEmpty()) return 0
         val start = (members.maxOfOrNull { it.position } ?: -1) + 1
         db.withTransaction {
-            playlistDao.insertMembers(trackIds.mapIndexed { i, trackId -> PlaylistTrackEntity(sid, playlistId, trackId, start + i) })
-            playlistDao.setTrackCount(sid, playlistId, members.size + trackIds.size)
+            playlistDao.insertMembers(fresh.mapIndexed { i, trackId -> PlaylistTrackEntity(sid, playlistId, trackId, start + i) })
+            playlistDao.setTrackCount(sid, playlistId, members.size + fresh.size)
         }
         try {
-            remote { it.updatePlaylist(playlistId, addTrackIds = trackIds) }
+            remote { it.updatePlaylist(playlistId, addTrackIds = fresh) }
         } catch (t: Throwable) {
             db.withTransaction {
                 playlistDao.replaceMembers(sid, playlistId, members)
@@ -704,6 +715,7 @@ class LibraryRepositoryImpl @Inject constructor(
             throw t
         }
         attempt { refreshPlaylist(playlistId) }
+        return fresh.size
     }
 
     override suspend fun removeFromPlaylist(playlistId: String, indices: List<Int>) {

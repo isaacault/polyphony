@@ -62,7 +62,7 @@ class TrackActionsViewModel @Inject constructor(
         viewModelScope.launch { runCatching { library.setRating(album.id, ItemKind.ALBUM, rating) } }
     }
 
-    fun addToPlaylist(playlistId: String, trackIds: List<String>, onDone: (Result<Unit>) -> Unit = {}) {
+    fun addToPlaylist(playlistId: String, trackIds: List<String>, onDone: (Result<Int>) -> Unit = {}) {
         viewModelScope.launch { onDone(runCatching { library.addToPlaylist(playlistId, trackIds) }) }
     }
 
