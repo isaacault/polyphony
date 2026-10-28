@@ -58,6 +58,6 @@ enum class AlbumListKind { RECENTLY_ADDED, RECENTLY_PLAYED, MOST_PLAYED, RANDOM,
 @Serializable data class ConnectServerRoute(val serverType: String? = null) : Route
 
 /** Routes that show the bottom navigation bar and mini player. */
-val TopLevelRoutes: List<Route> = listOf(HomeRoute, LibraryRoute(), SearchRoute)
+val TopLevelRoutes: List<Route> = listOf(HomeRoute, SearchRoute, LibraryRoute())
 
 @Serializable data class DiscoveryPlaylistRoute(val id: String, val title: String) : Route

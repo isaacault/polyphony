@@ -58,9 +58,10 @@ private data class Tab(
 )
 
 private val Tabs = listOf(
+    // Spotify's order: Home, Search, Library.
     Tab(HomeRoute, HomeRoute::class, R.string.tab_home, Icons.Outlined.Home, Icons.Rounded.Home),
-    Tab(LibraryRoute(), LibraryRoute::class, R.string.tab_library, Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
     Tab(SearchRoute, SearchRoute::class, R.string.tab_search, Icons.Outlined.Search, Icons.Rounded.Search),
+    Tab(LibraryRoute(), LibraryRoute::class, R.string.tab_library, Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
 )
 
 /**
@@ -104,7 +105,7 @@ fun PolyphonyBottomBar(
                         imageVector = if (selected) tab.selectedIcon else tab.icon,
                         contentDescription = null,
                         tint = tint,
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(22.dp),
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
