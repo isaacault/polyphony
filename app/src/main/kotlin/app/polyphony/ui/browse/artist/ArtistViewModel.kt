@@ -54,6 +54,8 @@ data class ArtistUiState(
     val albums: ImmutableList<Album> = persistentListOf(),
     val topTracks: ImmutableList<Track> = persistentListOf(),
     val similarArtists: ImmutableList<Artist> = persistentListOf(),
+    /** Albums by others with a track crediting this artist. */
+    val appearsOn: ImmutableList<Album> = persistentListOf(),
     val currentTrackId: String? = null,
     val isPlaying: Boolean = false,
     val isLoaded: Boolean = false,
@@ -103,6 +105,7 @@ class ArtistViewModel @Inject constructor(
     private val refreshFailed = MutableStateFlow(false)
     private val topTracks = MutableStateFlow<List<Track>?>(null)
     private val similar = MutableStateFlow<List<Artist>>(emptyList())
+    private val appearsOn = MutableStateFlow<List<Album>>(emptyList())
     private val catalog = MutableStateFlow<CatalogLoad>(CatalogLoad.None)
 
     private val messages = Channel<UiMessage>(Channel.BUFFERED)
@@ -116,8 +119,9 @@ class ArtistViewModel @Inject constructor(
         library.albumsByArtist(artistId),
         playback.state,
         refreshFailed,
-        combine(topTracks, similar, catalogPart) { t, s, c -> Triple(t, s, c) },
-    ) { artist, albums, pb, failed, (top, sim, cat) ->
+        combine(topTracks, similar, catalogPart, appearsOn) { t, s, c, a -> Triple(t, s to a, c) },
+    ) { artist, albums, pb, failed, (top, simAndAppears, cat) ->
+        val (sim, appears) = simAndAppears
         val (load, req, busy) = cat
         val catalogAlbums = (load as? CatalogLoad.Loaded)?.albums.orEmpty()
         val sorted = albums.sortedWith(compareByDescending<Album> { it.year ?: 0 }.thenBy { it.name })
@@ -126,6 +130,7 @@ class ArtistViewModel @Inject constructor(
             albums = sorted.toImmutableList(),
             topTracks = (top ?: emptyList()).toImmutableList(),
             similarArtists = sim.toImmutableList(),
+            appearsOn = appears.toImmutableList(),
             currentTrackId = pb.currentTrack?.id,
             isPlaying = pb.isPlaying,
             isLoaded = true,
@@ -151,6 +156,7 @@ class ArtistViewModel @Inject constructor(
         viewModelScope.launch {
             val artist = library.artist(artistId).filterNotNull().first()
             launch { loadDiscography(artist) }
+            launch { appearsOn.value = runCatching { library.albumsAppearingOn(artist) }.getOrDefault(emptyList()) }
             topTracks.value = runCatching { library.getArtistTopTracks(artist, 10) }.getOrDefault(emptyList())
             similar.value = runCatching { library.getSimilarArtists(artistId) }.getOrDefault(emptyList())
         }

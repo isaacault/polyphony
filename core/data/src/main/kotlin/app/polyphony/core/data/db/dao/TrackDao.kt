@@ -57,6 +57,14 @@ interface TrackDao {
     @Query("SELECT * FROM tracks WHERE serverId = :serverId AND id IN (:ids)")
     suspend fun getByIds(serverId: String, ids: List<String>): List<TrackEntity>
 
+    /** Tracks whose artist tag mentions [name] on albums by someone else ("Appears on"). */
+    @Query(
+        "SELECT * FROM tracks WHERE serverId = :serverId AND albumId IS NOT NULL " +
+            "AND artistName LIKE '%' || :name || '%' " +
+            "AND (albumArtistName IS NULL OR albumArtistName != :name COLLATE NOCASE) LIMIT 2000",
+    )
+    suspend fun mentioning(serverId: String, name: String): List<TrackEntity>
+
     @Query(
         "SELECT * FROM tracks WHERE serverId = :serverId AND albumId = :albumId " +
             "ORDER BY COALESCE(discNumber, 1), COALESCE(trackNumber, 0), title COLLATE NOCASE",

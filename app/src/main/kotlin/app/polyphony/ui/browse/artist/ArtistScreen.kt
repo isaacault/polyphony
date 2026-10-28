@@ -312,6 +312,20 @@ fun ArtistScreen(viewModel: ArtistViewModel = hiltViewModel()) {
                     }
                     if (state.catalogLoading) item(key = "catalog-loading") { CatalogNote(R.string.browse_catalog_loading) }
                     if (state.catalogFailed) item(key = "catalog-failed") { CatalogNote(R.string.browse_catalog_failed, isError = true) }
+                    if (state.appearsOn.isNotEmpty()) {
+                        item(key = "appears-header") { SectionHeader(title = stringResource(R.string.browse_artist_appears_on)) }
+                        item(key = "appears") {
+                            HorizontalCarousel(items = state.appearsOn, key = { "a-" + it.id }) { album ->
+                                AlbumCard(
+                                    album = album,
+                                    onClick = { navigator.openAlbum(album.id) },
+                                    onLongClick = { albumForOptions = album },
+                                    width = Dimens.carouselArtwork,
+                                    subtitle = album.artistName,
+                                )
+                            }
+                        }
+                    }
                     if (state.similarArtists.isNotEmpty()) {
                         item(key = "similar-header") { SectionHeader(title = stringResource(R.string.browse_artist_similar)) }
                         item(key = "similar") {

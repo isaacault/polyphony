@@ -28,6 +28,7 @@ import app.polyphony.core.data.util.attempt
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.AlbumSort
 import app.polyphony.core.domain.model.Artist
+import app.polyphony.core.domain.model.ArtistCredits
 import app.polyphony.core.domain.model.ArtistSort
 import app.polyphony.core.domain.model.Genre
 import app.polyphony.core.domain.model.ItemKind
@@ -384,6 +385,19 @@ class LibraryRepositoryImpl @Inject constructor(
         val fetched = attempt { remote { it.getTrack(id) } } ?: return null
         cacheTracks(listOf(fetched))
         return fetched
+    }
+
+    override suspend fun albumsAppearingOn(artist: Artist): List<Album> {
+        val sid = serverRepository.getActive()?.id ?: return emptyList()
+        if (offlineMode() || artist.name.isBlank()) return emptyList()
+        val albumIds = trackDao.mentioning(sid, artist.name)
+            .filter { ArtistCredits.credits(it.artistName, artist.name) }
+            .mapNotNull { it.albumId }
+            .distinct()
+        return albumIds.chunked(IN_CHUNK).flatMap { albumDao.getByIds(sid, it) }
+            .map { it.toDomain() }
+            .filter { it.artistId != artist.id && !it.artistName.equals(artist.name, ignoreCase = true) }
+            .sortedWith(compareByDescending<Album> { it.year ?: 0 }.thenBy { it.name })
     }
 
     override suspend fun getTracks(ids: List<String>): List<Track> {

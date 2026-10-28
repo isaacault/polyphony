@@ -122,6 +122,9 @@ interface LibraryRepository {
     // ---- Remote-only reads (not cached) ----
     suspend fun getArtistTopTracks(artist: Artist, count: Int = 20): List<Track>
     suspend fun getSimilarArtists(artistId: String): List<Artist>
+
+    /** Albums by others with a track crediting [artist] ("Appears on"), newest first. */
+    suspend fun albumsAppearingOn(artist: Artist): List<Album> = emptyList()
     suspend fun getSimilarTracks(trackId: String, count: Int = 50): List<Track>
     suspend fun getRandomTracks(size: Int = 50, genre: String? = null): List<Track>
     suspend fun getLyrics(track: Track): Lyrics?
