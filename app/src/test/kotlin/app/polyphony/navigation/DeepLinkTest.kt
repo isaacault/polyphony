@@ -73,6 +73,7 @@ class DeepLinkTest {
         assertEquals(DeepLink.Player, DeepLink.parse("polyphony://player"))
         assertEquals(DeepLink.Search, DeepLink.parse("polyphony://search"))
         assertEquals(DeepLink.Shuffle, DeepLink.parse("polyphony://shuffle"))
+        assertEquals(DeepLink.Resume, DeepLink.parse("polyphony://resume"))
     }
 
     @Test
