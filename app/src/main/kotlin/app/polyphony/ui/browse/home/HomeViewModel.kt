@@ -73,6 +73,7 @@ class HomeViewModel @Inject constructor(
     private val history: ListeningHistoryRepository,
     feedbackRepository: FeedbackRepository,
     downloads: DownloadRepository,
+    private val singles: app.polyphony.ui.common.SingleSongAlbums,
 ) : ViewModel() {
 
     /** The liked shelf reads "Top rated" in Ratings mode. */
@@ -82,12 +83,18 @@ class HomeViewModel @Inject constructor(
     private val downloadSummary = combine(downloads.downloadedTrackIds(), downloads.storageUsage) { ids, usage -> ids.size to usage.usedBytes }
         .distinctUntilChanged()
 
+    // Single songs (requested or kept one at a time) aren't albums: Home's album shelves leave
+    // them out, as Library does (SingleSongAlbums). Asked for a few more so a shelf stays full.
     private val shelves = combine(
         history.recent(20),
-        library.recentlyAddedAlbums(20),
-        library.mostPlayedAlbums(20),
+        library.recentlyAddedAlbums(30),
+        library.mostPlayedAlbums(30),
         library.likedAlbums(),
-    ) { recent, added, played, starred -> Shelves(recent, added, played, starred.take(20)) }
+        singles.ids,
+    ) { recent, added, played, starred, singleIds ->
+        fun List<Album>.albumsOnly() = filterNot { it.id in singleIds }.take(20)
+        Shelves(recent, added.albumsOnly(), played.albumsOnly(), starred.albumsOnly())
+    }
 
     private val meta = combine(
         library.playlists(),
