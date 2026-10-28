@@ -21,6 +21,7 @@ import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.LibrarySyncManager
 import app.polyphony.core.domain.repository.SettingsRepository
+import app.polyphony.ui.common.SingleSongAlbums
 import kotlinx.coroutines.flow.distinctUntilChanged
 import app.polyphony.core.domain.repository.AppearanceSettings
 import app.polyphony.core.domain.repository.LibraryLayout
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -57,7 +59,10 @@ class LibraryViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val playback: PlaybackController,
     feedbackRepository: FeedbackRepository,
+    private val singles: SingleSongAlbums,
 ) : ViewModel() {
+
+    init { singles.refresh() }
 
     /** Favourites or Ratings: each hides the other's sort and filter, here and in the tabs. */
     val feedback: StateFlow<Feedback> = feedbackRepository.feedback
@@ -122,15 +127,36 @@ class LibraryViewModel @Inject constructor(
     }
 
     // ---- content (null = first load pending) ----
+    // Single songs (SingleSongAlbums) stay out of Albums and Artists unless the filter asks.
+    private val allAlbums = library.albums()
+
     val artists: StateFlow<ImmutableList<Artist>?> = combine(artistSort, artistFilter) { s, f -> s to f }
-        .flatMapLatest { (sort, filter) -> library.artists(sort, filter) }
+        .flatMapLatest { (sort, filter) ->
+            combine(library.artists(sort, filter), allAlbums, singles.ids) { list, albums, singleIds ->
+                if (filter.singleSongs || singleIds.isEmpty()) list
+                else SinglesFilter.artistsWithAlbums(list, albums, singleIds)
+            }
+        }
         .map { it.toImmutableList() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val albums: StateFlow<ImmutableList<Album>?> = combine(albumSort, albumAscending, albumFilter) { s, a, f -> Triple(s, a, f) }
-        .flatMapLatest { (sort, asc, filter) -> library.albums(sort, asc, filter) }
+        .flatMapLatest { (sort, asc, filter) ->
+            combine(library.albums(sort, asc, filter), singles.ids) { list, singleIds ->
+                if (filter.singleSongs) list else list.filterNot { it.id in singleIds }
+            }
+        }
         .map { it.toImmutableList() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Songs tab with Single songs on: only the songs of single-song albums. */
+    val singleSongTracks: StateFlow<ImmutableList<Track>> = singles.ids
+        .flatMapLatest { ids ->
+            if (ids.isEmpty()) flowOf(emptyList())
+            else combine(ids.map { library.tracksForAlbum(it) }) { lists -> lists.flatMap { it.toList() }.sortedBy { it.title.lowercase() } }
+        }
+        .map { it.toImmutableList() }
+        .asState(persistentListOf())
 
     private val trackOrder = combine(trackSort, trackAscending, trackFilter) { s, a, f -> Triple(s, a, f) }
 
@@ -186,6 +212,12 @@ class LibraryViewModel @Inject constructor(
             val queue = if (slice.firstOrNull()?.id == track.id) slice else listOf(track) + slice.filter { it.id != track.id }
             playback.playTracks(queue, 0, queueTitle = "Songs")
         }
+    }
+
+    /** Songs tab, Single songs on: those songs as the queue, from [track]. */
+    fun playSingleSongs(track: Track) {
+        val list = singleSongTracks.value
+        playback.playTracks(list, list.indexOf(track).coerceAtLeast(0), queueTitle = "Single songs")
     }
 
     fun playAllSongs(shuffle: Boolean) {

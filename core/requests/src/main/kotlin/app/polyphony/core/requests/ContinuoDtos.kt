@@ -167,6 +167,13 @@ internal data class LibraryTracklistDto(
     val tracks: List<TracklistDto> = emptyList(),
 )
 
+/** `GET /v1/library/singles`: the library albums holding single songs. */
+@Serializable
+internal data class SinglesDto(val albums: List<SingleAlbumDto> = emptyList())
+
+@Serializable
+internal data class SingleAlbumDto(val navidromeAlbumId: String, val have: Int = 1, val expected: Int = 1)
+
 /** `GET /v1/scrobbling`: where Play now songs are scrobbled. */
 @Serializable
 internal data class ScrobbleLinksDto(

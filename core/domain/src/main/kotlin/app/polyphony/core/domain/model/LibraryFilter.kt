@@ -3,7 +3,7 @@ package app.polyphony.core.domain.model
 import kotlinx.serialization.Serializable
 
 /** One narrowing a [LibraryFilter] can apply. Which ones a list offers depends on what its items carry. */
-enum class FilterField { FAVOURITES, RATING, DOWNLOADED, GENRE, YEAR }
+enum class FilterField { FAVOURITES, RATING, DOWNLOADED, GENRE, YEAR, SINGLES }
 
 /**
  * What a library list or a search is narrowed to. Every field is an AND; the defaults filter
@@ -22,6 +22,12 @@ data class LibraryFilter(
     /** Inclusive bounds; either may be open. */
     val yearFrom: Int? = null,
     val yearTo: Int? = null,
+    /**
+     * Single songs (requested or kept one at a time, continuo): with Albums and Artists, also show
+     * those you only have single songs of; with Songs, show only those songs. Applied by the Library
+     * from continuo's list, not in SQL.
+     */
+    val singleSongs: Boolean = false,
 ) {
     val isActive: Boolean get() = this != NONE
 
@@ -33,6 +39,7 @@ data class LibraryFilter(
             if (downloadedOnly) add(FilterField.DOWNLOADED)
             if (genre != null) add(FilterField.GENRE)
             if (yearFrom != null || yearTo != null) add(FilterField.YEAR)
+            if (singleSongs) add(FilterField.SINGLES)
         }
 
     /** This filter without the fields [kind] has no data for (an artist has no year, a playlist no rating). */
@@ -45,6 +52,7 @@ data class LibraryFilter(
             genre = genre.takeIf { FilterField.GENRE in allowed },
             yearFrom = yearFrom.takeIf { FilterField.YEAR in allowed },
             yearTo = yearTo.takeIf { FilterField.YEAR in allowed },
+            singleSongs = singleSongs && kind in setOf(ItemKind.ALBUM, ItemKind.ARTIST, ItemKind.TRACK),
         )
     }
 

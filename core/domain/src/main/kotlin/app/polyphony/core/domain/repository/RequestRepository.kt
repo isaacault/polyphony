@@ -79,6 +79,9 @@ interface RequestRepository {
     /** One of discovery's ListenBrainz playlists as songs; null when it's gone. */
     suspend fun discoveryPlaylist(server: Server, id: String): app.polyphony.core.domain.model.DiscoveryPlaylistPage?
 
+    /** The library albums holding single songs (continuo's _singles), by album id; null when unknown. */
+    suspend fun singleSongAlbums(server: Server): Set<String>?
+
     /** Home's discovery rows; null from a continuo too old to have them. */
     suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery?
 
