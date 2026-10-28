@@ -13,6 +13,7 @@ import app.polyphony.core.domain.repository.TranscodeProfileRepository
 import app.polyphony.core.downloads.db.DownloadDao
 import app.polyphony.core.downloads.db.DownloadRuleDao
 import app.polyphony.core.downloads.db.toDomain
+import app.polyphony.core.downloads.work.DownloadNotifications
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,6 +38,7 @@ class DownloadRuleEvaluator @Inject constructor(
     private val serverRepository: ServerRepository,
     private val settingsRepository: SettingsRepository,
     private val profileRepository: TranscodeProfileRepository,
+    private val notifications: DownloadNotifications,
     private val json: Json,
 ) {
     private val mutex = Mutex()
@@ -95,7 +97,10 @@ class DownloadRuleEvaluator @Inject constructor(
                     val after = downloadDao.getAllForServer(serverId).map { it.toDomain() }
                     val used = downloadDao.usedBytes()
                     val evict = Eviction.plan(after, used, limitBytes, settings.evictLeastRecentlyPlayed)
-                    if (evict.isNotEmpty()) engine.remove(evict)
+                    if (evict.isNotEmpty()) {
+                        engine.remove(evict)
+                        notifications.evicted(evict.size, settings.maxStorageMb)
+                    }
                 }
                 _state.value = SyncState(status = SyncState.Status.IDLE, lastSyncAt = now)
             } catch (e: Exception) {

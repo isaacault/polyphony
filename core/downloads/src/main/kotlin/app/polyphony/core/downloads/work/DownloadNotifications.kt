@@ -18,6 +18,7 @@ import app.polyphony.core.domain.repository.TransferRate
 import app.polyphony.core.downloads.R
 import app.polyphony.core.downloads.engine.TransferMeter
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -84,6 +85,26 @@ class DownloadNotifications @Inject constructor(@ApplicationContext private val 
         runCatching { NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID) }
     }
 
+    /** Songs the storage cap removed, so they don't just vanish (they come back when there's room). */
+    @SuppressLint("MissingPermission")
+    fun evicted(count: Int, limitMb: Long) {
+        if (count <= 0 || !canPost()) return
+        val limit = if (limitMb >= 1024) String.format(Locale.US, "%.1f GB", limitMb / 1024.0) else "$limitMb MB"
+        val songs = if (count == 1) "1 song" else "$count songs"
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_download)
+            .setContentTitle("Removed $songs to stay under $limit")
+            .setContentText("Only rule downloads go, never pinned ones; they come back when there's room.")
+            .setStyle(NotificationCompat.BigTextStyle().bigText(
+                "Only rule downloads go, never pinned ones; they come back when there's room. " +
+                    "Raise the limit in Downloads settings to keep more.",
+            ))
+            .setAutoCancel(true)
+            .setSilent(true)
+            .build()
+        runCatching { NotificationManagerCompat.from(context).notify(EVICTED_ID, notification) }
+    }
+
     private fun canPost(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -94,5 +115,6 @@ class DownloadNotifications @Inject constructor(@ApplicationContext private val 
     companion object {
         const val CHANNEL_ID = "downloads"
         const val NOTIFICATION_ID = 0x5044 // "PD"
+        const val EVICTED_ID = 0x5045
     }
 }
