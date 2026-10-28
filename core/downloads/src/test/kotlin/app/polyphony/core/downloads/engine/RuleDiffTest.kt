@@ -90,4 +90,12 @@ class RuleDiffTest {
         val desired = RuleDiff.mergeDesired(listOf(rule("r1").copy(enabled = false) to listOf(track("a"))), TranscodeProfile.ORIGINAL_ID, profiles)
         assertTrue(desired.isEmpty())
     }
+
+    @Test
+    fun `a held rule's downloads are kept though nothing wants them`() {
+        val desired = RuleDiff.mergeDesired(listOf(rule("r1") to emptyList(), rule("r2") to listOf(track("b"))), TranscodeProfile.ORIGINAL_ID, profiles)
+        val current = listOf(have("a", ruleId = "r1"), have("b", ruleId = "r2"), have("c", ruleId = "r2"))
+        val plan = RuleDiff.compute(desired, current, removeWhenRuleNoLongerMatches = true, profiles, held = setOf("r1"))
+        assertEquals(listOf("c"), plan.remove)
+    }
 }
