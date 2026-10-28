@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.polyphony.R
+import app.polyphony.core.ui.components.LoadingPlaceholder
+import app.polyphony.core.ui.components.PlaceholderStyle
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbumTrack
 import app.polyphony.core.domain.model.CatalogTrack
@@ -102,7 +104,8 @@ fun CatalogAlbumScreen(viewModel: CatalogAlbumViewModel = hiltViewModel()) {
                     },
                 )
             }
-            if (state.loading) item(key = "loading") { CatalogNote(R.string.browse_catalog_album_loading) }
+            // The tracklist's shape while MusicBrainz answers.
+            if (state.loading) item(key = "loading") { LoadingPlaceholder(PlaceholderStyle.LIST, count = 10) }
             if (!state.loading && state.discs.isEmpty()) item(key = "no-tracks") { CatalogNote(R.string.browse_catalog_album_no_tracks) }
             state.discs.forEach { disc ->
                 if (state.showDiscLabels) {
