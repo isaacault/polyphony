@@ -4,6 +4,7 @@ import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.model.TrackSort
 import app.polyphony.core.domain.repository.DownloadRule
 import app.polyphony.core.domain.repository.DownloadRuleTarget
+import app.polyphony.core.domain.repository.DownloadStatus
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
@@ -75,14 +76,21 @@ class DownloadRuleEvaluator @Inject constructor(
                 _state.value = _state.value.copy(progress = 0.9f, phase = "Applying changes")
                 if (plan.remove.isNotEmpty()) engine.remove(plan.remove)
                 plan.retag.forEach { (trackId, ruleId) -> downloadDao.setRule(trackId, ruleId) }
-                plan.enqueue.groupBy { it.ruleId to it.profileId }.forEach { (key, items) ->
+                val limitBytes = settings.maxStorageMb * 1024L * 1024L
+                val enqueue = if (limitBytes <= 0) {
+                    plan.enqueue
+                } else {
+                    val estimate = RuleDiff.estimateBytes(current)
+                    val queued = current.count { it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.DOWNLOADING }
+                    RuleDiff.withinBudget(plan.enqueue, limitBytes - downloadDao.usedBytes() - queued * estimate, estimate)
+                }
+                enqueue.groupBy { it.ruleId to it.profileId }.forEach { (key, items) ->
                     engine.enqueue(items.map { it.track }, profileId = key.second, pinned = false, ruleId = key.first)
                 }
                 val now = System.currentTimeMillis()
                 rules.forEach { ruleDao.setEvaluated(it.id, now) }
 
                 // Storage cap.
-                val limitBytes = settings.maxStorageMb * 1024L * 1024L
                 if (limitBytes > 0) {
                     val after = downloadDao.getAllForServer(serverId).map { it.toDomain() }
                     val used = downloadDao.usedBytes()
