@@ -59,11 +59,17 @@ object RuleDiff {
         return out
     }
 
+    /**
+     * [held] rules couldn't say what they want this time (their lookup failed, or came back empty
+     * while they still own downloads: a deleted playlist, or a library mid-sync), so nothing of
+     * theirs is removed. Deleting the rule is how its files go.
+     */
     fun compute(
         desired: Map<String, Desired>,
         current: List<DownloadedTrack>,
         removeWhenRuleNoLongerMatches: Boolean,
         profiles: Map<String, TranscodeProfile>,
+        held: Set<String> = emptySet(),
     ): Plan {
         val byId = current.associateBy { it.trackId }
         val enqueue = ArrayList<EnqueueItem>()
@@ -90,7 +96,7 @@ object RuleDiff {
         }
 
         val remove = if (removeWhenRuleNoLongerMatches) {
-            current.filter { !it.pinned && it.trackId !in desired }.map { it.trackId }
+            current.filter { !it.pinned && it.trackId !in desired && it.ruleId !in held }.map { it.trackId }
         } else {
             emptyList()
         }

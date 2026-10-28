@@ -48,15 +48,20 @@ class DownloadRuleEvaluator @Inject constructor(
                 val rules = ruleDao.getForServer(serverId).mapNotNull { it.toDomain(json) }.filter { it.enabled }
                 val profiles = profileRepository.getProfiles().associateBy { it.id }
 
+                val current = downloadDao.getAllForServer(serverId).map { it.toDomain() }
+                val owning = current.mapNotNullTo(HashSet()) { it.ruleId }
                 val perRule = ArrayList<Pair<DownloadRule, List<Track>>>()
+                val held = HashSet<String>()
                 rules.forEachIndexed { index, rule ->
                     _state.value = _state.value.copy(progress = index.toFloat() / (rules.size + 1), phase = rule.target.label)
-                    val tracks = runCatching { tracksFor(rule) }.getOrElse { emptyList() }
-                    perRule += rule to tracks
+                    val tracks = runCatching { tracksFor(rule) }.getOrNull()
+                    // A failed lookup, or nothing at all from a rule that owns downloads, is far
+                    // likelier a vanished target or a library mid-sync than a wish to delete them.
+                    if (tracks == null || (tracks.isEmpty() && rule.id in owning)) held += rule.id
+                    perRule += rule to tracks.orEmpty()
                 }
                 val desired = RuleDiff.mergeDesired(perRule, settings.defaultProfileId, profiles)
-                val current = downloadDao.getAllForServer(serverId).map { it.toDomain() }
-                val plan = RuleDiff.compute(desired, current, settings.removeWhenRuleNoLongerMatches, profiles)
+                val plan = RuleDiff.compute(desired, current, settings.removeWhenRuleNoLongerMatches, profiles, held)
 
                 _state.value = _state.value.copy(progress = 0.9f, phase = "Applying changes")
                 if (plan.remove.isNotEmpty()) engine.remove(plan.remove)
