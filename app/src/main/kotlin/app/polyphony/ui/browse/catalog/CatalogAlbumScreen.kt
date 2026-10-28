@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.LibraryAdd
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -100,6 +101,9 @@ fun CatalogAlbumScreen(viewModel: CatalogAlbumViewModel = hiltViewModel()) {
                             onRequest = viewModel::request,
                             onOpenLibrary = navigator::openAlbum,
                             onOpenRequests = { navigator.openRequests(it) },
+                            // Play the album from its first song, each fetched by Play now as it comes up.
+                            onPlay = state.discs.flatMap { it.tracks }.firstOrNull { it.recordingId != null }
+                                ?.takeIf { playable }?.let { first -> { viewModel.playTrack(first) } },
                         )
                     },
                 )
@@ -147,12 +151,20 @@ private fun AlbumAction(
     onRequest: () -> Unit,
     onOpenLibrary: (String) -> Unit,
     onOpenRequests: (Long?) -> Unit,
+    onPlay: (() -> Unit)? = null,
 ) {
     Row(
         Modifier.fillMaxWidth().padding(top = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (onPlay != null) {
+            Button(onClick = onPlay) {
+                Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                Text(stringResource(R.string.browse_action_play))
+            }
+        }
         when (availability) {
             Availability.Requestable -> Button(onClick = onRequest, enabled = !busy) {
                 Icon(Icons.Rounded.LibraryAdd, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
