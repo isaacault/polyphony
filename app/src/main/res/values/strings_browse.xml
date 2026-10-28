@@ -51,6 +51,8 @@
     <string name="explore_albums">Albums for you</string>
     <string name="explore_playlists">Playlists for you</string>
     <string name="explore_playlist_source">From ListenBrainz</string>
+    <string name="explore_playlists_link">Link ListenBrainz for playlists made for you</string>
+    <string name="explore_playlists_link_hint">Settings, Playback, Scrobbling. They come once it has some of your listens.</string>
     <string name="explore_playlist_failed">Couldn\'t load this playlist from ListenBrainz.</string>
     <string name="browse_tab_artists">Artists</string>
     <string name="browse_tab_albums">Albums</string>

@@ -53,6 +53,8 @@ data class ExploreUiState(
     val playlists: ImmutableList<DiscoveryPlaylist> = persistentListOf(),
     /** Release groups with a request in flight from here. */
     val requesting: ImmutableSet<String> = persistentSetOf(),
+    /** ListenBrainz isn't linked for scrobbling, so it makes no playlists for you: say how. */
+    val playlistsNeedListenBrainz: Boolean = false,
 )
 
 /**
@@ -82,17 +84,21 @@ class ExploreViewModel @Inject constructor(
 
     private val discovery = combine(servers.activeServer.map { it?.id }.distinctUntilChanged(), reloads) { id, _ -> id }
         .mapLatest {
-            val server = servers.getActive()?.takeIf { requests.supports(it) } ?: return@mapLatest Discovery()
+            val server = servers.getActive()?.takeIf { requests.supports(it) } ?: return@mapLatest Discovery() to false
             try {
-                requests.discover(server) ?: Discovery()
+                val found = requests.discover(server) ?: Discovery()
+                // A continuo that scrobbles, without ListenBrainz linked: its playlists need it.
+                val needsLink = found.playlists.isEmpty() &&
+                    runCatching { requests.scrobbling(server) }.getOrNull()?.listenBrainz?.connected == false
+                found to needsLink
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Discovery()
+                Discovery() to false
             }
         }
 
-    val state: StateFlow<ExploreUiState> = combine(discovery, requester.requested, requester.requesting, randomPicks) { d, requested, busy, picks ->
+    val state: StateFlow<ExploreUiState> = combine(discovery, requester.requested, requester.requesting, randomPicks) { (d, needsLink), requested, busy, picks ->
         fun CatalogAlbum.withRequest() = releaseGroupId?.let(requested::get)?.let { copy(availability = it) } ?: this
         ExploreUiState(
             loading = false,
@@ -101,6 +107,7 @@ class ExploreViewModel @Inject constructor(
             albums = mix(d.albums.map { it.withRequest() }, picks).toImmutableList(),
             playlists = d.playlists.toImmutableList(),
             requesting = busy.toImmutableSet(),
+            playlistsNeedListenBrainz = needsLink,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ExploreUiState())
 
