@@ -75,7 +75,9 @@ import app.polyphony.core.domain.model.Track
 import app.polyphony.core.ui.components.AlbumRow
 import app.polyphony.core.ui.components.ArtistRow
 import app.polyphony.core.ui.components.EmptyState
+import app.polyphony.core.ui.components.LoadingPlaceholder
 import app.polyphony.core.ui.components.MediaRow
+import app.polyphony.core.ui.components.PlaceholderStyle
 import app.polyphony.core.ui.components.PlaylistRow
 import app.polyphony.core.ui.components.SectionHeader
 import app.polyphony.core.ui.components.TrackRow
@@ -204,7 +206,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                 onRemove = viewModel::removeRecent,
                 modifier = Modifier.padding(padding),
             )
-            state.isEmpty && !state.isSearchingRemote && !state.everything.searching -> Column(Modifier.padding(padding)) {
+            state.isEmpty && !state.isSearchingRemote && !state.everything.searching && !state.everything.pending -> Column(Modifier.padding(padding)) {
                 val everything = state.showsEverything
                 EmptyState(
                     title = stringResource(R.string.browse_search_no_results),
@@ -231,10 +233,14 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                 contentPadding = listContentPadding(top = 4.dp),
             ) {
                 // Exact matches first, whatever they are (Spotify's top result), labelled with their type.
-                if (!state.top.isEmpty) {
+                if (!state.top.isEmpty || state.everything.pending) {
                     item(key = "h-top") { SectionHeader(title = stringResource(R.string.browse_search_top_results)) }
-                    val top = state.top
-                    items(top.artists, key = { "ta-" + it.id }, contentType = { "artist" }) { artist ->
+                }
+                if (!state.top.isEmpty) {
+                    // One list across kinds (TopBlend), in its order: each row drawn as its kind.
+                    items(state.top.items, key = { "t-" + it.key }, contentType = { it::class.simpleName }) { item ->
+                      when (item) {
+                    is TopItem.LibArtist -> { val artist = item.artist
                         MediaRow(
                             title = artist.name,
                             subtitle = stringResource(R.string.browse_search_type_artist),
@@ -244,13 +250,13 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             placeholder = Icons.Rounded.Person,
                         )
                     }
-                    items(top.catalogArtists, key = { "tea-" + it.key }, contentType = { "everything-artist" }) { artist ->
+                    is TopItem.CatArtist -> { val artist = item.artist
                         CatalogArtistRow(artist, subtitle = stringResource(R.string.browse_search_type_artist), onClick = {
                             viewModel.rememberSearch(state.query)
                             artist.musicBrainzId?.let { navigator.openCatalogArtist(it, artist.name) }
                         })
                     }
-                    items(top.albums, key = { "tal-" + it.id }, contentType = { "album" }) { album ->
+                    is TopItem.LibAlbum -> { val album = item.album
                         MediaRow(
                             title = album.name,
                             subtitle = typed(R.string.browse_search_type_album, album.artistName),
@@ -261,7 +267,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             placeholder = Icons.Rounded.Album,
                         )
                     }
-                    items(top.catalogAlbums, key = { "teal-" + it.key }, contentType = { "everything" }) { album ->
+                    is TopItem.CatAlbum -> { val album = item.album
                         CatalogRow(
                             title = album.title,
                             subtitle = typed(R.string.browse_search_type_album, album.artist),
@@ -274,7 +280,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             onClick = album.releaseGroupId?.let { rg -> { navigator.openCatalogAlbum(rg, album.title) } },
                         )
                     }
-                    items(top.playlists, key = { "tp-" + it.id }, contentType = { "playlist" }) { playlist ->
+                    is TopItem.LibPlaylist -> { val playlist = item.playlist
                         MediaRow(
                             title = playlist.name,
                             subtitle = stringResource(R.string.browse_search_type_playlist),
@@ -283,7 +289,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             placeholder = Icons.AutoMirrored.Rounded.QueueMusic,
                         )
                     }
-                    items(top.tracks, key = { "tt-" + it.id }, contentType = { "track" }) { track ->
+                    is TopItem.LibTrack -> { val track = item.track
                         TrackSwipeRow(track = track) {
                             TrackRow(
                                 track = track,
@@ -297,7 +303,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             )
                         }
                     }
-                    items(top.catalogTracks, key = { "tet-" + it.key }, contentType = { "everything" }) { track ->
+                    is TopItem.CatTrack -> { val track = item.track
                         CatalogSwipeRow(track) {
                             CatalogRow(
                                 title = track.title,
@@ -314,6 +320,12 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             )
                         }
                     }
+                      }
+                    }
+                }
+                // The server's answer on its way: rows of skeleton, shimmering.
+                if (state.everything.pending) {
+                    item(key = "top-pending") { LoadingPlaceholder(PlaceholderStyle.LIST, count = 3) }
                 }
                 // Then by type: artists, albums, playlists, songs; yours first, best matches first.
                 if (state.artists.isNotEmpty() || state.everything.artists.isNotEmpty()) {

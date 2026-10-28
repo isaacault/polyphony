@@ -1,10 +1,14 @@
 package app.polyphony.ui.browse.search
 
+import app.polyphony.core.domain.model.Album
+import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
 import app.polyphony.core.domain.model.CatalogArtist
 import app.polyphony.core.domain.model.CatalogResults
 import app.polyphony.core.domain.model.CatalogTrack
+import app.polyphony.core.domain.model.Playlist
+import app.polyphony.core.domain.model.Track
 import app.polyphony.ui.browse.catalog.Discography
 
 /**
@@ -29,6 +33,24 @@ object SearchRanking {
 
     /** The name starts with what was typed ("maverick": Maverick Sabre). */
     fun startsWith(name: String, query: String): Boolean = loose(query).let { it.isNotEmpty() && loose(name).startsWith(it) }
+
+    /**
+     * How well [name] is what was typed, on continuo's scale: 3 the same, 2 it starts so, 1.5
+     * every word typed starts one of its words, 1 it's inside, 0 not at all.
+     */
+    fun points(name: String, query: String): Float {
+        val q = loose(query)
+        val n = loose(name)
+        if (q.isEmpty() || n.isEmpty()) return 0f
+        if (n == q) return 3f
+        if (n.startsWith(q)) return 2f
+        val words = n.split(' ')
+        if (q.split(' ').all { t -> words.any { it.startsWith(t) } }) return 1.5f
+        return if (n.contains(q)) 1f else 0f
+    }
+
+    /** A name as a key for matching yours to the server's (case, punctuation and "The" aside). */
+    fun nameKey(name: String): String = loose(name)
 
     private fun score(name: String, q: String): Int = when {
         name == q -> 0
@@ -62,6 +84,65 @@ object TopHit {
         val at = items.indexOfFirst { SearchRanking.startsWith(name(it), query) }
         return if (at < 0) emptyList<T>() to items else listOf(items[at]) to items.filterIndexed { i, _ -> i != at }
     }
+}
+
+/** One row of Top results, whatever it is. */
+sealed interface TopItem {
+    val key: String
+
+    data class LibArtist(val artist: Artist) : TopItem { override val key get() = "la-" + artist.id }
+    data class CatArtist(val artist: CatalogArtist) : TopItem { override val key get() = "ca-" + artist.key }
+    data class LibAlbum(val album: Album) : TopItem { override val key get() = "lb-" + album.id }
+    data class CatAlbum(val album: CatalogAlbum) : TopItem { override val key get() = "cb-" + album.key }
+    data class LibPlaylist(val playlist: Playlist) : TopItem { override val key get() = "lp-" + playlist.id }
+    data class LibTrack(val track: Track) : TopItem { override val key get() = "lt-" + track.id }
+    data class CatTrack(val track: CatalogTrack) : TopItem { override val key get() = "ct-" + track.key }
+}
+
+/**
+ * Top results as one list, like Spotify's ("lil": Lil Wayne, Lil Peep, Lil Uzi Vert, an album,
+ * Lil Baby…): yours and the server's together, each scored as continuo scores its lists: how
+ * well its own name is what was typed, plus its popularity (the server's, by key, or for one of
+ * yours by name; else [LIBRARY_POP]), plus a lean towards artists, then albums, then playlists,
+ * then songs, and a little for yours. The server's best hit gets a lift. Only what matches by
+ * name (or is the server's best) is in it.
+ */
+object TopBlend {
+    const val SIZE = 8
+    private const val POP_WEIGHT = 0.75f
+    private const val LIBRARY_POP = 4.5f
+    private const val YOURS = 0.3f
+    private const val BEST = 2f
+    private const val ARTIST = 1.2f
+    private const val ALBUM = 0.6f
+    private const val PLAYLIST = 0.4f
+
+    fun build(
+        query: String,
+        artists: List<Artist>, albums: List<Album>, playlists: List<Playlist>, tracks: List<Track>,
+        catArtists: List<CatalogArtist>, catAlbums: List<CatalogAlbum>, catTracks: List<CatalogTrack>,
+        popularity: Map<String, Float>, popularityByName: Map<String, Float>, bestKey: String?,
+    ): List<TopItem> {
+        fun songPoints(title: String, artist: String?): Float {
+            val own = SearchRanking.points(title, query)
+            if (own > 0f || artist == null || query.trim().split(' ').size < 2) return own
+            return maxOf(SearchRanking.points("$title $artist", query), SearchRanking.points("$artist $title", query)) - 0.25f
+        }
+        fun yours(name: String) = popularityByName[SearchRanking.nameKey(name)] ?: LIBRARY_POP
+        val scored = buildList {
+            artists.forEach { add(TopItem.LibArtist(it) to score(SearchRanking.points(it.name, query), yours(it.name), ARTIST + YOURS, false)) }
+            albums.forEach { add(TopItem.LibAlbum(it) to score(SearchRanking.points(it.name, query), yours(it.name), ALBUM + YOURS, false)) }
+            playlists.forEach { add(TopItem.LibPlaylist(it) to score(SearchRanking.points(it.name, query), LIBRARY_POP, PLAYLIST + YOURS, false)) }
+            tracks.forEach { add(TopItem.LibTrack(it) to score(songPoints(it.title, it.artistName), yours(it.title), YOURS, false)) }
+            catArtists.forEach { add(TopItem.CatArtist(it) to score(SearchRanking.points(it.name, query), popularity[it.key] ?: 0f, ARTIST, it.key == bestKey)) }
+            catAlbums.forEach { add(TopItem.CatAlbum(it) to score(SearchRanking.points(it.title, query), popularity[it.key] ?: 0f, ALBUM, it.key == bestKey)) }
+            catTracks.forEach { add(TopItem.CatTrack(it) to score(songPoints(it.title, it.artist), popularity[it.key] ?: 0f, 0f, it.key == bestKey)) }
+        }
+        return scored.filter { it.second > 0f }.sortedByDescending { it.second }.take(SIZE).map { it.first }
+    }
+
+    private fun score(points: Float, pop: Float, boost: Float, best: Boolean): Float =
+        if (points == 0f && !best) 0f else points + POP_WEIGHT * pop + boost + if (best) BEST else 0f
 }
 
 /**

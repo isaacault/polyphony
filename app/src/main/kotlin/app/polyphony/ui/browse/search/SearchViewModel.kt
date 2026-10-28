@@ -75,6 +75,11 @@ data class EverythingUi(
     /** The server ranked these (TopHit): their order stands, [bestKey] leads. */
     val ranked: Boolean = false,
     val bestKey: String? = null,
+    /** Popularity by hit key, and by name for matching yours (TopBlend). */
+    val popularity: ImmutableMap<String, Float> = persistentMapOf(),
+    val popularityByName: ImmutableMap<String, Float> = persistentMapOf(),
+    /** The server is being asked about what's typed and hasn't answered yet: skeleton rows. */
+    val pending: Boolean = false,
 ) {
     val isEmpty: Boolean get() = artists.isEmpty() && albums.isEmpty() && tracks.isEmpty()
 }
@@ -84,6 +89,8 @@ data class EverythingUi(
  * artists, then albums, playlists and songs; yours, then the catalogue's.
  */
 data class TopResults(
+    /** All of it in one order (TopBlend's, from a ranking server; else by kind). */
+    val items: ImmutableList<TopItem> = persistentListOf(),
     val artists: ImmutableList<Artist> = persistentListOf(),
     val catalogArtists: ImmutableList<CatalogArtist> = persistentListOf(),
     val albums: ImmutableList<Album> = persistentListOf(),
@@ -175,6 +182,8 @@ class SearchViewModel @Inject constructor(
     private var remoteJob: Job? = null
     private var catalogJob: Job? = null
     private var quickJob: Job? = null
+    /** The query a quick search is out for (skeleton rows until it answers). */
+    private val quickPending = MutableStateFlow<String?>(null)
 
     /** The last submitted term: switching scope re-runs the searches that scope needs. */
     private var submitted: String? = null
@@ -241,8 +250,8 @@ class SearchViewModel @Inject constructor(
     }
 
     private val everythingState: Flow<Triple<Boolean, SearchScope, EverythingUi>> = combine(
-        linked, scope, query, catalog, combine(requester.requested, requester.requesting) { r, busy -> r to busy },
-    ) { isLinked, s, q, cat, (req, busy) ->
+        linked, scope, query, catalog, combine(requester.requested, requester.requesting, quickPending) { r, busy, p -> Triple(r, busy, p) },
+    ) { isLinked, s, q, cat, (req, busy, quickFor) ->
         // While typing, the last quick results stay up until the next letter's arrive: "sabr"'s
         // for "sabri", rather than a blank list between keystrokes.
         val current = cat.forQuery == q.trim() || (cat.quick && cat.forQuery.isNotEmpty() && q.trim().startsWith(cat.forQuery, ignoreCase = true))
@@ -263,6 +272,9 @@ class SearchViewModel @Inject constructor(
                 quick = cat.quick && results != null,
                 ranked = results?.ranked == true,
                 bestKey = results?.bestKey,
+                popularity = results?.popularity.orEmpty().toImmutableMap(),
+                popularityByName = popularityByName(results).toImmutableMap(),
+                pending = quickFor == q.trim() && results == null,
             ),
         )
     }
@@ -276,6 +288,7 @@ class SearchViewModel @Inject constructor(
             if (on) SearchRanking.rank(items, q, name) else emptyList()
         fun <T> split(on: Boolean, items: List<T>, name: (T) -> String): Pair<List<T>, List<T>> =
             ranked(on, items, name).partition { lead && SearchRanking.isExact(name(it), q) }
+        if (lead && shown.ranked) return@combine blendedState(s, shown, pb, fb, k, isLinked, sc)
         var (topArtists, artists) = split(k.shows(SearchKind.ARTISTS), s.artists) { it.name }
         var (topAlbums, albums) = split(k.shows(SearchKind.ALBUMS), s.albums) { it.name }
         val (topPlaylists, playlists) = split(k.shows(SearchKind.PLAYLISTS), s.playlists) { it.name }
@@ -303,6 +316,9 @@ class SearchViewModel @Inject constructor(
             scope = sc,
             kind = k,
             top = TopResults(
+                items = (topArtists.map(TopItem::LibArtist) + topCatArtists.map(TopItem::CatArtist) + topAlbums.map(TopItem::LibAlbum) +
+                    topCatAlbums.map(TopItem::CatAlbum) + topPlaylists.map(TopItem::LibPlaylist) + topTracks.map(TopItem::LibTrack) +
+                    topCatTracks.map(TopItem::CatTrack)).toImmutableList(),
                 artists = topArtists.toImmutableList(), catalogArtists = topCatArtists.toImmutableList(),
                 albums = topAlbums.toImmutableList(), catalogAlbums = topCatAlbums.toImmutableList(),
                 playlists = topPlaylists.toImmutableList(),
@@ -321,6 +337,46 @@ class SearchViewModel @Inject constructor(
             isPlaying = pb.isPlaying,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchUiState())
+
+    /**
+     * All (on a ranking server): Top results is one list across kinds, yours and the server's
+     * blended (TopBlend), and the sections below hold the rest, in their own orders.
+     */
+    private fun blendedState(
+        s: SearchUiState, shown: EverythingUi, pb: app.polyphony.core.domain.playback.PlaybackState,
+        fb: app.polyphony.core.domain.model.Feedback, k: SearchKind, isLinked: Boolean, sc: SearchScope,
+    ): SearchUiState {
+        val q = s.query
+        val items = TopBlend.build(
+            q, s.artists, s.albums, s.playlists, s.tracks, shown.artists, shown.albums, shown.tracks,
+            shown.popularity, shown.popularityByName, shown.bestKey,
+        )
+        val used = items.map { it.key }.toSet()
+        return s.copy(
+            feedback = fb, scopesAvailable = isLinked, scope = sc, kind = k,
+            top = TopResults(
+                items = items.toImmutableList(),
+                artists = items.filterIsInstance<TopItem.LibArtist>().map { it.artist }.toImmutableList(),
+                catalogArtists = items.filterIsInstance<TopItem.CatArtist>().map { it.artist }.toImmutableList(),
+                albums = items.filterIsInstance<TopItem.LibAlbum>().map { it.album }.toImmutableList(),
+                catalogAlbums = items.filterIsInstance<TopItem.CatAlbum>().map { it.album }.toImmutableList(),
+                playlists = items.filterIsInstance<TopItem.LibPlaylist>().map { it.playlist }.toImmutableList(),
+                tracks = items.filterIsInstance<TopItem.LibTrack>().map { it.track }.toImmutableList(),
+                catalogTracks = items.filterIsInstance<TopItem.CatTrack>().map { it.track }.toImmutableList(),
+            ),
+            artists = SearchRanking.rank(s.artists, q) { it.name }.filterNot { "la-" + it.id in used }.toImmutableList(),
+            albums = SearchRanking.rank(s.albums, q) { it.name }.filterNot { "lb-" + it.id in used }.toImmutableList(),
+            playlists = SearchRanking.rank(s.playlists, q) { it.name }.filterNot { "lp-" + it.id in used }.toImmutableList(),
+            tracks = SearchRanking.rank(s.tracks, q) { it.title }.filterNot { "lt-" + it.id in used }.toImmutableList(),
+            everything = shown.copy(
+                artists = shown.artists.filterNot { "ca-" + it.key in used }.toImmutableList(),
+                albums = shown.albums.filterNot { "cb-" + it.key in used }.toImmutableList(),
+                tracks = shown.tracks.filterNot { "ct-" + it.key in used }.toImmutableList(),
+            ),
+            currentTrackId = pb.currentTrack?.id,
+            isPlaying = pb.isPlaying,
+        )
+    }
 
     /** Choices for the Genre filter chip. */
     val genreNames: StateFlow<ImmutableList<String>> = library.genres()
@@ -354,6 +410,7 @@ class SearchViewModel @Inject constructor(
         if (q.length < QUICK_MIN_CHARS || !linked.value || effectiveScope() != SearchScope.ALL || filter.value.isActive) return
         quickJob = viewModelScope.launch {
             delay(QUICK_DEBOUNCE_MS)
+            quickPending.value = q
             if (catalog.value.let { !it.quick && it.forQuery == q }) return@launch    // the full search has it
             val server = servers.getActive()?.takeIf { requests.supports(it) } ?: return@launch
             val results = try {
@@ -366,7 +423,7 @@ class SearchViewModel @Inject constructor(
             // A full search started meanwhile wins; a stale quick one doesn't replace a newer query's.
             if (catalog.value.let { !it.quick && it.forQuery.isNotEmpty() && it.forQuery == q } || query.value.trim() != q) return@launch
             catalog.value = CatalogState(forQuery = q, results = results, quick = true)
-        }
+        }.also { job -> job.invokeOnCompletion { if (quickPending.value == q) quickPending.value = null } }
     }
 
     fun clear() = onQueryChange("")
@@ -502,4 +559,16 @@ class SearchViewModel @Inject constructor(
 /** Search while typing: from the second letter, 300 ms after the last one, the top 3 of each. */
 private const val QUICK_MIN_CHARS = 2
 private const val QUICK_DEBOUNCE_MS = 300L
-private const val QUICK_LIMIT = 3
+private const val QUICK_LIMIT = 5
+
+/** Popularity by name (yours matched to the server's hits, which include yours). */
+private fun popularityByName(results: CatalogResults?): Map<String, Float> {
+    if (results == null) return emptyMap()
+    val pop = results.popularity
+    return buildMap {
+        results.artists.forEach { a -> pop[a.key]?.let { put(SearchRanking.nameKey(a.name), it) } }
+        results.albums.forEach { a -> pop[a.key]?.let { putIfAbsent(SearchRanking.nameKey(a.title), it) } }
+        results.tracks.forEach { t -> pop[t.key]?.let { putIfAbsent(SearchRanking.nameKey(t.title), it) } }
+    }
+}
+
