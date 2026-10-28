@@ -81,6 +81,7 @@ import app.polyphony.core.ui.components.listContentPadding
 import app.polyphony.core.ui.theme.ArtworkShapes
 import app.polyphony.core.ui.theme.Dimens
 import app.polyphony.core.ui.util.formatBytes
+import app.polyphony.core.ui.util.formatDurationLong
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.ui.common.TrackSwipeRow
 import app.polyphony.ui.common.TrackActionsViewModel
@@ -279,6 +280,7 @@ private fun ActiveTab(state: DownloadsUiState, vm: DownloadsViewModel, onTrackOp
                     }
                 }
             }
+            item(key = "rate") { TransferRateLine(vm) }
         }
         when {
             !state.isLoaded -> item(key = "loading") { LoadingPlaceholder(PlaceholderStyle.LIST, count = 4) }
@@ -294,6 +296,21 @@ private fun ActiveTab(state: DownloadsUiState, vm: DownloadsViewModel, onTrackOp
             }
         }
     }
+}
+
+/** "1.2 MB/s · about 3 min left" while downloads run; nothing otherwise. */
+@Composable
+private fun TransferRateLine(vm: DownloadsViewModel) {
+    val rate by vm.rate.collectAsStateWithLifecycle()
+    val r = rate ?: return
+    val speed = stringResource(R.string.dl_rate_speed, formatBytes(r.bytesPerSecond))
+    val text = r.secondsLeft?.let { stringResource(R.string.dl_rate_speed_left, speed, formatDurationLong(it * 1000)) } ?: speed
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = Dimens.screenPadding, vertical = 2.dp),
+    )
 }
 
 @Composable

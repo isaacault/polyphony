@@ -60,6 +60,8 @@
     <string name="dl_rules_empty_body">Rules keep favourites, playlists, recent additions and more downloaded automatically, and clean up what no longer matches.</string>
     <string name="dl_status_queued">Queued</string>
     <string name="dl_status_downloading">Downloading</string>
+    <string name="dl_rate_speed">%1$s/s</string>
+    <string name="dl_rate_speed_left">%1$s · about %2$s left</string>
     <string name="dl_status_paused">Paused</string>
     <string name="dl_status_failed">Failed</string>
     <string name="dl_status_completed">Downloaded</string>

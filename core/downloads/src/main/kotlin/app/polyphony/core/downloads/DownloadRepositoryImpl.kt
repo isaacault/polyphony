@@ -12,6 +12,7 @@ import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.StorageUsage
 import app.polyphony.core.domain.repository.SyncState
+import app.polyphony.core.domain.repository.TransferRate
 import app.polyphony.core.downloads.db.DownloadDao
 import app.polyphony.core.downloads.db.DownloadRuleDao
 import app.polyphony.core.downloads.db.toDomain
@@ -20,6 +21,7 @@ import app.polyphony.core.downloads.di.DownloadsScope
 import app.polyphony.core.downloads.engine.DownloadEngine
 import app.polyphony.core.downloads.engine.DownloadRuleEvaluator
 import app.polyphony.core.downloads.storage.DownloadStorage
+import app.polyphony.core.downloads.work.DownloadRates
 import app.polyphony.core.downloads.work.DownloadScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -51,9 +53,12 @@ class DownloadRepositoryImpl @Inject constructor(
     private val serverRepository: ServerRepository,
     private val settingsRepository: SettingsRepository,
     private val librarySyncManager: LibrarySyncManager,
+    private val rates: DownloadRates,
     private val json: Json,
     @DownloadsScope private val scope: CoroutineScope,
 ) : DownloadRepository {
+
+    override val transferRate: Flow<TransferRate?> = rates.rate
 
     private val activeServerId: Flow<String?> = serverRepository.activeServer.map { it?.id }.distinctUntilChanged()
     private val downloadSettings: Flow<DownloadSettings> = settingsRepository.settings.map { it.downloads }.distinctUntilChanged()

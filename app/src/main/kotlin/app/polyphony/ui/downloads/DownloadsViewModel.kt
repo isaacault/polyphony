@@ -13,6 +13,7 @@ import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.StorageUsage
 import app.polyphony.core.domain.repository.SyncState
 import app.polyphony.core.domain.repository.TranscodeProfileRepository
+import app.polyphony.core.domain.repository.TransferRate
 import app.polyphony.core.domain.transcode.TranscodeProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
@@ -70,6 +71,10 @@ class DownloadsViewModel @Inject constructor(
 
     /** The favourites rule reads as Top rated in Ratings mode. */
     val feedback: StateFlow<Feedback> = feedbackRepository.feedback
+
+    /** Speed and time left of the running downloads, apart from [state] (it ticks every second). */
+    val rate: StateFlow<TransferRate?> = downloads.transferRate
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val allDownloads: StateFlow<List<DownloadedTrack>> = downloads.downloads
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
