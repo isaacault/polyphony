@@ -23,7 +23,6 @@ import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -54,13 +53,9 @@ class PolyphonyApplication : Application(), Configuration.Provider, SingletonIma
         super.onCreate()
         CrashRecorder.install(this)
         inboxScheduler.start(appScope)
-        // Keep the artwork data saver in step with the setting and whether the network is metered.
+        // Smaller artwork whenever the network is metered (mobile data).
         appScope.launch {
-            combine(
-                settingsRepository.settings.map { it.appearance.reduceImageDataOnMobile }.distinctUntilChanged(),
-                networkMonitor.state.map { it.isMetered }.distinctUntilChanged(),
-            ) { reduce, metered -> reduce && metered }
-                .distinctUntilChanged()
+            networkMonitor.state.map { it.isMetered }.distinctUntilChanged()
                 .collect { DataSaver.reduceArtwork = it }
         }
     }
