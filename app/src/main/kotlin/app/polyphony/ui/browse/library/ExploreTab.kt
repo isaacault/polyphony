@@ -154,6 +154,19 @@ internal fun ExploreTab(viewModel: ExploreViewModel = hiltViewModel()) {
                 )
             }
         }
+        if (state.playlists.isEmpty() && state.playlistsNeedListenBrainz) {
+            item(key = "playlists-header") { SectionHeader(title = stringResource(R.string.explore_playlists)) }
+            item(key = "playlists-link") {
+                MediaRow(
+                    title = stringResource(R.string.explore_playlists_link),
+                    subtitle = stringResource(R.string.explore_playlists_link_hint),
+                    artworkUrl = null,
+                    onClick = { navigator.openPlaybackSettings() },
+                    placeholder = Icons.AutoMirrored.Rounded.QueueMusic,
+                    showChevron = true,
+                )
+            }
+        }
         item(key = "footer") { Spacer(Modifier.height(Dimens.sectionSpacing)) }
     }
     albumForOptions?.let { AlbumOptionsSheet(album = it, onDismiss = { albumForOptions = null }) }
