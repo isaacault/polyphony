@@ -50,6 +50,9 @@
     <string name="queue_empty">Nothing in the queue</string>
     <string name="queue_remove">Remove from queue</string>
     <string name="queue_removed">Removed “%1$s”</string>
+    <string name="queue_previously_played">Previously played</string>
+    <string name="queue_now_playing">Now playing</string>
+    <string name="queue_up_next">Up next</string>
     <string name="queue_drag">Drag to reorder</string>
     <string name="queue_on_phone">On the phone: plays without a connection</string>
 

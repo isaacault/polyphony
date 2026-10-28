@@ -44,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.runtime.rememberCoroutineScope
@@ -137,6 +138,25 @@ fun QueueSheet(
                 ) {
                     itemsIndexed(items, key = { _, item -> item.key }, contentType = { _, _ -> "queueRow" }) { index, item ->
                         ReorderableItem(reorderableState, key = item.key) { isDragging ->
+                          Column {
+                            // Where the queue stands, as captions inside the rows (separate items
+                            // would shift the indices the drag-to-reorder works with).
+                            val current = playback.currentIndex
+                            val caption = when {
+                                isDragging -> null
+                                index == 0 && current > 0 -> R.string.queue_previously_played
+                                index == current -> R.string.queue_now_playing
+                                index == current + 1 -> R.string.queue_up_next
+                                else -> null
+                            }
+                            if (caption != null) {
+                                Text(
+                                    stringResource(caption),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 2.dp),
+                                )
+                            }
                             val dismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = { value ->
                                     if (value == SwipeToDismissBoxValue.EndToStart) {
@@ -201,8 +221,11 @@ fun QueueSheet(
                                             haptics.gestureEnd()
                                         },
                                     ),
+                                    // Played already: dimmed, still there to go back to.
+                                    modifier = if (index < current) Modifier.alpha(0.55f) else Modifier,
                                 )
                             }
+                          }
                         }
                     }
                 }
@@ -267,6 +290,7 @@ private fun QueueRow(
     elevation: Dp,
     onClick: () -> Unit,
     handleModifier: Modifier,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
         color = if (isCurrent) {
@@ -280,7 +304,7 @@ private fun QueueRow(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
-            modifier = Modifier
+            modifier = modifier
                 .clickable(onClick = onClick)
                 .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
