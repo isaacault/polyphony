@@ -166,6 +166,26 @@ internal data class LibraryTracklistDto(
     val tracks: List<TracklistDto> = emptyList(),
 )
 
+/** `GET /v1/scrobbling`: where Play now songs are scrobbled. */
+@Serializable
+internal data class ScrobbleLinksDto(
+    val listenbrainz: ScrobbleLinkDto = ScrobbleLinkDto(),
+    val lastfm: ScrobbleLinkDto = ScrobbleLinkDto(),
+)
+
+@Serializable
+internal data class ScrobbleLinkDto(val available: Boolean = false, val connected: Boolean = false, val account: String? = null)
+
+@Serializable
+internal data class TokenDto(val token: String)
+
+@Serializable
+internal data class LastFmStartDto(val token: String, val url: String)
+
+internal fun ScrobbleLinkDto.toDomain() = app.polyphony.core.domain.model.ScrobbleLink(available, connected, account?.takeIf { it.isNotBlank() })
+
+internal fun ScrobbleLinksDto.toDomain() = app.polyphony.core.domain.model.ScrobbleLinks(listenbrainz.toDomain(), lastfm.toDomain())
+
 /** `GET /v1/library/lyrics`: a song's lyrics from LRCLIB. */
 @Serializable
 internal data class LyricsDto(

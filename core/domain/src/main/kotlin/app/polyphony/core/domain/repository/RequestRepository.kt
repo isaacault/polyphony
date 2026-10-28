@@ -59,6 +59,23 @@ interface RequestRepository {
      */
     suspend fun lyrics(server: Server, artist: String, title: String, album: String?, durationMs: Long?): app.polyphony.core.domain.model.Lyrics?
 
+    /** Where Play now songs are scrobbled; null from a continuo too old to scrobble them. */
+    suspend fun scrobbling(server: Server): app.polyphony.core.domain.model.ScrobbleLinks?
+
+    /** Link ListenBrainz with the account's user token; throws when the token is refused. */
+    suspend fun linkListenBrainz(server: Server, token: String): app.polyphony.core.domain.model.ScrobbleLinks
+
+    /** Start linking Last.fm: (token, the URL where the user approves it). */
+    suspend fun startLastFm(server: Server): Pair<String, String>
+
+    /** Finish linking Last.fm once approved; throws when it isn't yet. */
+    suspend fun finishLastFm(server: Server, token: String): app.polyphony.core.domain.model.ScrobbleLinks
+
+    suspend fun unlinkScrobbler(server: Server, service: String): app.polyphony.core.domain.model.ScrobbleLinks
+
+    /** Scrobble a Play now song: a finished listen at [listenedAtMs], or (null) playing now. */
+    suspend fun scrobblePlayNow(server: Server, streamId: String, listenedAtMs: Long?)
+
     /** Home's discovery rows; null from a continuo too old to have them. */
     suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery?
 

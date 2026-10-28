@@ -99,6 +99,15 @@ data class CatalogAlbumDetail(
     val tracks: List<CatalogAlbumTrack>,
 )
 
+/**
+ * Where this account's Play now songs are scrobbled (continuo): Navidrome scrobbles library songs
+ * to the accounts linked there, but doesn't know Play now songs.
+ */
+data class ScrobbleLinks(val listenBrainz: ScrobbleLink, val lastFm: ScrobbleLink)
+
+/** [available]: the server can link it (Last.fm needs the server's API key). */
+data class ScrobbleLink(val available: Boolean, val connected: Boolean, val account: String?)
+
 /** The whole album a library album is of (continuo's catalogue): for showing what it lacks. */
 data class LibraryAlbumTracklist(
     val releaseGroupId: String,

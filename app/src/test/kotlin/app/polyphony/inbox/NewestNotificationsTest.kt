@@ -56,6 +56,12 @@ class NewestNotificationsTest {
         override suspend fun catalogArtist(server: Server, artistMbid: String): CatalogArtistPage? = error("unused")
         override suspend fun libraryAlbumTracklist(server: Server, libraryAlbumId: String): app.polyphony.core.domain.model.LibraryAlbumTracklist? = error("unused")
         override suspend fun lyrics(server: Server, artist: String, title: String, album: String?, durationMs: Long?): app.polyphony.core.domain.model.Lyrics? = error("unused")
+        override suspend fun scrobbling(server: Server): app.polyphony.core.domain.model.ScrobbleLinks? = error("unused")
+        override suspend fun linkListenBrainz(server: Server, token: String): app.polyphony.core.domain.model.ScrobbleLinks = error("unused")
+        override suspend fun startLastFm(server: Server): Pair<String, String> = error("unused")
+        override suspend fun finishLastFm(server: Server, token: String): app.polyphony.core.domain.model.ScrobbleLinks = error("unused")
+        override suspend fun unlinkScrobbler(server: Server, service: String): app.polyphony.core.domain.model.ScrobbleLinks = error("unused")
+        override suspend fun scrobblePlayNow(server: Server, streamId: String, listenedAtMs: Long?) = Unit
         override suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery? = error("unused")
         override suspend fun requestAlbum(server: Server, releaseGroupId: String): RequestOutcome = error("unused")
         override suspend fun requestTrack(server: Server, recordingId: String, albumReleaseGroupId: String): RequestOutcome = error("unused")

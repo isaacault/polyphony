@@ -77,6 +77,47 @@ class ContinuoRequestRepository internal constructor(
         return client.decode(LyricsDto.serializer(), reply.body).toDomain()
     }
 
+    override suspend fun scrobbling(server: Server): app.polyphony.core.domain.model.ScrobbleLinks? {
+        val reply = client.get(server, "/v1/scrobbling")
+        if (reply.code == 404) return null
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo scrobbling failed")
+        return client.decode(ScrobbleLinksDto.serializer(), reply.body).toDomain()
+    }
+
+    override suspend fun linkListenBrainz(server: Server, token: String): app.polyphony.core.domain.model.ScrobbleLinks {
+        val body = Json.encodeToString(TokenDto.serializer(), TokenDto(token.trim()))
+        val reply = client.put(server, "/v1/scrobbling/listenbrainz", body)
+        if (reply.code !in 200..299) throw client.serverError(reply, "ListenBrainz refused the token")
+        return client.decode(ScrobbleLinksDto.serializer(), reply.body).toDomain()
+    }
+
+    override suspend fun startLastFm(server: Server): Pair<String, String> {
+        val reply = client.post(server, "/v1/scrobbling/lastfm/connect", "{}")
+        if (reply.code !in 200..299) throw client.serverError(reply, "Last.fm can't be linked")
+        val dto = client.decode(LastFmStartDto.serializer(), reply.body)
+        return dto.token to dto.url
+    }
+
+    override suspend fun finishLastFm(server: Server, token: String): app.polyphony.core.domain.model.ScrobbleLinks {
+        val body = Json.encodeToString(TokenDto.serializer(), TokenDto(token))
+        val reply = client.post(server, "/v1/scrobbling/lastfm/finish", body)
+        if (reply.code !in 200..299) throw client.serverError(reply, "Last.fm isn't approved yet")
+        return client.decode(ScrobbleLinksDto.serializer(), reply.body).toDomain()
+    }
+
+    override suspend fun unlinkScrobbler(server: Server, service: String): app.polyphony.core.domain.model.ScrobbleLinks {
+        val reply = client.delete(server, "/v1/scrobbling/${URLEncoder.encode(service, "UTF-8")}")
+        if (reply.code !in 200..299) throw client.serverError(reply, "couldn't unlink")
+        return client.decode(ScrobbleLinksDto.serializer(), reply.body).toDomain()
+    }
+
+    override suspend fun scrobblePlayNow(server: Server, streamId: String, listenedAtMs: Long?) {
+        val body = if (listenedAtMs != null) """{"listenedAt":${listenedAtMs / 1000}}""" else "{}"
+        val reply = client.post(server, "/v1/play-now/${URLEncoder.encode(streamId, "UTF-8")}/scrobble", body)
+        // 404/405: a continuo from before; best-effort either way.
+        if (reply.code !in 200..299 && reply.code !in setOf(404, 405)) throw client.serverError(reply, "scrobble failed")
+    }
+
     override suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery? {
         val reply = client.get(server, "/v1/discover")
         if (reply.code == 404) return null   // a continuo from before discovery

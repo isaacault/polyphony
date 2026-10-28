@@ -172,7 +172,10 @@ class PlaybackService : MediaLibraryService() {
         player = basePlayer
 
         sleepTimer = SleepTimer(scope, pause = { player.pause() }, setVolume = { player.volume = it })
-        reporter = PlaybackReporter(scope, serverLookup, libraryRepository).also {
+        reporter = PlaybackReporter(scope, serverLookup, libraryRepository) { serverId, streamId, listenedAtMs ->
+            val server = serverLookup.providerFor(serverId)?.server ?: return@PlaybackReporter
+            if (requestRepository.supports(server)) requestRepository.scrobblePlayNow(server, streamId, listenedAtMs)
+        }.also {
             it.enabled = settings.scrobble
             it.threshold = settings.scrobbleThreshold
         }
