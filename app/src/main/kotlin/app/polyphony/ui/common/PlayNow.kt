@@ -231,6 +231,8 @@ class PlayNow @Inject constructor(
         title = stream.title.ifBlank { track.title },
         artistName = stream.artist ?: track.artist,
         albumName = track.albumTitle,
+        // The cover the row showed: Now Playing, the notification and the queue have one at once.
+        artworkUrl = track.artworkUrl,
         durationMs = stream.durationMs ?: track.durationMs ?: 0L,
         container = stream.format,
     )

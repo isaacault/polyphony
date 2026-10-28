@@ -95,7 +95,7 @@ class AlbumViewModel @Inject constructor(
     ) { album, tracks, pb, showNumbers, (failed, done, catalog) ->
         val (w, requested, busy) = catalog
         AlbumUiState(
-            entries = AlbumTracklist.entries(tracks, w, album?.artistName, album?.name)
+            entries = AlbumTracklist.entries(tracks, w, album?.artistName, album?.name, album?.artworkUrl)
                 .map { e -> if (e is AlbumEntry.Missing) e.copy(track = CatalogArtistPageLogic.topTracks(listOf(e.track), requested).first()) else e }
                 .toImmutableList(),
             requesting = busy.toImmutableSet(),
