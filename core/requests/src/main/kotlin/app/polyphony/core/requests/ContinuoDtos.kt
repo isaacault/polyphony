@@ -43,6 +43,7 @@ internal data class SearchDto(
     val ranked: Boolean = false,
     /** The key of the hit to lead with, when one clearly does. */
     val best: String? = null,
+    val popularity: Map<String, Float> = emptyMap(),
 )
 
 @Serializable
@@ -277,7 +278,7 @@ internal fun SearchDto.toDomain(artworkHost: String?): CatalogResults {
     val albums = results.filter { it.kind == "album" }.map { it.toCatalogAlbum(artworkHost) }
     val tracks = results.filter { it.kind == "track" }.map { it.toCatalogTrack(artworkHost) }
     return CatalogResults(artists = artists, albums = albums, tracks = tracks, catalogAvailable = sources.catalog != "unavailable",
-                          partial = partial, ranked = ranked, bestKey = best?.takeIf { ranked })
+                          partial = partial, ranked = ranked, bestKey = best?.takeIf { ranked }, popularity = popularity)
 }
 
 internal fun HitDto.toCatalogArtist(artworkHost: String?) = CatalogArtist(

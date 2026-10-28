@@ -129,4 +129,30 @@ class EverythingSectionTest {
         assertEquals(listOf("Ed Maverick", "Mavis"), rest)
         assertEquals("a leading The aside", listOf("The Weeknd"), TopHit.startingWith(listOf("The Weeknd"), "weeknd") { it }.first)
     }
+
+    @Test
+    fun `top results blend kinds, artists and popular things first, like Spotify's`() {
+        fun cat(name: String) = CatalogArtist(key = "mb:artist:$name", musicBrainzId = name, name = name, artworkUrl = null,
+                                              availability = Availability.CatalogOnly)
+        val mySong = app.polyphony.core.domain.model.Track(id = "t1", serverId = "s", title = "Miss Me (feat. Lil Wayne)", artistName = "Drake")
+        val myAlbum = app.polyphony.core.domain.model.Album(id = "a1", serverId = "s", name = "So Far Gone", artistName = "Drake")
+        val myArtist = app.polyphony.core.domain.model.Artist(id = "ar1", serverId = "s", name = "Lil Baby")
+        val items = TopBlend.build(
+            "lil", listOf(myArtist), listOf(myAlbum), emptyList(), listOf(mySong),
+            listOf(cat("Lil Peep"), cat("Lil Wayne"), cat("Lily Allen")), emptyList(), emptyList(),
+            popularity = mapOf("mb:artist:Lil Peep" to 6.5f, "mb:artist:Lil Wayne" to 6.8f, "mb:artist:Lily Allen" to 6.0f),
+            popularityByName = mapOf("lil baby" to 6.2f), bestKey = null,
+        )
+        val names = items.map {
+            when (it) {
+                is TopItem.CatArtist -> it.artist.name
+                is TopItem.LibArtist -> it.artist.name
+                is TopItem.LibTrack -> it.track.title
+                is TopItem.LibAlbum -> it.album.name
+                else -> "?"
+            }
+        }
+        assertEquals(listOf("Lil Wayne", "Lil Baby", "Lil Peep", "Lily Allen", "Miss Me (feat. Lil Wayne)"), names)
+        assertTrue("an album that doesn't match isn't a top result", "So Far Gone" !in names)
+    }
 }

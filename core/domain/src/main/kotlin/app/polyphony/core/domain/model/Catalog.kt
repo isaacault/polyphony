@@ -137,6 +137,8 @@ data class CatalogResults(
      */
     val ranked: Boolean = false,
     val bestKey: String? = null,
+    /** Each hit's popularity by key (log10 scale, continuo#68), for blending kinds into one list. */
+    val popularity: Map<String, Float> = emptyMap(),
 )
 
 /**
