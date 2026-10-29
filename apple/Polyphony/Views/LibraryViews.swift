@@ -189,6 +189,9 @@ struct TrackList: View {
                          isCurrent: model.player.current?.libraryTrack?.id == track.id)
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) { model.player.play(tracks, startAt: index, context: context) }
+                    .draggable(DraggedTracks(tracks: [track])) {
+                        Label(track.title, systemImage: "music.note").padding(6).background(.regularMaterial, in: Capsule())
+                    }
                     .trackContextMenu(track, in: tracks, onRemove: onRemove.map { remove in { remove(index) } })
                 Divider().opacity(0.4)
             }
@@ -546,6 +549,20 @@ struct PlaylistsView: View {
                         Text("\(playlist.songCount) songs · \(formatLong(playlist.duration))").font(.caption).foregroundStyle(.secondary)
                     }
                 }
+            }
+            .dropDestination(for: DraggedTracks.self) { drops, _ in
+                let ids = drops.flatMap(\.tracks).map(\.id)
+                Task {
+                    do {
+                        try await model.subsonic?.updatePlaylist(id: playlist.id, adding: ids)
+                        model.notice = "Added to \(playlist.name)"
+                        model.downloads.libraryChanged()
+                        await load()
+                    } catch {
+                        model.handle(error)
+                    }
+                }
+                return !ids.isEmpty
             }
             .contextMenu {
                 KeepDownloadedButton(target: .playlist(id: playlist.id, name: playlist.name))
