@@ -51,6 +51,11 @@ struct ChildDTO: Decodable, Sendable {
     let starred: String?
     let userRating: Int?
     let replayGain: ReplayGainDTO?
+    let year: Int?
+    let genre: String?
+    let playCount: Int?
+    let path: String?
+    let channelCount: Int?
 }
 
 struct ReplayGainDTO: Decodable, Sendable {
@@ -152,6 +157,7 @@ extension ChildDTO {
               replayGain: replayGain.flatMap { rg in
                   rg.trackGain == nil && rg.albumGain == nil ? nil
                       : ReplayGain.Tags(trackGainDb: rg.trackGain, albumGainDb: rg.albumGain, trackPeak: rg.trackPeak, albumPeak: rg.albumPeak)
-              })
+              },
+              details: Track.Details(year: year, genre: genre, playCount: playCount, path: path, channels: channelCount))
     }
 }

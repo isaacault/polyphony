@@ -75,12 +75,31 @@ public struct Track: Sendable, Hashable, Identifiable, Codable {
     public var rating: Int?
     /// Loudness tags (OpenSubsonic replayGain), for levelling volume between songs.
     public var replayGain: ReplayGain.Tags?
+    /// What Song Info shows besides the file's format.
+    public var details: Details?
+
+    public struct Details: Sendable, Codable, Hashable {
+        public var year: Int?
+        public var genre: String?
+        public var playCount: Int?
+        /// The file's path on the server, as Navidrome reports it.
+        public var path: String?
+        public var channels: Int?
+
+        public init(year: Int? = nil, genre: String? = nil, playCount: Int? = nil, path: String? = nil, channels: Int? = nil) {
+            self.year = year
+            self.genre = genre
+            self.playCount = playCount
+            self.path = path
+            self.channels = channels
+        }
+    }
 
     public init(id: String, title: String, albumID: String? = nil, albumName: String? = nil, artistName: String? = nil,
                 artistID: String? = nil, trackNumber: Int? = nil, discNumber: Int? = nil, duration: TimeInterval = 0,
                 bitRateKbps: Int? = nil, bitDepth: Int? = nil, sampleRateHz: Int? = nil, container: String? = nil,
                 sizeBytes: Int64? = nil, coverArtID: String? = nil, starred: Bool = false, rating: Int? = nil,
-                replayGain: ReplayGain.Tags? = nil) {
+                replayGain: ReplayGain.Tags? = nil, details: Details? = nil) {
         self.id = id
         self.title = title
         self.albumID = albumID
@@ -99,6 +118,7 @@ public struct Track: Sendable, Hashable, Identifiable, Codable {
         self.starred = starred
         self.rating = rating
         self.replayGain = replayGain
+        self.details = details
     }
 
     private static let losslessContainers: Set<String> = ["flac", "alac", "wav", "aiff", "aif", "ape", "wv", "dsf", "dff"]
