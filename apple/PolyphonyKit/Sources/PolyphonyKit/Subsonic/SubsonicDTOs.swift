@@ -49,6 +49,14 @@ struct ChildDTO: Decodable, Sendable {
     let coverArt: String?
     let starred: String?
     let userRating: Int?
+    let replayGain: ReplayGainDTO?
+}
+
+struct ReplayGainDTO: Decodable, Sendable {
+    let trackGain: Double?
+    let albumGain: Double?
+    let trackPeak: Double?
+    let albumPeak: Double?
 }
 
 struct ArtistIndexDTO: Decodable, Sendable {
@@ -139,6 +147,10 @@ extension ChildDTO {
         Track(id: id, title: title ?? "", albumID: albumId, albumName: album, artistName: artist, artistID: artistId,
               trackNumber: track, discNumber: discNumber, duration: duration ?? 0, bitRateKbps: bitRate,
               bitDepth: bitDepth, sampleRateHz: samplingRate, container: suffix, sizeBytes: size,
-              coverArtID: coverArt, starred: starred != nil, rating: userRating.flatMap { $0 > 0 ? $0 : nil })
+              coverArtID: coverArt, starred: starred != nil, rating: userRating.flatMap { $0 > 0 ? $0 : nil },
+              replayGain: replayGain.flatMap { rg in
+                  rg.trackGain == nil && rg.albumGain == nil ? nil
+                      : ReplayGain.Tags(trackGainDb: rg.trackGain, albumGainDb: rg.albumGain, trackPeak: rg.trackPeak, albumPeak: rg.albumPeak)
+              })
     }
 }

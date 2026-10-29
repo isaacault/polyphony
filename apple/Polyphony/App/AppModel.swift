@@ -171,6 +171,10 @@ final class AppModel {
         let engine = AVPlayerEngine()
         macEngine = engine
         player = PlayerController(engine: engine, nowPlaying: center)
+        if let data = UserDefaults.standard.data(forKey: "playback.replayGain"),
+           let saved = try? JSONDecoder().decode(ReplayGain.Settings.self, from: data) {
+            player.replayGain = saved
+        }
         center.attach(player)
         player.resolve = { [weak self] entry in await self?.source(for: entry) }
         player.artwork = { [weak self] entry in self?.artworkURL(for: entry, size: 600) }
@@ -210,6 +214,15 @@ final class AppModel {
 
     /// Streaming quality: 0 for the file as it is, else transcoded to MP3 at this bitrate (kbps).
     private(set) var streamingBitrate = UserDefaults.standard.integer(forKey: "streaming.bitrate")
+
+    /// Levelling loudness between songs (ReplayGain), kept between launches.
+    var replayGain: ReplayGain.Settings {
+        get { player.replayGain }
+        set {
+            player.replayGain = newValue
+            if let data = try? JSONEncoder().encode(newValue) { UserDefaults.standard.set(data, forKey: "playback.replayGain") }
+        }
+    }
 
     func setStreamingBitrate(_ kbps: Int) {
         streamingBitrate = kbps
