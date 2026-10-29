@@ -47,8 +47,10 @@ tokens) to a file to send.
 
 ## Status
 
-Written without a Mac to build on: PolyphonyKit is tested (Linux), the app code is syntax-checked
-(`swiftc -parse`) but has not been compiled or run. Expect a first build to need small fixes.
+Written without a Mac to build on: PolyphonyKit is tested (Linux); the app's model and downloads
+type-check on Linux against it (`scripts/typecheck-app.sh`, with stand-ins for the Apple-only
+classes in `scripts/linux-stand-ins`); the views and the Apple glue are syntax-checked
+(`swiftc -parse`) only. The app has not been compiled or run: expect a first build to need small fixes.
 
 Once `shared/` (Kotlin Multiplatform) produces its Apple framework, the Subsonic and continuo code in
 PolyphonyKit gives way to it; the Apple glue stays.
