@@ -35,6 +35,59 @@ struct DownloadsView: View {
                 Section { Text("Downloading \(downloads.active.count) songs…").foregroundStyle(.secondary) }
             }
             Section {
+                ForEach(downloads.rules) { rule in
+                    HStack {
+                        Toggle(isOn: Binding(get: { rule.enabled }, set: { downloads.setEnabled(rule.id, $0) })) {
+                            VStack(alignment: .leading) {
+                                Text(rule.target.label)
+                                let kept = downloads.index.entries.values.filter { $0.ruleID == rule.id }.count
+                                Text(rule.enabled ? "\(kept) songs kept" : "Paused").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .toggleStyle(.switch)
+                        Button(role: .destructive) { downloads.stopKeeping(rule.id) } label: { Image(systemName: "trash") }
+                            .buttonStyle(.borderless)
+                            .help("Stop keeping this downloaded (its songs go, unless downloaded by hand)")
+                    }
+                }
+                Menu("Add Rule") {
+                    Button("Favourite Songs") { downloads.keep(.favourites) }
+                    Menu("Newest Albums") {
+                        ForEach([10, 25, 50], id: \.self) { n in Button("Last \(n) Added") { downloads.keep(.recentlyAdded(albums: n)) } }
+                    }
+                    Menu("Most Played Albums") {
+                        ForEach([10, 25, 50], id: \.self) { n in Button("Top \(n)") { downloads.keep(.mostPlayed(albums: n)) } }
+                    }
+                    Menu("Recently Played Albums") {
+                        ForEach([10, 25], id: \.self) { n in Button("Last \(n)") { downloads.keep(.recentlyPlayed(albums: n)) } }
+                    }
+                    Divider()
+                    Text("Playlists, albums, artists and genres: “Keep Downloaded” on their page")
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+            } header: {
+                HStack {
+                    Text("Rules")
+                    Spacer()
+                    if downloads.checkingRules {
+                        ProgressView().controlSize(.mini)
+                    } else if !downloads.rules.isEmpty {
+                        Button("Check Now") { Task { await downloads.checkRules() } }.buttonStyle(.link).font(.caption)
+                    }
+                }
+            } footer: {
+                Text("Rules keep themselves downloaded: new songs in them download, ones that leave go (unless you downloaded them by hand).")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if albums.isEmpty && downloads.active.isEmpty {
+                Section {
+                    Label("Nothing downloaded yet. Download albums to play them without a connection, or keep a playlist downloaded from its page.",
+                          systemImage: "arrow.down.to.line")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Section {
                 ForEach(albums) { album in
                     HStack(spacing: 10) {
                         Artwork(url: model.coverURL(album.coverArtID, size: 100), cornerRadius: 4).frame(width: 44, height: 44)
@@ -58,12 +111,6 @@ struct DownloadsView: View {
                 if !albums.isEmpty {
                     Text("\(ByteCountFormatter.string(fromByteCount: downloads.usedBytes, countStyle: .file)) on this Mac")
                 }
-            }
-        }
-        .overlay {
-            if albums.isEmpty && downloads.active.isEmpty {
-                Placeholder(title: "Nothing downloaded", symbol: "arrow.down.to.line",
-                            message: "Download albums to play them without a connection.")
             }
         }
         .navigationTitle("Downloads")

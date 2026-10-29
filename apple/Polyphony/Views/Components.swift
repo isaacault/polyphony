@@ -169,6 +169,7 @@ private struct AlbumContextMenu: ViewModifier {
             Button("Play Next") { Task { await load { model.player.playNext($0.map(QueueEntry.track)) } } }
             Button("Add to Queue") { Task { await load { model.player.addToQueue($0.map(QueueEntry.track)) } } }
             Button("Download") { Task { await load { model.downloads.download($0) } } }
+            KeepDownloadedButton(target: .album(id: album.id, name: album.name))
             Divider()
             Button(album.starred ? "Remove from Favourites" : "Add to Favourites") {
                 Task { try? await model.subsonic?.setStarred(.album(album.id), !album.starred) }
@@ -241,7 +242,10 @@ private struct TrackContextMenu: ViewModifier {
                 }
             } else {
                 Button(track.starred ? "Remove from Favourites" : "Add to Favourites") {
-                    Task { try? await model.subsonic?.setStarred(.track(track.id), !track.starred) }
+                    Task {
+                        try? await model.subsonic?.setStarred(.track(track.id), !track.starred)
+                        model.downloads.libraryChanged()
+                    }
                 }
             }
             AddToPlaylistMenu(trackIDs: [track.id])
@@ -269,6 +273,7 @@ struct AddToPlaylistMenu: View {
                             model.notice = "Already in \(playlist.name)"
                         } else {
                             try? await model.subsonic?.updatePlaylist(id: playlist.id, adding: fresh)
+                            model.downloads.libraryChanged()
                             model.notice = "Added to \(playlist.name)"
                             await model.refreshPlaylists()
                         }
@@ -278,6 +283,21 @@ struct AddToPlaylistMenu: View {
             if model.playlists.isEmpty {
                 Text("No playlists yet")
             }
+        }
+    }
+}
+
+/// "Keep Downloaded": a download rule for an album, playlist, artist, genre or the favourites, so new
+/// songs in it download by themselves and ones that leave it go. Again, it stops.
+struct KeepDownloadedButton: View {
+    @Environment(AppModel.self) private var model
+    let target: DownloadRule.Target
+
+    var body: some View {
+        if let rule = model.downloads.rule(for: target) {
+            Button { model.downloads.stopKeeping(rule.id) } label: { Label("Stop Keeping Downloaded", systemImage: "arrow.down.circle.dotted") }
+        } else {
+            Button { model.downloads.keep(target) } label: { Label("Keep Downloaded", systemImage: "arrow.down.circle") }
         }
     }
 }
