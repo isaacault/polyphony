@@ -229,8 +229,20 @@ private struct TrackContextMenu: ViewModifier {
                 NavigationLink("Go to Artist", value: Route.artist(artistID))
             }
             Divider()
-            Button(track.starred ? "Remove from Favourites" : "Add to Favourites") {
-                Task { try? await model.subsonic?.setStarred(.track(track.id), !track.starred) }
+            if model.usesRatings {
+                Menu("Rating") {
+                    ForEach(1...5, id: \.self) { stars in
+                        Button(String(repeating: "★", count: stars) + String(repeating: "☆", count: 5 - stars)) {
+                            Task { try? await model.subsonic?.setRating(id: track.id, stars) }
+                        }
+                    }
+                    Divider()
+                    Button("No Rating") { Task { try? await model.subsonic?.setRating(id: track.id, 0) } }
+                }
+            } else {
+                Button(track.starred ? "Remove from Favourites" : "Add to Favourites") {
+                    Task { try? await model.subsonic?.setStarred(.track(track.id), !track.starred) }
+                }
             }
             AddToPlaylistMenu(trackIDs: [track.id])
             if let onRemove {
