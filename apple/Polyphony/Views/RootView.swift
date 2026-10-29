@@ -188,7 +188,20 @@ struct NoticeBanner: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        if let notice = model.notice {
+        if model.offline {
+            Button { model.go(to: .downloads) } label: {
+                Label(model.offlineMode ? "Offline mode: playing what's downloaded" : "Can't reach \(model.server?.address.host ?? "the server"): what's downloaded still plays",
+                      systemImage: "wifi.slash")
+                    .font(.callout)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(.regularMaterial, in: Capsule())
+                    .shadow(radius: 4, y: 2)
+            }
+            .buttonStyle(.plain)
+            .help("Go to Downloads")
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        } else if let notice = model.notice {
             Text(notice)
                 .font(.callout)
                 .padding(.horizontal, 14).padding(.vertical, 8)

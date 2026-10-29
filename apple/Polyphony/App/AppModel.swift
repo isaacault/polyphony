@@ -293,7 +293,7 @@ final class AppModel {
 
     /// Signs out of the server showing; the next one signed in to takes over.
     func signOut() async {
-        if let account = continuo?.account { await account.signOut() }
+        if let account = continuo?.account, !offline { await account.signOut() }
         var list = await store.load()
         if let key = server?.key { list.remove(key) }
         await store.save(list)
@@ -311,6 +311,8 @@ final class AppModel {
         detaching = false
         arrivals.stop()
         inboxTask?.cancel()
+        reachabilityTask?.cancel()
+        unreachable = false
         unreadCount = 0
         downloads.detach()
         server = nil
@@ -372,14 +374,60 @@ final class AppModel {
         }
     }
 
-    /// A call that failed because the session ended sends the app back to sign-in.
+    /// A call that failed because the session ended sends the app back to sign-in; one that couldn't
+    /// reach the server at all puts the app offline (downloads still play) until it can again.
     func handle(_ error: Error) {
+        // A page closed or a search moved on mid-request: nothing went wrong.
+        if error is CancellationError { return }
         DiagnosticLog.shared.log("error", String(describing: error))
         if let e = error as? ContinuoError, e.needsSignIn {
             Task { await signOut() }
             return
         }
+        if Self.isUnreachable(error) {
+            goOffline()
+            return
+        }
         notice = (error as? CustomStringConvertible)?.description ?? error.localizedDescription
+    }
+
+    // MARK: Offline
+
+    /// The server can't be reached (or Offline mode is on): Downloads still play; the rest waits.
+    private(set) var unreachable = false
+    /// Settings > Playback > Offline mode: only what's downloaded, no network.
+    private(set) var offlineMode = UserDefaults.standard.bool(forKey: "offline.mode")
+    var offline: Bool { offlineMode || unreachable }
+    @ObservationIgnored private var reachabilityTask: Task<Void, Never>?
+
+    func setOfflineMode(_ on: Bool) {
+        offlineMode = on
+        UserDefaults.standard.set(on, forKey: "offline.mode")
+        DiagnosticLog.shared.log("offline", on ? "offline mode on" : "offline mode off")
+    }
+
+    nonisolated static func isUnreachable(_ error: Error) -> Bool {
+        (error as? TransportError)?.unreachable ?? TransportError.isUnreachable(error)
+    }
+
+    /// Unreachable: try the server every 30 seconds until it answers.
+    private func goOffline() {
+        guard !unreachable else { return }
+        unreachable = true
+        DiagnosticLog.shared.log("offline", "can't reach \(server?.address.host ?? "the server")")
+        reachabilityTask?.cancel()
+        reachabilityTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                guard let self, let subsonic = self.subsonic else { return }
+                if (try? await subsonic.ping()) != nil {
+                    self.unreachable = false
+                    self.albumLists = [:]
+                    DiagnosticLog.shared.log("offline", "back online")
+                    return
+                }
+            }
+        }
     }
 
     // MARK: Diagnostics
@@ -437,6 +485,7 @@ final class AppModel {
                     downloads.played(t.id)
                     return AudioSource(url: local)
                 }
+                if offlineMode { return nil }
                 return subsonic.map {
                     AudioSource(url: bitrate > 0 ? $0.streamURL(trackID: t.id, maxBitRateKbps: bitrate, format: "mp3")
                                                  : $0.streamURL(trackID: t.id))

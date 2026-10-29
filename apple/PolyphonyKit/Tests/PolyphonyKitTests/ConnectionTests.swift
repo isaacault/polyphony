@@ -100,3 +100,14 @@ struct ConnectionTests {
         #expect(ServerList.decoding(Data("junk".utf8)) == nil)
     }
 }
+
+struct TransportErrorTests {
+    @Test func unreachableServersAndCancelledRequests() {
+        #expect((TransportError.from(URLError(.notConnectedToInternet)) as? TransportError)?.unreachable == true)
+        #expect((TransportError.from(URLError(.timedOut)) as? TransportError)?.unreachable == true)
+        #expect((TransportError.from(URLError(.cannotFindHost)) as? TransportError)?.unreachable == true)
+        #expect((TransportError.from(URLError(.badServerResponse)) as? TransportError)?.unreachable == false)
+        #expect(TransportError.from(URLError(.cancelled)) is CancellationError, "the caller moved on: not a network error")
+        #expect(TransportError.from(CancellationError()) is CancellationError)
+    }
+}

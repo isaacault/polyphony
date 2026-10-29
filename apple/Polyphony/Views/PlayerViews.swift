@@ -340,6 +340,9 @@ struct SettingsView: View {
                 }
                 Text("Applies from the next song. Transcoding is done by the server.")
                     .font(.caption).foregroundStyle(.secondary)
+                Toggle("Offline mode", isOn: Binding(get: { model.offlineMode }, set: { model.setOfflineMode($0) }))
+                Text("Only what's downloaded plays; nothing is streamed (as on a plane).")
+                    .font(.caption).foregroundStyle(.secondary)
                 Picker("Volume levelling", selection: gain(\.mode)) {
                     Text("Off").tag(ReplayGain.Mode.off)
                     Text("Automatic (album gain for whole albums)").tag(ReplayGain.Mode.auto)
