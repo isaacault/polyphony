@@ -55,4 +55,30 @@ struct ContractCasesTests {
             }
         }
     }
+
+    @Test func resumePoints() throws {
+        let cases = try #require(try contract("resume")["cases"] as? [[String: Any]])
+        #expect(!cases.isEmpty)
+        for c in cases {
+            let tracks = (c["tracks"] as? [String] ?? []).map { Track(id: $0, title: $0, duration: 200) }
+            let entry = RecentContext(context: PlayContext(kind: .album, id: "al", title: "Album"), trackID: string(c["trackId"]),
+                                      trackIndex: int(c["trackIndex"]) ?? 0, positionMs: int(c["positionMs"]) ?? 0,
+                                      updatedAt: Date())
+            let expected = ResumePoint(index: int(c["index"]) ?? -1, positionMs: int(c["resumeMs"]) ?? -1)
+            #expect(ResumePoint.of(tracks, entry) == expected, "\(c["about"] ?? "")")
+        }
+    }
+
+    @Test func historyKeepsTheNewestOncePerCollection() {
+        var h = ListeningHistory()
+        h.limit = 2
+        let a = PlayContext(kind: .album, id: "a", title: "A"), b = PlayContext(kind: .album, id: "b", title: "B")
+        let c = PlayContext(kind: .playlist, id: "c", title: "C")
+        h.record(a, trackID: "1", index: 0, positionMs: 0)
+        h.record(b, trackID: "2", index: 0, positionMs: 0)
+        h.record(a, trackID: "3", index: 2, positionMs: 5000)
+        #expect(h.entries.map(\.context.id) == ["a", "b"] && h.entry(for: a)?.trackID == "3")
+        h.record(c, trackID: "4", index: 0, positionMs: 0)
+        #expect(h.entries.map(\.context.id) == ["c", "a"], "at most the limit")
+    }
 }

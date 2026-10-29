@@ -86,7 +86,8 @@ struct AlbumDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         AlbumHeader(album: album)
-                        TrackList(tracks: album.tracks, numbered: true, albumBadge: AudioQuality.albumBadge(album.tracks))
+                        TrackList(tracks: album.tracks, numbered: true, albumBadge: AudioQuality.albumBadge(album.tracks),
+                                  context: .album(album))
                     }
                     .padding(24)
                 }
@@ -133,9 +134,9 @@ private struct AlbumHeader: View {
                 }
                 .font(.callout).foregroundStyle(.secondary)
                 HStack(spacing: 10) {
-                    Button { model.player.play(album.tracks, title: album.name) } label: { Label("Play", systemImage: "play.fill") }
+                    Button { model.player.play(album.tracks, context: .album(album)) } label: { Label("Play", systemImage: "play.fill") }
                         .buttonStyle(.borderedProminent)
-                    Button { model.player.play(album.tracks, shuffle: true, title: album.name) } label: { Label("Shuffle", systemImage: "shuffle") }
+                    Button { model.player.play(album.tracks, shuffle: true, context: .album(album)) } label: { Label("Shuffle", systemImage: "shuffle") }
                     Button {
                         Task {
                             try? await model.subsonic?.setStarred(.album(album.id), !album.starred)
@@ -167,6 +168,8 @@ struct TrackList: View {
     var numbered = false
     var showArtwork = false
     var albumBadge: String?
+    /// The album or playlist these are, so playing from here is remembered for Continue Listening.
+    var context: PlayContext?
     /// A playlist's songs can be taken out of it (by position: the same song can be there twice).
     var onRemove: ((Int) -> Void)?
 
@@ -176,7 +179,7 @@ struct TrackList: View {
                 TrackRow(track: track, index: index, numbered: numbered, showArtwork: showArtwork, albumBadge: albumBadge,
                          isCurrent: model.player.current?.libraryTrack?.id == track.id)
                     .contentShape(Rectangle())
-                    .onTapGesture(count: 2) { model.player.play(tracks, startAt: index) }
+                    .onTapGesture(count: 2) { model.player.play(tracks, startAt: index, context: context) }
                     .trackContextMenu(track, in: tracks, onRemove: onRemove.map { remove in { remove(index) } })
                 Divider().opacity(0.4)
             }
@@ -531,16 +534,16 @@ struct PlaylistDetailView: View {
                             if let comment = playlist.comment, !comment.isEmpty { Text(comment).foregroundStyle(.secondary) }
                             Text("\(playlist.songCount) songs · \(formatLong(playlist.duration))").foregroundStyle(.secondary)
                             HStack {
-                                Button { model.player.play(playlist.tracks, title: playlist.name) } label: { Label("Play", systemImage: "play.fill") }
+                                Button { model.player.play(playlist.tracks, context: .playlist(playlist)) } label: { Label("Play", systemImage: "play.fill") }
                                     .buttonStyle(.borderedProminent)
-                                Button { model.player.play(playlist.tracks, shuffle: true, title: playlist.name) } label: {
+                                Button { model.player.play(playlist.tracks, shuffle: true, context: .playlist(playlist)) } label: {
                                     Label("Shuffle", systemImage: "shuffle")
                                 }
                             }
                             .controlSize(.large)
                         }
                     }
-                    TrackList(tracks: playlist.tracks, showArtwork: true, onRemove: { index in
+                    TrackList(tracks: playlist.tracks, showArtwork: true, context: .playlist(playlist), onRemove: { index in
                         Task {
                             try? await model.subsonic?.updatePlaylist(id: playlist.id, removingIndices: [index])
                             self.playlist = try? await model.subsonic?.playlist(id: playlistID)

@@ -65,6 +65,8 @@ public struct PlayQueue: Sendable, Equatable {
     public private(set) var shuffled = false
     public var repeatMode: RepeatMode = .off
     public var title: String?
+    /// The collection this queue plays (an album, a playlist…), for Continue listening.
+    public var context: PlayContext?
 
     public init() {}
 
@@ -247,6 +249,7 @@ extension PlayQueue {
         public var position: TimeInterval
         public var repeatMode: String
         public var title: String?
+        public var context: PlayContext?
     }
 
     public func snapshot(position: TimeInterval) -> Snapshot? {
@@ -258,13 +261,14 @@ extension PlayQueue {
         let index = kept.lastIndex(where: { $0.0 <= p }) ?? 0
         let samePlace = kept[index].0 == p
         return Snapshot(tracks: kept.map(\.1), index: index, position: samePlace ? position : 0,
-                        repeatMode: repeatMode.rawValue, title: title)
+                        repeatMode: repeatMode.rawValue, title: title, context: context)
     }
 
     /// The queue as the snapshot left it, unshuffled (its order is already the play order).
     public init(snapshot: Snapshot) {
         self.init(snapshot.tracks.map(QueueEntry.track), startAt: snapshot.index, shuffle: false, title: snapshot.title)
         repeatMode = RepeatMode(rawValue: snapshot.repeatMode) ?? .off
+        context = snapshot.context
     }
 }
 

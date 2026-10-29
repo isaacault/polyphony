@@ -14,6 +14,7 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
+                continueListening
                 shelf("Recently Played", recentlyPlayed)
                 shelf("Recently Added", recentlyAdded)
                 if !discovery.forYou.isEmpty {
@@ -64,6 +65,44 @@ struct HomeView: View {
         .navigationTitle("Home")
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    /// Albums and playlists left part-way, each resumed where it stopped.
+    @ViewBuilder
+    private var continueListening: some View {
+        let entries = Array(model.history.entries.filter { $0.trackID != nil }.prefix(12))
+        if !entries.isEmpty {
+            Section {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 18) {
+                        ForEach(entries, id: \.context.key) { entry in
+                            Button { Task { await model.resume(entry) } } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Artwork(url: model.coverURL(entry.context.coverArtID, size: 400))
+                                        .overlay(alignment: .bottomTrailing) {
+                                            Image(systemName: "play.circle.fill").font(.title).symbolRenderingMode(.hierarchical)
+                                                .padding(6)
+                                        }
+                                    Text(entry.context.title).font(.callout.weight(.medium)).lineLimit(1)
+                                    Text("Song \(entry.trackIndex + 1)" + (entry.context.subtitle.map { " · \($0)" } ?? ""))
+                                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                                .frame(width: 160)
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("Start from the Beginning") {
+                                    var fresh = entry
+                                    fresh.trackID = nil
+                                    Task { await model.resume(fresh) }
+                                }
+                                Button("Remove from Continue Listening") { model.forget(entry.context) }
+                            }
+                        }
+                    }
+                }
+            } header: { SectionTitle("Continue Listening") }
+        }
     }
 
     @ViewBuilder
