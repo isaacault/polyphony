@@ -5,6 +5,8 @@ import SwiftUI
 /// form; the app works out which it is.
 struct SignInView: View {
     @Environment(AppModel.self) private var model
+    /// Another server besides the one showing (a sheet, with Cancel).
+    var adding = false
     @State private var address = "https://continuo.ault.me"
     @State private var username = ""
     @State private var password = ""
@@ -44,6 +46,9 @@ struct SignInView: View {
             .controlSize(.large)
             .keyboardShortcut(.defaultAction)
             .disabled(busy || address.isEmpty || username.isEmpty || password.isEmpty)
+            if adding {
+                Button("Cancel") { model.addingServer = false }.keyboardShortcut(.cancelAction).disabled(busy)
+            }
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

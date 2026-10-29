@@ -5,9 +5,13 @@ import Testing
 private func json(_ status: Int, _ body: String) -> HTTPResponse { HTTPResponse(status: status, body: Data(body.utf8)) }
 
 private actor MemoryServers: ServerStore {
-    var saved: SavedServer?
-    func load() async -> SavedServer? { saved }
-    func save(_ server: SavedServer?) async { saved = server }
+    var list = ServerList()
+    func load() async -> ServerList { list }
+    func save(_ list: ServerList) async { self.list = list }
+}
+
+private func saved(_ host: String, _ user: String = "isaac", kind: SavedServer.Kind = .subsonic) -> SavedServer {
+    SavedServer(kind: kind, address: URL(string: "https://\(host)")!, subsonicUsername: user, subsonicPassword: "pw", salt: "s", session: nil)
 }
 
 struct ConnectionTests {
@@ -55,15 +59,44 @@ struct ConnectionTests {
         }
     }
 
-    @Test func refreshedSessionsGoBackIntoTheSavedServer() async throws {
+    @Test func refreshedSessionsGoBackIntoTheirOwnServer() async throws {
         let servers = MemoryServers()
         let session = try JSONDecoder().decode(ContinuoSession.self, from: fixture("login"))
-        await servers.save(SavedServer(kind: .continuo, address: URL(string: "https://continuo.ault.me")!, subsonicUsername: "isaac",
-                                       subsonicPassword: "old", salt: "s", session: session))
-        let store = ServerSessionStore(servers)
+        let continuo = SavedServer(kind: .continuo, address: URL(string: "https://continuo.ault.me")!, subsonicUsername: "isaac",
+                                   subsonicPassword: "old", salt: "s", session: session)
+        var list = ServerList()
+        list.add(continuo)
+        list.add(saved("navidrome.lan"))   // now showing the other one
+        await servers.save(list)
+        let store = ServerSessionStore(servers, key: continuo.key)
         await store.save(session)
-        #expect(await servers.saved?.subsonicPassword == "device-secret")
+        #expect(await servers.list.server(continuo.key)?.subsonicPassword == "device-secret")
+        #expect(await servers.list.active?.address.host == "navidrome.lan", "a refresh doesn't switch servers")
         await store.save(nil)
-        #expect(await servers.saved == nil, "an ended session signs the app out")
+        #expect(await servers.list.servers.map { $0.address.host } == ["navidrome.lan"], "an ended session signs that server out")
+    }
+
+    @Test func theServerList() {
+        var list = ServerList()
+        list.add(saved("a"))
+        list.add(saved("b"))
+        #expect(list.servers.count == 2 && list.active?.address.host == "b", "signing in shows the new one")
+        list.add(SavedServer(kind: .subsonic, address: URL(string: "https://a")!, subsonicUsername: "isaac", subsonicPassword: "new", salt: "t", session: nil))
+        #expect(list.servers.count == 2 && list.servers[0].subsonicPassword == "new" && list.active?.address.host == "a", "again: replaced in place")
+        #expect(list.activate(saved("b").key) && !list.activate("nope") && list.active?.address.host == "b")
+        list.remove(saved("b").key)
+        #expect(list.active?.address.host == "a", "the next one takes over")
+        list.remove(saved("a").key)
+        #expect(list.active == nil && list.servers.isEmpty)
+        #expect(saved("a").key != saved("a", "caleb").key)
+    }
+
+    @Test func theKeychainsOneServerFromBeforeBecomesAList() throws {
+        let one = try JSONEncoder().encode(saved("a"))
+        #expect(ServerList.decoding(one)?.active == saved("a"))
+        var list = ServerList()
+        list.add(saved("a")); list.add(saved("b")); list.activate(saved("a").key)
+        #expect(ServerList.decoding(try JSONEncoder().encode(list)) == list)
+        #expect(ServerList.decoding(Data("junk".utf8)) == nil)
     }
 }

@@ -28,34 +28,91 @@ public struct SavedServer: Sendable, Codable, Equatable {
     }
 }
 
-public protocol ServerStore: Sendable {
-    func load() async -> SavedServer?
-    func save(_ server: SavedServer?) async
+extension SavedServer {
+    /// Which server this is, across sign-ins: kind, address and user.
+    public var key: String { "\(kind.rawValue)|\(address.absoluteString)|\(subsonicUsername)" }
 }
 
-/// continuo's refreshed sessions go back into the saved server, so a restart signs in silently.
+/// Every server the app is signed in to, and which one it's showing (the Android app's server list).
+public struct ServerList: Sendable, Codable, Equatable {
+    public private(set) var servers: [SavedServer] = []
+    public private(set) var activeKey: String?
+
+    public init(servers: [SavedServer] = [], activeKey: String? = nil) {
+        self.servers = servers
+        self.activeKey = activeKey ?? servers.first?.key
+    }
+
+    public var active: SavedServer? { servers.first { $0.key == activeKey } }
+
+    public func server(_ key: String) -> SavedServer? { servers.first { $0.key == key } }
+
+    /// Signing in: a server already here is replaced where it is; either way it becomes the active one.
+    public mutating func add(_ server: SavedServer) {
+        if let i = servers.firstIndex(where: { $0.key == server.key }) { servers[i] = server } else { servers.append(server) }
+        activeKey = server.key
+    }
+
+    /// A server's newer state (a refreshed session), without switching to it.
+    public mutating func update(_ server: SavedServer) {
+        guard let i = servers.firstIndex(where: { $0.key == server.key }) else { return }
+        servers[i] = server
+    }
+
+    @discardableResult
+    public mutating func activate(_ key: String) -> Bool {
+        guard server(key) != nil else { return false }
+        activeKey = key
+        return true
+    }
+
+    /// Signed out of [key]: if it was showing, the next one left takes over (nil: none left).
+    public mutating func remove(_ key: String) {
+        servers.removeAll { $0.key == key }
+        if activeKey == key || active == nil { activeKey = servers.first?.key }
+    }
+
+    /// What the Keychain holds: a list, or one server from before there were several.
+    public static func decoding(_ data: Data) -> ServerList? {
+        if let list = try? JSONDecoder().decode(ServerList.self, from: data) { return list }
+        return (try? JSONDecoder().decode(SavedServer.self, from: data)).map { ServerList(servers: [$0]) }
+    }
+}
+
+public protocol ServerStore: Sendable {
+    func load() async -> ServerList
+    func save(_ list: ServerList) async
+}
+
+/// continuo's refreshed sessions go back into their own saved server (not whichever is showing), so
+/// a restart signs in silently.
 public struct ServerSessionStore: SessionStore {
     let store: ServerStore
+    let key: String
 
-    public init(_ store: ServerStore) {
+    public init(_ store: ServerStore, key: String) {
         self.store = store
+        self.key = key
     }
 
     public func load() async -> ContinuoSession? {
-        await store.load()?.session
+        await store.load().server(key)?.session
     }
 
     public func save(_ session: ContinuoSession?) async {
-        guard var server = await store.load() else { return }
+        var list = await store.load()
+        guard var server = list.server(key) else { return }
         guard let session else {
-            // The session ended (signed out elsewhere): the server goes with it, and the app asks again.
-            await store.save(nil)
+            // The session ended (signed out elsewhere): the server goes with it.
+            list.remove(key)
+            await store.save(list)
             return
         }
         server.session = session
         server.subsonicUsername = session.library.username
         server.subsonicPassword = session.library.password
-        await store.save(server)
+        list.update(server)
+        await store.save(list)
     }
 }
 
