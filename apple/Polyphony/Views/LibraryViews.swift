@@ -492,11 +492,8 @@ struct PlaylistsView: View {
     }
 
     private func load() async {
-        do {
-            playlists = try await model.subsonic?.playlists() ?? []
-        } catch {
-            model.handle(error)
-        }
+        await model.refreshPlaylists()
+        playlists = model.playlists
     }
 }
 
