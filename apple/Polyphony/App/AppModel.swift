@@ -201,6 +201,10 @@ final class AppModel {
             guard let subsonic = self?.subsonic else { return }
             Task { try? await subsonic.scrobble(trackID: track.id, submission: submission) }
         }
+        player.playNowScrobble = { [weak self] streamID, listenedAt in
+            guard let continuo = self?.continuo else { return }
+            Task { try? await continuo.scrobblePlayNow(id: streamID, listenedAt: listenedAt) }
+        }
         player.history = { [weak self] context, trackID, index, ms in
             guard let self else { return }
             self.history.record(context, trackID: trackID, index: index, positionMs: ms)

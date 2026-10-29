@@ -94,3 +94,28 @@ struct SpeedTests {
         #expect(speaker.rates == [1.5])
     }
 }
+
+@MainActor
+struct PlayNowScrobbleTests {
+    @Test func aPlayNowSongIsReportedNowPlayingThenOnceCounted() async {
+        let engine = GainSpy()
+        let p = PlayerController(engine: engine)
+        p.now = { Date(timeIntervalSince1970: 1_000) }
+        var reports: [(String, Date?)] = []
+        p.playNowScrobble = { id, at in reports.append((id, at)) }
+        var library = 0
+        p.scrobble = { _, _ in library += 1 }
+        p.resolve = { _ in AudioSource(url: URL(string: "https://c/v1/play-now/s1/audio")!) }
+        let stream = PlayNowStream(id: "s1", status: "ready", playable: true, percent: 100, title: "Song", artist: nil,
+                                   durationMs: 200_000, format: nil, error: nil)
+        let catalog = CatalogTrack(key: "k", title: "Song", artist: nil, durationMs: 200_000, albumTitle: nil,
+                                   albumReleaseGroupID: nil, availability: .requestable, recordingID: "r", artworkURL: nil)
+        p.play(entries: [.playNow(stream, catalog)])
+        for _ in 0..<20 { await Task.yield() }
+        #expect(reports.count == 1 && reports[0].0 == "s1" && reports[0].1 == nil, "now playing")
+        for t in stride(from: 1.0, through: 101, by: 1) { engine.onEvent?(.position(t, duration: 200)) }
+        #expect(reports.count == 2 && reports[1].1 == Date(timeIntervalSince1970: 1_000), "counted, at when it started")
+        engine.onEvent?(.position(150, duration: 200))
+        #expect(reports.count == 2 && library == 0, "once, and not as a library song")
+    }
+}
