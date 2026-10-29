@@ -60,6 +60,8 @@ private final class FakeSpeaker: @unchecked Sendable {
     var position = "0:00:00"
     var actions: [String] = []
     var lastURI: String?
+    var volume = 31
+    var volumesSet: [String] = []
 
     func respond(_ request: HTTPRequest) -> HTTPResponse {
         let action = (request.headers["SOAPACTION"] ?? "").split(separator: "#").last.map { String($0.dropLast()) } ?? ""
@@ -72,6 +74,12 @@ private final class FakeSpeaker: @unchecked Sendable {
         switch action {
         case "GetTransportInfo": out = "<CurrentTransportState>\(state)</CurrentTransportState>"
         case "GetPositionInfo": out = "<RelTime>\(position)</RelTime><TrackDuration>0:03:20</TrackDuration>"
+        case "GetVolume": out = "<CurrentVolume>\(volume)</CurrentVolume>"
+        case "SetVolume":
+            if let r = body.range(of: "<DesiredVolume>"), let e = body.range(of: "</DesiredVolume>") {
+                volumesSet.append(String(body[r.upperBound..<e.lowerBound]))
+            }
+            out = ""
         default: out = ""
         }
         return HTTPResponse(status: 200, body: Data("<s:Envelope xmlns:s=\"x\"><s:Body><u:\(action)Response>\(out)</u:\(action)Response></s:Body></s:Envelope>".utf8))
@@ -138,5 +146,17 @@ struct DLNAEngineTests {
         speaker.state = "PLAYING"; await e.pollOnce()
         speaker.state = "PAUSED_PLAYBACK"; await e.pollOnce()
         #expect(events.last(where: { $0 == .paused || $0 == .started }) == .paused)
+    }
+
+    @Test func theSpeakersOwnVolumeIsReadAndChangesGoInOrderLatestWinning() async {
+        let speaker = FakeSpeaker()
+        let (e, _) = engine(speaker)
+        await e.adoptSpeakerVolume()
+        #expect(abs(e.volume - 0.31) < 0.001 && speaker.volumesSet.isEmpty, "read, not sent back")
+        for v in stride(from: 0.32, through: 0.50, by: 0.02) { e.volume = Float(v) }
+        for _ in 0..<200 { await Task.yield() }
+        #expect(speaker.volumesSet.last == "50", "the latest wins")
+        #expect(speaker.volumesSet.count < 10, "not one call per step: \(speaker.volumesSet)")
+        #expect(speaker.volumesSet == speaker.volumesSet.sorted { Int($0)! < Int($1)! }, "in order")
     }
 }

@@ -16,7 +16,7 @@ struct PlayerBar: View {
             VStack(spacing: 0) {
                 Divider()
                 HStack(spacing: 16) {
-                    nowPlaying(entry).frame(width: 280, alignment: .leading)
+                    nowPlaying(entry).frame(width: 260, alignment: .leading)
                     Spacer(minLength: 8)
                     VStack(spacing: 4) {
                         transport
@@ -24,7 +24,8 @@ struct PlayerBar: View {
                     }
                     .frame(maxWidth: 520)
                     Spacer(minLength: 8)
-                    trailing.frame(width: 220, alignment: .trailing)
+                    // Lyrics, queue, sleep, speakers, AirPlay and volume: about 300 points.
+                    trailing.frame(width: 300, alignment: .trailing)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
