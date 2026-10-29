@@ -124,8 +124,8 @@ final class AppModel {
 
     /// Plays on [renderer] (nil: this Mac), carrying on from where the song is.
     func play(on renderer: Renderer?) {
-        DiagnosticLog.shared.log("output", renderer.map { "to \($0.name) (\($0.model ?? "?"), \($0.avTransport.host ?? "?"))" } ?? "to this Mac"
-                                 + (receiverAddress.isEmpty ? ", no receiver address" : ", receiver \(receiverAddress)"))
+        let to = renderer.map { "to \($0.name) (\($0.model ?? "?"), \($0.avTransport.host ?? "?"))" } ?? "to this Mac"
+        DiagnosticLog.shared.log("output", to + (receiverAddress.isEmpty ? ", no receiver address" : ", receiver \(receiverAddress)"))
         speakerEngine?.detach()
         if let renderer {
             let engine = DLNAEngine(control: DLNAControl(renderer: renderer))
