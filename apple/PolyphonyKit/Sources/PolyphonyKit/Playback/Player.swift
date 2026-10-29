@@ -418,6 +418,7 @@ public final class PlayerController {
                 if let context = queue.context { history(context, nil, 0, 0) }
             }
         case let .failed(message):
+            DiagnosticLog.shared.log("playback", "\(current?.title ?? "?"): \(message)")
             error = message
             isPlaying = false
         }

@@ -219,6 +219,7 @@ final class Downloads {
                 save()
                 if ruleID != nil { enforceLimit() }
             } catch {
+                DiagnosticLog.shared.log("downloads", "\(track.title) (\(track.id)): \(error)")
                 failed.insert(track.id)
             }
             active[track.id] = nil
