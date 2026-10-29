@@ -50,7 +50,7 @@ final class NowPlayingCenter: NowPlayingPublisher {
             MPMediaItemPropertyTitle: info.title,
             MPMediaItemPropertyPlaybackDuration: info.duration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: info.position,
-            MPNowPlayingInfoPropertyPlaybackRate: info.isPlaying ? 1.0 : 0.0,
+            MPNowPlayingInfoPropertyPlaybackRate: info.rate,
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
         ]
         if let artist = info.artist { dict[MPMediaItemPropertyArtist] = artist }
@@ -65,6 +65,8 @@ final class NowPlayingCenter: NowPlayingPublisher {
     }
 
     private func loadArtwork(_ url: URL?) {
+        // Published every half second: a cover still on its way isn't fetched again.
+        if url == artworkURL, url != nil { return }
         artworkURL = url
         artwork = nil
         guard let url else { return }
