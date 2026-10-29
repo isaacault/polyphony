@@ -198,6 +198,26 @@ public struct ContinuoService: Sendable {
         return try decode(ScrobbleLinksDTO.self, response).model
     }
 
+    /// Artists' names in their own script, keyed by the library's (often Latin) name, folded so
+    /// case and punctuation don't matter: "Ichiko Aoba" → 青葉市子. Empty from a continuo without it.
+    public func originalArtistNames() async throws -> [String: String] {
+        let response = try await authorised("GET", "v1/library/artist-names")
+        if response.status == 404 { return [:] }
+        guard (200..<300).contains(response.status) else { throw ContinuoClient.error(from: response) }
+        let dtos = try decode([ArtistNameDTO].self, response)
+        var out: [String: String] = [:]
+        for d in dtos {
+            guard let original = d.originalName?.trimmingCharacters(in: .whitespaces), !original.isEmpty else { continue }
+            out[Self.nameKey(d.name)] = original
+        }
+        return out
+    }
+
+    /// An artist name compared loosely, as the Android app does.
+    public static func nameKey(_ name: String) -> String {
+        name.lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
     // MARK: Inbox
 
     /// The newest notifications first.
@@ -562,6 +582,11 @@ private struct LyricsDTO: Decodable {
                       synced: synced, instrumental: instrumental ?? false,
                       source: source == "lrclib" ? "LRCLIB" : source)
     }
+}
+
+private struct ArtistNameDTO: Decodable {
+    let name: String
+    let originalName: String?
 }
 
 private struct NotificationListDTO: Decodable {

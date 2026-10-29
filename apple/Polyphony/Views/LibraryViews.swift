@@ -254,7 +254,10 @@ struct ArtistsView: View {
                     Artwork(url: model.coverURL(artist.coverArtID ?? artist.id, size: 100), cornerRadius: 20, symbol: "music.mic")
                         .frame(width: 40, height: 40)
                     VStack(alignment: .leading) {
-                        Text(artist.name)
+                        HStack(spacing: 6) {
+                            Text(artist.name)
+                            if let original = model.originalName(of: artist.name) { Text(original).foregroundStyle(.secondary) }
+                        }
                         Text(artist.albumCount == 1 ? "1 album" : "\(artist.albumCount) albums").font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -300,6 +303,9 @@ struct ArtistDetailView: View {
                         .frame(width: 180, height: 180)
                     VStack(alignment: .leading, spacing: 8) {
                         Text(artist?.name ?? "").font(.largeTitle.weight(.bold))
+                        if let original = model.originalName(of: artist?.name) {
+                            Text(original).font(.title2).foregroundStyle(.secondary)
+                        }
                         HStack {
                             Button { Task { await playAll(shuffle: false) } } label: { Label("Play", systemImage: "play.fill") }
                                 .buttonStyle(.borderedProminent)
