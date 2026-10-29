@@ -182,6 +182,27 @@ public struct MusicRequest: Sendable, Hashable, Identifiable {
     public var needsLook: Bool { status == "needs_attention" || status == "failed" }
 }
 
+/// An album taken out of the library (continuo keeps it for a while, so it can come back).
+public struct RemovedAlbum: Sendable, Hashable, Identifiable {
+    public let id: Int
+    public var title: String
+    public var artist: String?
+    public var removedAt: String?
+    public var restorableUntil: String?
+}
+
+/// Where Play now songs are scrobbled (library songs scrobble through Navidrome's own links).
+public struct ScrobbleLinks: Sendable, Hashable {
+    public struct Link: Sendable, Hashable {
+        public var available: Bool
+        public var connected: Bool
+        public var account: String?
+    }
+
+    public var listenBrainz: Link
+    public var lastFm: Link
+}
+
 public struct LyricLine: Sendable, Hashable {
     /// When the line starts; nil for unsynced lyrics.
     public var startMs: Int?

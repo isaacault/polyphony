@@ -3,7 +3,7 @@ import PolyphonyKit
 import SwiftUI
 
 enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
-    case home, search, artists, albums, songs, playlists, genres, favourites, requests
+    case home, search, artists, albums, songs, playlists, genres, favourites, requests, removed
 
     var id: String { rawValue }
 
@@ -18,6 +18,7 @@ enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
         case .genres: "Genres"
         case .favourites: "Favourites"
         case .requests: "Requests"
+        case .removed: "Recently Removed"
         }
     }
 
@@ -32,6 +33,7 @@ enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
         case .genres: "guitars"
         case .favourites: "heart"
         case .requests: "arrow.down.circle"
+        case .removed: "trash"
         }
     }
 }
@@ -71,7 +73,10 @@ struct MainWindow: View {
                     ForEach([SidebarItem.artists, .albums, .songs, .playlists, .genres, .favourites]) { row($0) }
                 }
                 if model.isContinuo {
-                    Section("Server") { row(.requests) }
+                    Section("Server") {
+                        row(.requests)
+                        row(.removed)
+                    }
                 }
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 200)
@@ -115,6 +120,7 @@ struct MainWindow: View {
         case .genres: GenresView()
         case .favourites: FavouritesView()
         case .requests: RequestsView()
+        case .removed: RemovedAlbumsView()
         }
     }
 

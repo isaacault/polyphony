@@ -238,6 +238,36 @@ public struct PlayQueue: Sendable, Equatable {
     }
 }
 
+extension PlayQueue {
+    /// What's kept between launches so the app opens where it left off: the library tracks in their
+    /// play order and where in them it was. Play now streams aren't kept (they're temporary).
+    public struct Snapshot: Sendable, Codable, Equatable {
+        public var tracks: [Track]
+        public var index: Int
+        public var position: TimeInterval
+        public var repeatMode: String
+        public var title: String?
+    }
+
+    public func snapshot(position: TimeInterval) -> Snapshot? {
+        guard let p = self.position else { return nil }
+        let played = order.map { items[$0] }
+        let kept = played.enumerated().compactMap { i, item in item.entry.libraryTrack.map { (i, $0) } }
+        guard !kept.isEmpty else { return nil }
+        // Where the current one lands once the Play now entries are left out (or the nearest before it).
+        let index = kept.lastIndex(where: { $0.0 <= p }) ?? 0
+        let samePlace = kept[index].0 == p
+        return Snapshot(tracks: kept.map(\.1), index: index, position: samePlace ? position : 0,
+                        repeatMode: repeatMode.rawValue, title: title)
+    }
+
+    /// The queue as the snapshot left it, unshuffled (its order is already the play order).
+    public init(snapshot: Snapshot) {
+        self.init(snapshot.tracks.map(QueueEntry.track), startAt: snapshot.index, shuffle: false, title: snapshot.title)
+        repeatMode = RepeatMode(rawValue: snapshot.repeatMode) ?? .off
+    }
+}
+
 /// When a play counts, as Last.fm counts it: half the song or four minutes, whichever comes first,
 /// and never for songs under 30 seconds.
 public enum ScrobbleRule {

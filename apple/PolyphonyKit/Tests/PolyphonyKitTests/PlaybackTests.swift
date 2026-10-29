@@ -188,3 +188,71 @@ struct PlayerControllerTests {
         #expect(engine.loaded.isEmpty && p.error == "Can't play a.")
     }
 }
+
+struct QueueSnapshotTests {
+    @Test func aSnapshotKeepsThePlayOrderAndThePlace() {
+        var q = PlayQueue((1...5).map { .track(Track(id: "\($0)", title: "\($0)", duration: 200)) }, startAt: 2, title: "Album")
+        q.repeatMode = .all
+        let snap = q.snapshot(position: 42)!
+        #expect(snap.tracks.map(\.id) == ["1", "2", "3", "4", "5"] && snap.index == 2 && snap.position == 42)
+        let back = PlayQueue(snapshot: snap)
+        #expect(back.current?.entry.libraryTrack?.id == "3" && back.repeatMode == .all && back.title == "Album")
+    }
+
+    @Test func playNowEntriesArentKept() {
+        let stream = PlayNowStream(id: "s", status: "ready", playable: true, percent: 100, title: "Loaded", artist: nil,
+                                   durationMs: 1000, format: nil, error: nil)
+        let catalog = CatalogTrack(key: "k", title: "Loaded", artist: nil, durationMs: 1000, albumTitle: nil,
+                                   albumReleaseGroupID: nil, availability: .requestable, recordingID: "r", artworkURL: nil)
+        let q = PlayQueue([.track(Track(id: "a", title: "a")), .playNow(stream, catalog), .track(Track(id: "b", title: "b"))], startAt: 1)
+        let snap = q.snapshot(position: 30)!
+        #expect(snap.tracks.map(\.id) == ["a", "b"] && snap.index == 0 && snap.position == 0,
+                "on a Play now song: back to the library track before it, from the start")
+    }
+
+    @Test func aSnapshotSurvivesJSON() throws {
+        let q = PlayQueue([.track(Track(id: "a", title: "A", albumName: "X", bitDepth: 24, container: "flac"))])
+        let snap = q.snapshot(position: 5)!
+        #expect(try JSONDecoder().decode(PlayQueue.Snapshot.self, from: JSONEncoder().encode(snap)) == snap)
+    }
+}
+
+@MainActor
+struct PlayerRestoreTests {
+    @Test func restoringLoadsPausedAtTheSavedPlace() async {
+        let engine = RestoreEngine()
+        let p = PlayerController(engine: engine)
+        p.resolve = { entry in AudioSource(url: URL(string: "https://x/\(entry.libraryTrack!.id)")!) }
+        let snap = PlayQueue([.track(Track(id: "a", title: "a", duration: 200)), .track(Track(id: "b", title: "b"))])
+            .snapshot(position: 77)!
+        p.restore(snap)
+        for _ in 0..<20 { await Task.yield() }
+        #expect(engine.loads.map(\.0.url.lastPathComponent) == ["a"] && engine.loads.first?.1 == 77 && engine.loads.first?.2 == false)
+        #expect(!p.isPlaying && p.position == 77)
+    }
+
+    @Test func aNewSongAndAPauseAreKept() async {
+        let engine = RestoreEngine()
+        let p = PlayerController(engine: engine)
+        p.resolve = { _ in AudioSource(url: URL(string: "https://x/y")!) }
+        var kept: [PlayQueue.Snapshot?] = []
+        p.persist = { kept.append($0) }
+        p.play([Track(id: "a", title: "a"), Track(id: "b", title: "b")])
+        engine.onEvent?(.paused)
+        p.stop()
+        #expect(kept.count == 3 && kept[0]?.index == 0 && kept[2] == nil)
+    }
+}
+
+@MainActor
+private final class RestoreEngine: AudioEngine {
+    var onEvent: ((AudioEvent) -> Void)?
+    var volume: Float = 1
+    var loads: [(AudioSource, TimeInterval, Bool)] = []
+    func load(_ source: AudioSource, startAt: TimeInterval, autoplay: Bool) { loads.append((source, startAt, autoplay)) }
+    func preload(_ next: AudioSource?) {}
+    func play() {}
+    func pause() {}
+    func seek(to time: TimeInterval) {}
+    func stop() {}
+}
