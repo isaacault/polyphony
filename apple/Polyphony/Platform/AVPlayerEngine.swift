@@ -29,6 +29,11 @@ final class AVPlayerEngine: AudioEngine {
     private let player = AVQueuePlayer()
     private var timeObserver: Any?
     private var observations: [NSKeyValueObservation] = []
+    /// Each queued item's failure watch, dropped with the item (a long session queues thousands).
+    private var itemWatches: [ObjectIdentifier: NSKeyValueObservation] = [:]
+    /// The queue player moved on to the preloaded song by itself: the controller's next load of that
+    /// song keeps it playing. Any other load of the same song (played again) starts it over.
+    private var advancedByItself = false
     private var endObserver: NSObjectProtocol?
     private var preloaded: (source: AudioSource, item: AVPlayerItem)?
     private var currentSource: AudioSource?
@@ -55,10 +60,12 @@ final class AVPlayerEngine: AudioEngine {
 
     func load(_ source: AudioSource, startAt: TimeInterval, autoplay: Bool) {
         // The queue player already moved on to the preloaded song: keep it playing.
-        if source == currentSource, player.currentItem != nil {
+        if advancedByItself, source == currentSource, player.currentItem != nil, startAt == 0 {
+            advancedByItself = false
             if autoplay { player.play() }
             return
         }
+        advancedByItself = false
         let item: AVPlayerItem
         if let preloaded, preloaded.source == source {
             item = preloaded.item
@@ -67,6 +74,7 @@ final class AVPlayerEngine: AudioEngine {
         }
         preloaded = nil
         player.removeAllItems()
+        itemWatches = itemWatches.filter { $0.key == ObjectIdentifier(item) }
         player.insert(item, after: nil)
         currentSource = source
         playingItem = item
@@ -77,7 +85,10 @@ final class AVPlayerEngine: AudioEngine {
 
     func preload(_ next: AudioSource?) {
         // Drop any earlier preload that's still queued behind the current item.
-        for item in player.items().dropFirst() { player.remove(item) }
+        for item in player.items().dropFirst() {
+            player.remove(item)
+            itemWatches[ObjectIdentifier(item)] = nil
+        }
         guard let next else {
             preloaded = nil
             return
@@ -101,6 +112,8 @@ final class AVPlayerEngine: AudioEngine {
     func stop() {
         player.pause()
         player.removeAllItems()
+        itemWatches = [:]
+        advancedByItself = false
         currentSource = nil
         playingItem = nil
         preloaded = nil
@@ -120,10 +133,12 @@ final class AVPlayerEngine: AudioEngine {
         guard let item, item === playingItem else { return }
         // With a preloaded next item the queue player moves on by itself; the controller is told
         // the song ended and asks for the next one, which `load` then sees is already playing.
+        itemWatches[ObjectIdentifier(item)] = nil
         if let preloaded, player.currentItem === preloaded.item {
             currentSource = preloaded.source
             playingItem = preloaded.item
             self.preloaded = nil
+            advancedByItself = true
         } else {
             currentSource = nil
             playingItem = nil
@@ -132,7 +147,8 @@ final class AVPlayerEngine: AudioEngine {
     }
 
     private func watchFailures(of item: AVPlayerItem) {
-        observations.append(item.observe(\.status, options: [.new]) { [weak self] item, _ in
+        guard itemWatches[ObjectIdentifier(item)] == nil else { return }
+        itemWatches[ObjectIdentifier(item)] = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             guard item.status == .failed else { return }
             let message = item.error?.localizedDescription ?? "Couldn't play this song."
             Task { @MainActor in
@@ -140,7 +156,7 @@ final class AVPlayerEngine: AudioEngine {
                 guard let self, item === self.playingItem else { return }
                 self.onEvent?(.failed(message))
             }
-        })
+        }
     }
 
     private func report(_ status: AVPlayer.TimeControlStatus) {
