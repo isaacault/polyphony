@@ -134,7 +134,13 @@ internal class ContinuoClient(
             }
             if (reply.code !in 200..299) throw serverError(reply, "continuo refresh failed")
             val session = decode(SessionDto.serializer(), reply.body)
-            servers.update(current.copy(options = current.options + (ServerOptions.CONTINUO_REFRESH_TOKEN to session.refreshToken)))
+            // continuo's address for speakers arrives with a refresh too, so a phone signed in before
+            // it was configured picks it up; a receiver address the user set stays.
+            val receiver = session.library?.receiverBaseUrl?.takeIf {
+                it.isNotBlank() && current.options[ServerOptions.REMOTE_BASE_URL].isNullOrBlank()
+            }
+            servers.update(current.copy(options = current.options + (ServerOptions.CONTINUO_REFRESH_TOKEN to session.refreshToken) +
+                listOfNotNull(receiver?.let { ServerOptions.REMOTE_BASE_URL to it })))
             Access(session.accessToken, clock() + session.expiresIn * 1000L).also { access[server.id] = it }.token
         }
     }

@@ -63,6 +63,8 @@ class ContinuoRequestRepositoryTest {
         val current = AtomicInteger(0)
         val refreshes = AtomicInteger(0)
         var expireNextAccess = false
+        /** What the refresh answer's library credential gives speakers (continuo's RECEIVER_BASE_URL). */
+        var receiver: String? = null
         val routes = mutableMapOf<String, (Request, String?) -> Pair<Int, String>>()
         val seen = mutableListOf<Pair<Request, String?>>()
 
@@ -77,7 +79,8 @@ class ContinuoRequestRepositoryTest {
                     if (presented != current.get()) 401 to """{"error":{"code":"refresh_token_reused","message":"revoked"}}"""
                     else {
                         current.incrementAndGet(); issued++
-                        200 to """{"accessToken":"at_$issued","expiresIn":3600,"refreshToken":"crt_${current.get()}"}"""
+                        val library = receiver?.let { ""","library":{"receiverBaseUrl":"$it"}""" }.orEmpty()
+                        200 to """{"accessToken":"at_$issued","expiresIn":3600,"refreshToken":"crt_${current.get()}"$library}"""
                     }
                 }
             } else {
@@ -111,6 +114,29 @@ class ContinuoRequestRepositoryTest {
        "album":{"title":"Trans Canada Highway","musicBrainzReleaseGroupId":"tch","navidromeAlbumId":null},
        "availability":{"state":"requestable","via":"album"}}
     ]}"""
+
+    @Test
+    fun `a refresh takes continuo's receiver address for speakers`() = runTest {
+        val fake = FakeContinuo().apply {
+            receiver = "http://192.168.0.101"
+            routes["GET /v1/search"] = { _, _ -> 200 to searchBody }
+        }
+        val servers = FakeServers(server)
+        repo(fake, servers).search(server, "geogaddi")
+        assertEquals("http://192.168.0.101", servers.state.value.single().options[ServerOptions.REMOTE_BASE_URL])
+    }
+
+    @Test
+    fun `a receiver address the user set stays`() = runTest {
+        val fake = FakeContinuo().apply {
+            receiver = "http://192.168.0.101"
+            routes["GET /v1/search"] = { _, _ -> 200 to searchBody }
+        }
+        val own = server.copy(options = server.options + (ServerOptions.REMOTE_BASE_URL to "http://10.0.0.5:8080"))
+        val servers = FakeServers(own)
+        repo(fake, servers).search(own, "geogaddi")
+        assertEquals("http://10.0.0.5:8080", servers.state.value.single().options[ServerOptions.REMOTE_BASE_URL])
+    }
 
     @Test
     fun `search maps availability and drops third-party artwork`() = runTest {

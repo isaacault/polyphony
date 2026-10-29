@@ -27,7 +27,13 @@ import java.io.IOException
 internal class ContinuoSignIn(private val client: Call.Factory, private val json: Json) {
 
     @Serializable
-    data class Library(val baseUrl: String, val username: String, val password: String)
+    data class Library(
+        val baseUrl: String,
+        val username: String,
+        val password: String,
+        /** Where speakers should fetch from instead of [baseUrl] (continuo's plain-HTTP LAN door). */
+        val receiverBaseUrl: String? = null,
+    )
 
     @Serializable
     data class Device(val id: String, val name: String? = null)
