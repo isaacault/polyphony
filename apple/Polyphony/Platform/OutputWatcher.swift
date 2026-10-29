@@ -48,7 +48,7 @@ final class OutputWatcher {
         }
         sourceDevice = nil
         sourceListener = nil
-        guard device != 0, AudioObjectHasProperty(device, &Self.dataSourceAddress) else { return }
+        guard device != 0, AudioObjectHasProperty(device, &Self.dataSourceAddress).boolValue else { return }
         let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
             MainActor.assumeIsolated { self?.changed() }
         }
@@ -68,7 +68,7 @@ final class OutputWatcher {
     private static func uint32(_ device: AudioObjectID, _ selector: AudioObjectPropertySelector,
                                scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> UInt32? {
         var address = AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
-        guard AudioObjectHasProperty(device, &address) else { return nil }
+        guard AudioObjectHasProperty(device, &address).boolValue else { return nil }
         var value: UInt32 = 0
         var size = UInt32(MemoryLayout<UInt32>.size)
         return AudioObjectGetPropertyData(device, &address, 0, nil, &size, &value) == noErr ? value : nil
