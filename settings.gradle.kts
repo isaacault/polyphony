@@ -22,14 +22,16 @@ dependencyResolutionManagement {
 
 rootProject.name = "Polyphony"
 
-include(":app")
-include(":core:domain")
-include(":core:network")
-include(":core:data")
-include(":core:playback")
-include(":core:ui")
-include(":core:downloads")
-include(":core:dlna")
-include(":core:requests")
-include(":provider:subsonic")
-include(":provider:jellyfin")
+// Clients share one codebase (ARCHITECTURE.md): shared/ is the logic every client needs (becoming
+// Kotlin Multiplatform), android/ the Android app and the modules still tied to Android.
+include(":shared:domain")
+include(":shared:network")
+include(":shared:data")
+include(":shared:requests")
+include(":shared:providers:subsonic")
+include(":shared:providers:jellyfin")
+include(":android:app")
+include(":android:ui")
+include(":android:playback")
+include(":android:downloads")
+include(":android:dlna")

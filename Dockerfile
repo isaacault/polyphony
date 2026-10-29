@@ -45,4 +45,4 @@ RUN if [ "$(dpkg --print-architecture)" = "arm64" ]; then \
 
 WORKDIR /src
 # Default: build a debug APK and run unit tests. Override the command to do anything else.
-CMD ["sh", "-c", "./gradlew --no-daemon assembleDebug test && ls -la app/build/outputs/apk/debug/"]
+CMD ["sh", "-c", "./gradlew --no-daemon assembleDebug test && ls -la android/app/build/outputs/apk/debug/"]

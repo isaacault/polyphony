@@ -2,7 +2,7 @@
 # Local CI, in the polyphony-build Docker image.
 #
 #   scripts/ci.sh             full: what .github/workflows/build.yml runs (test, lintDebug,
-#                             :app:assembleDebug), on the checkout you are in (a worktree is fine)
+#                             :android:app:assembleDebug), on the checkout you are in (a worktree is fine)
 #   scripts/ci.sh --quick     compile every module and run the unit tests (no lint, no APK):
 #                             the pre-push check (scripts/git-hooks/pre-push)
 #   scripts/ci.sh --status    full, on a clean, pushed HEAD, then post the result to GitHub as the
@@ -42,10 +42,10 @@ short=${sha:0:7}
 if $quick; then
   # core:domain is plain Kotlin (`test`); every other module is Android (`testDebugUnitTest`).
   # The app has unit tests, so this compiles it too.
-  tasks=${CI_TASKS:-":core:domain:test testDebugUnitTest"}
+  tasks=${CI_TASKS:-":shared:domain:test testDebugUnitTest"}
   what="compile and unit tests"
 else
-  tasks=${CI_TASKS:-"test lintDebug :app:assembleDebug"}
+  tasks=${CI_TASKS:-"test lintDebug :android:app:assembleDebug"}
   what="test, lint and assemble"
 fi
 lock=${CI_LOCK:-/ssd/Personal/repositories/.locks/docker-ci.lock}

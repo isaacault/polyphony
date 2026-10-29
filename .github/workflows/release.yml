@@ -62,19 +62,19 @@ jobs:
           POLYPHONY_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           POLYPHONY_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           POLYPHONY_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew :app:assembleRelease :app:bundleRelease --console=plain
+        run: ./gradlew :android:app:assembleRelease :android:app:bundleRelease --console=plain
 
       - name: Verify signature and collect artifacts
         run: |
           set -euo pipefail
           BT="$ANDROID_HOME/build-tools/37.0.0"
-          APK=app/build/outputs/apk/release/app-release.apk
-          AAB=app/build/outputs/bundle/release/app-release.aab
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
           "$BT/apksigner" verify --print-certs "$APK" | head -3
           mkdir -p dist
           cp "$APK" "dist/polyphony-${VERSION}.apk"
           cp "$AAB" "dist/polyphony-${VERSION}.aab"
-          cp app/build/outputs/mapping/release/mapping.txt "dist/polyphony-${VERSION}-mapping.txt"
+          cp android/app/build/outputs/mapping/release/mapping.txt "dist/polyphony-${VERSION}-mapping.txt"
           (cd dist && sha256sum * > "polyphony-${VERSION}.sha256")
           cat "dist/polyphony-${VERSION}.sha256"
 

@@ -1,31 +1,44 @@
 # Architecture
 
-Polyphony is a multi-module Kotlin/Jetpack Compose app. The dependency rule is strict:
-`app → core:ui, core:playback, core:data, core:dlna, core:downloads, providers → core:network → core:domain`.
-`core:domain` is a pure Kotlin module with no Android dependencies.
+Polyphony is one repository for every client: Android today, then Mac, iPhone, Apple TV, Windows
+and Linux, all on the same backend (continuo, a separate repo) and plain Subsonic servers. The
+logic they share lives in `shared/`, written once; each platform adds its own UI and player.
 
 ```
-app                 Compose screens, navigation, Application, DI aggregation
-core/domain         Models, MediaProvider + repository contracts, TranscodeResolver (pure Kotlin)
-core/network        OkHttp/Json plumbing, per-server client factory
-core/data           Room cache, DataStore settings, repository impls, library sync, network monitor
-core/playback       Media3 PlaybackService, local ⇄ Cast switching, stream URL resolution,
-                    latency monitor, scrobbling, PlaybackController/CastController impls
-core/ui             Theme (Material 3 Expressive), motion tokens, shared components, palette utils
-core/dlna           Hand-rolled UPnP AV control point (SSDP, SOAP AVTransport/RenderingControl),
-                    DlnaPlayer (Media3 SimpleBasePlayer), DlnaController impl
-core/downloads      Offline downloads: own Room DB, WorkManager download queue, rules engine
-                    (favourites / playlists / albums / artists / genres / recently added / most
-                    played) with storage-cap eviction, DownloadRepository impl
-provider/subsonic   Subsonic / OpenSubsonic / Navidrome implementation of MediaProvider
-provider/jellyfin   Jellyfin implementation of MediaProvider (official Kotlin SDK)
+shared/                       the logic every client needs; becoming Kotlin Multiplatform (Android,
+                              desktop JVM, Apple frameworks), so nothing here may depend on Android
+  domain                      Models, MediaProvider + repository contracts, TranscodeResolver (pure Kotlin)
+  network                     OkHttp/Json plumbing, per-server client factory
+  data                        Room cache, DataStore settings, repository impls, library sync, network monitor
+  requests                    The continuo client: search, requests, Play now, discovery, lyrics
+  providers/subsonic          Subsonic / OpenSubsonic / Navidrome implementation of MediaProvider
+  providers/jellyfin          Jellyfin implementation of MediaProvider (official Kotlin SDK)
+android/                      the Android app, and the modules still tied to Android
+  app                         Compose screens, navigation, Application, DI aggregation
+  ui                          Theme (Material 3 Expressive), motion tokens, shared components, palette utils
+  playback                    Media3 PlaybackService, local ⇄ Cast switching, stream URL resolution,
+                              latency monitor, scrobbling, PlaybackController/CastController impls
+  dlna                        Hand-rolled UPnP AV control point (SSDP, SOAP AVTransport/RenderingControl),
+                              DlnaPlayer (Media3 SimpleBasePlayer), DlnaController impl
+  downloads                   Offline downloads: own Room DB, WorkManager download queue, rules engine
+                              (favourites / playlists / albums / artists / genres / recently added / most
+                              played) with storage-cap eviction, DownloadRepository impl
+apple/                        (to come) one Xcode project: macOS, iOS, tvOS in SwiftUI over shared/
+desktop/                      (to come) Windows + Linux, Compose Multiplatform
+contract/                     continuo's OpenAPI schema and the test cases every client must pass
 ```
 
-Adding a music backend (Plex, Emby, local files, …) is a self-contained `provider:*` module.
+The dependency rule is strict:
+`android:app → android:{ui, playback, dlna, downloads}, shared:data, shared:providers:*, shared:requests
+→ shared:network → shared:domain`. Nothing in `shared/` depends on `android/`; `shared:domain` is pure
+Kotlin with no Android dependencies. Logic that a second platform will need moves from `android/`
+into `shared/` (the playback queue rules, the download rules engine), leaving the platform glue behind.
+
+Adding a music backend (Plex, Emby, local files, …) is a self-contained `shared:providers:*` module.
 See [docs/providers.md](docs/providers.md) for the `MediaProvider` contract, registration, and a
 step-by-step guide.
 
-## Key contracts (core:domain)
+## Key contracts (shared:domain)
 
 | Contract | Purpose |
 | --- | --- |
@@ -63,7 +76,7 @@ settings ──▶│ TranscodePolicy│   │ NetworkState │   │ OutputTarg
 - **Cast and DLNA** must send real URLs to the receiver, so the `MediaItemConverter` resolves them with the
   decision for the connected device. When the decision changes mid-session, the remaining queue
   is re-sent.
-- **Receiver URLs** pass through `RemoteUrlResolver` (core:playback): an explicit per-server
+- **Receiver URLs** pass through `RemoteUrlResolver` (android:playback): an explicit per-server
   receiver address (`ServerOptions.REMOTE_BASE_URL`) replaces the base URL; otherwise plain-http
   hosts the phone resolves to a private IPv4 get that IP substituted. HTTPS hosts are never
   rewritten because the receiver would fail certificate validation.
@@ -71,7 +84,7 @@ settings ──▶│ TranscodePolicy│   │ NetworkState │   │ OutputTarg
   `TranscodeProfileRepository`. Devices are remembered as soon as they are discovered so the
   Settings screen can list them even when not connected.
 - **Network rules** come from `NetworkMonitor` (Wi-Fi/Ethernet vs cellular/metered).
-- **Adaptive latency**: the `LatencyMonitor` in `core:playback` counts rebuffer events (and long
+- **Adaptive latency**: the `LatencyMonitor` in `android:playback` counts rebuffer events (and long
   stalls) in a sliding window. Crossing the threshold sets `latencyDegraded = true`, which makes
   the resolver cap quality with the high-latency profile. It auto-recovers after a quiet period
   or when the user taps "Restore quality". Network changes reset it.
@@ -97,4 +110,4 @@ settings ──▶│ TranscodePolicy│   │ NetworkState │   │ OutputTarg
   `LocalNavigator` and never touch `NavController` directly.
 - Build: `source scripts/env.sh && ./gradlew assembleDebug`. Tests: `./gradlew test`.
 - Docker: `docker build -t polyphony-build . && docker run --rm -v "$PWD":/src polyphony-build`
-  produces `app/build/outputs/apk/debug/app-debug.apk` on any x86_64 host.
+  produces `android/app/build/outputs/apk/debug/app-debug.apk` on any x86_64 host.

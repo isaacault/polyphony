@@ -44,7 +44,7 @@ sdkmanager --sdk_root="$ANDROID_HOME" emulator "system-images;android-36;google_
 ANDROID_AVD_HOME=$HOME/.config/.android/avd "$ANDROID_HOME/emulator/emulator" -avd polyphony \
   -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect &
 adb wait-for-device
-./gradlew :app:assembleDebug && adb install -r app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:assembleDebug && adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n app.polyphony.debug/app.polyphony.MainActivity
 ```
 
@@ -91,13 +91,13 @@ with `sqlite3`, and spell the name exactly, because `sqlite3` creates any path y
 
 ## 5. Database migrations
 
-Room schemas are exported to `core/data/schemas/<db>/<version>.json`; commit the new file with every
+Room schemas are exported to `shared/data/schemas/<db>/<version>.json`; commit the new file with every
 version bump together with a `Migration` in `Migrations.ALL`. `MigrationsChainTest` (plain unit
 test, runs in CI) fails if the chain has a gap. `MigrationsTest` migrates a real database from the
 oldest schema and lets Room validate the result; it needs the emulator:
 
 ```sh
-./gradlew :core:data:connectedDebugAndroidTest
+./gradlew :shared:data:connectedDebugAndroidTest
 ```
 
 Instrumented tests in any module run on demand from the Actions tab (`Connected tests` workflow),
@@ -119,7 +119,7 @@ There are two depths:
 
 | | Runs | When |
 | --- | --- | --- |
-| `scripts/ci.sh --quick` | every module compiled, all unit tests (`:core:domain:test testDebugUnitTest`) | on each push, from the pre-push hook |
+| `scripts/ci.sh --quick` | every module compiled, all unit tests (`:shared:domain:test testDebugUnitTest`) | on each push, from the pre-push hook |
 | `scripts/ci.sh` | the full Build workflow: `test lintDebug :app:assembleDebug` | at merge, from `merge_when_green.sh` |
 
 `scripts/install-hooks.sh` (once per clone; it covers every worktree) points git at

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "app.polyphony.provider.jellyfin"
+    namespace = "app.polyphony.core.requests"
     compileSdk = 37
     defaultConfig { minSdk = 26 }
     compileOptions {
@@ -20,14 +20,16 @@ kotlin {
     compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
 }
 
+// continuo's /v1 API (https://github.com/isaacault/continuo): catalogue search and requests for a
+// continuo-linked server. Depends only on core:network (OkHttp, Json) and core:domain.
 dependencies {
-    api(project(":core:domain"))
-    implementation(project(":core:network"))
+    api(project(":shared:domain"))
+    implementation(project(":shared:network"))
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
-    implementation(libs.jellyfin.core)
+    implementation(libs.okhttp.sse)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

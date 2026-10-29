@@ -121,7 +121,7 @@ docker run --rm \
     p() { grep "^$1=" /signing/keystore.properties | cut -d= -f2-; }
     export POLYPHONY_KEYSTORE_PATH=/signing/release.jks
     export POLYPHONY_KEYSTORE_PASSWORD="$(p storePassword)" POLYPHONY_KEY_ALIAS="$(p keyAlias)" POLYPHONY_KEY_PASSWORD="$(p keyPassword)"
-    ./gradlew --no-daemon --console=plain '"$props"' :app:assembleRelease :app:bundleRelease
+    ./gradlew --no-daemon --console=plain '"$props"' :android:app:assembleRelease :android:app:bundleRelease
     rc=$?; find . -user 0 -exec chown '"$(id -u):$(id -g)"' {} + 2>/dev/null; exit $rc' \
   > "$log" 2>&1
 rc=$?
@@ -130,9 +130,9 @@ exec 9>&-
 [ "$rc" -eq 0 ] || { grep -E "^e: |FAILED|What went wrong" "$log" | head -10 >&2; die "build failed; see $log"; }
 
 # ---- verify ----------------------------------------------------------------------------------
-apk="$wt/app/build/outputs/apk/release/app-release.apk"
-aab="$wt/app/build/outputs/bundle/release/app-release.aab"
-mapping="$wt/app/build/outputs/mapping/release/mapping.txt"
+apk="$wt/android/app/build/outputs/apk/release/app-release.apk"
+aab="$wt/android/app/build/outputs/bundle/release/app-release.aab"
+mapping="$wt/android/app/build/outputs/mapping/release/mapping.txt"
 for f in "$apk" "$aab" "$mapping"; do [ -f "$f" ] || die "missing ${f#"$wt"/}"; done
 aapt2=/opt/android-sdk/build-tools/37.0.0/aapt2
 [ "$(uname -m)" = aarch64 ] && aapt2=/opt/aapt2/aapt2

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="app/src/main/res/drawable/ic_launcher_foreground.xml" width="0" height="0" alt="">
+  <img src="android/app/src/main/res/drawable/ic_launcher_foreground.xml" width="0" height="0" alt="">
   <strong style="font-size:1.6em">Polyphony</strong><br>
   <em>One player. Every voice.</em>
 </p>
@@ -98,7 +98,7 @@ Linux, so Docker there runs under emulation):
 
 ```sh
 source scripts/env.sh          # sets JAVA_HOME (Homebrew openjdk@17) and ANDROID_HOME
-./gradlew assembleDebug        # → app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleDebug        # → android/app/build/outputs/apk/debug/app-debug.apk
 ./gradlew test                 # JVM unit tests (transcode resolver, providers, latency monitor…)
 ```
 
@@ -145,11 +145,11 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the module graph, contracts and the t
 engine, and [DESIGN.md](DESIGN.md) for the UI rules every screen follows.
 
 ```
-app → core:ui, core:playback, core:data, core:dlna, core:downloads, provider:* → core:network → core:domain
+android:app → android:ui, android:playback, shared:data, android:dlna, android:downloads, shared:providers:* → shared:network → shared:domain
 ```
 
 Adding a backend means implementing `MediaProvider` + `MediaProviderFactory` in a new
-`provider:*` module and binding the factory into the Hilt set — nothing else changes. See
+`shared:providers:*` module and binding the factory into the Hilt set — nothing else changes. See
 [docs/providers.md](docs/providers.md) for the full provider contract and a step-by-step guide to
 adding one.
 
@@ -163,7 +163,7 @@ adding one.
 
 ## Contributing
 
-Issues and pull requests are welcome at https://github.com/isaacault/polyphony. Keep the dependency rule (`app → … → core:domain`),
+Issues and pull requests are welcome at https://github.com/isaacault/polyphony. Keep the dependency rule (`app → … → shared:domain`),
 follow DESIGN.md, add unit tests for pure logic, and run `./gradlew test` before pushing.
 
 ## License
