@@ -341,10 +341,7 @@ struct CatalogAlbumView: View {
 
     private func request(_ title: String) -> some View {
         Button {
-            Task {
-                await model.request(album)
-                requested = true
-            }
+            Task { requested = await model.request(album) }
         } label: { Label(title, systemImage: requested ? "checkmark" : "plus") }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
