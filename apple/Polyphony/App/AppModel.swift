@@ -264,7 +264,10 @@ final class AppModel {
 
     // MARK: Signing in and out
 
+    /// Once per launch: the window's task calls it, and the window can close and open again while
+    /// the music plays on.
     func start() async {
+        guard state == .loading, server == nil else { return }
         let list = await store.load()
         servers = list.servers
         if let saved = list.active {
