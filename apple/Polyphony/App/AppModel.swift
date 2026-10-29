@@ -208,6 +208,14 @@ final class AppModel {
     /// Each server's queue on its own: switching servers and back carries on where it was.
     private var queueKey: String { "queue.snapshot." + (server?.key ?? "") }
 
+    /// Now Playing tinted with the cover's colours (the Android app's artwork colours in the player).
+    private(set) var artworkColours = UserDefaults.standard.object(forKey: "appearance.artworkColours") as? Bool ?? true
+
+    func setArtworkColours(_ on: Bool) {
+        artworkColours = on
+        UserDefaults.standard.set(on, forKey: "appearance.artworkColours")
+    }
+
     /// Rate songs with stars (1–5) instead of the heart, as the Android app's Ratings mode.
     private(set) var usesRatings = UserDefaults.standard.bool(forKey: "feedback.ratings")
 
