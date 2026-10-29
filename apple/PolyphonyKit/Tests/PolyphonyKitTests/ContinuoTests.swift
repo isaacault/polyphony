@@ -82,6 +82,12 @@ struct ContinuoTests {
         #expect(await account.current == nil && saved == nil)
     }
 
+    @Test func theSpeakersAddressComesWithTheSession() throws {
+        let with = Data(#"{"accessToken":"a","expiresIn":3600,"refreshToken":"r","user":{"id":1,"username":"i","role":"admin"},"device":{"id":"d","name":"Mac"},"library":{"type":"subsonic","baseUrl":"https://c","username":"i","password":"p","receiverBaseUrl":"http://192.168.0.101"}}"#.utf8)
+        #expect(try JSONDecoder().decode(ContinuoSession.self, from: with).library.receiverBaseUrl == "http://192.168.0.101")
+        #expect(try JSONDecoder().decode(ContinuoSession.self, from: fixture("login")).library.receiverBaseUrl == nil)
+    }
+
     @Test func aSavedSessionKeepsItsExpiry() throws {
         var s = try JSONDecoder().decode(ContinuoSession.self, from: fixture("login"))
         s.expiresAt = Date(timeIntervalSince1970: 2_000_000_000)

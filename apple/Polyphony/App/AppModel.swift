@@ -274,7 +274,8 @@ final class AppModel {
         } else {
             continuo = nil
         }
-        receiverAddress = UserDefaults.standard.string(forKey: receiverKey) ?? ""
+        // The user's own receiver address, else the one continuo hands out (continuo#83).
+        receiverAddress = UserDefaults.standard.string(forKey: receiverKey) ?? saved.session?.library.receiverBaseUrl ?? ""
         if let data = UserDefaults.standard.data(forKey: historyKey),
            let saved = try? JSONDecoder().decode(ListeningHistory.self, from: data) {
             history = saved
