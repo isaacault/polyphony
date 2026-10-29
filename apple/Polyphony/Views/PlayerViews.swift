@@ -484,6 +484,7 @@ struct NowPlayingView: View {
                         Text(entry.title).font(.title.weight(.bold)).lineLimit(2)
                         Text([entry.artist, entry.album].compactMap { $0 }.joined(separator: " — "))
                             .font(.title3).foregroundStyle(.secondary).lineLimit(2)
+                        NowPlayingActions(entry: entry)
                     }
                     .frame(maxWidth: 460)
                     LyricsView()
@@ -587,4 +588,142 @@ struct SpeakerMenu: View {
         .help(model.speaker.map { "Playing on \($0.name)" } ?? "Play on a speaker")
         .onAppear { if model.speakers.renderers.isEmpty { model.speakers.search() } }
     }
+}
+
+/// Under the big cover: where it's playing from and on, the song's quality and details, the heart or
+/// stars, and the song's menu (as the Android app's Now Playing).
+private struct NowPlayingActions: View {
+    @Environment(AppModel.self) private var model
+    let entry: QueueEntry
+    @State private var showingInfo = false
+    /// What was set here since the song was queued (the queue's copy of the song doesn't change).
+    @State private var hearts: [String: Bool] = [:]
+    @State private var ratings: [String: Int] = [:]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let context = model.player.queue.context {
+                Button { open(context) } label: {
+                    Label("Playing from \(context.title)", systemImage: "music.note.list")
+                }
+                .buttonStyle(.link)
+                .disabled(context.kind == .genre || context.kind == .favourites)
+            }
+            if let speaker = model.speaker {
+                Label("Playing on \(speaker.name)", systemImage: "hifispeaker.fill").foregroundStyle(.tint)
+            }
+            HStack(spacing: 14) {
+                if let track = entry.libraryTrack {
+                    if let chip = AudioQuality.trackChip(track, albumBadge: nil) {
+                        Button { showingInfo.toggle() } label: { QualityChip(label: chip) }
+                            .buttonStyle(.plain)
+                            .help("Song Info")
+                            .popover(isPresented: $showingInfo) { SongInfo(track: track).padding() }
+                    } else {
+                        Button { showingInfo.toggle() } label: { Image(systemName: "info.circle") }
+                            .buttonStyle(.plain)
+                            .help("Song Info")
+                            .popover(isPresented: $showingInfo) { SongInfo(track: track).padding() }
+                    }
+                    if model.usesRatings {
+                        Menu {
+                            ForEach(1...5, id: \.self) { stars in
+                                Button(String(repeating: "★", count: stars)) { rate(track, stars) }
+                            }
+                            Button("No Rating") { rate(track, 0) }
+                        } label: {
+                            let stars = ratings[track.id] ?? track.rating ?? 0
+                            Text(String(repeating: "★", count: stars) + String(repeating: "☆", count: 5 - stars))
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                    } else {
+                        let starred = hearts[track.id] ?? track.starred
+                        Button {
+                            hearts[track.id] = !starred
+                            Task {
+                                try? await model.subsonic?.setStarred(.track(track.id), !starred)
+                                model.downloads.libraryChanged()
+                            }
+                        } label: { Image(systemName: starred ? "heart.fill" : "heart") }
+                            .buttonStyle(.plain)
+                            .help(starred ? "Remove from Favourites" : "Add to Favourites")
+                    }
+                    Menu {
+                        if let albumID = track.albumID { Button("Go to Album") { go(.album(albumID)) } }
+                        if let artistID = track.artistID { Button("Go to Artist") { go(.artist(artistID)) } }
+                        Divider()
+                        AddToPlaylistMenu(trackIDs: [track.id])
+                        if !model.downloads.isDownloaded(track.id) {
+                            Button("Download") { model.downloads.download([track]) }
+                        }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help("More")
+                }
+            }
+            .font(.title3)
+        }
+        .foregroundStyle(.secondary)
+    }
+
+    private func rate(_ track: Track, _ stars: Int) {
+        ratings[track.id] = stars
+        Task {
+            try? await model.subsonic?.setRating(id: track.id, stars)
+            model.notice = stars == 0 ? "Rating removed" : "Rated \(String(repeating: "★", count: stars))"
+        }
+    }
+
+    private func go(_ route: Route) {
+        model.nowPlayingExpanded = false
+        model.path.append(route)
+    }
+
+    private func open(_ context: PlayContext) {
+        switch context.kind {
+        case .album: go(.album(context.id))
+        case .playlist: go(.playlist(context.id))
+        case .artist: go(.artist(context.id))
+        case .genre, .favourites: break
+        }
+    }
+}
+
+/// The song's file: format, resolution, bitrate, size.
+private struct SongInfo: View {
+    let track: Track
+
+    var body: some View {
+        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
+            row("Format", track.container?.uppercased())
+            row("Resolution", [track.bitDepth.map { "\($0)-bit" }, track.sampleRateHz.map { String(format: "%g kHz", Double($0) / 1000) }]
+                .compactMap { $0 }.joined(separator: " / ").nilIfEmpty)
+            row("Bitrate", track.bitRateKbps.map { "\($0) kbps" })
+            row("Size", track.sizeBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) })
+            row("Length", formatDuration(track.duration))
+            if let rg = track.replayGain {
+                row("ReplayGain", [rg.trackGainDb.map { String(format: "track %+.1f dB", $0) }, rg.albumGainDb.map { String(format: "album %+.1f dB", $0) }]
+                    .compactMap { $0 }.joined(separator: ", ").nilIfEmpty)
+            }
+        }
+        .font(.callout)
+        .frame(minWidth: 220)
+    }
+
+    @ViewBuilder
+    private func row(_ name: String, _ value: String?) -> some View {
+        if let value {
+            GridRow {
+                Text(name).foregroundStyle(.secondary)
+                Text(value).textSelection(.enabled)
+            }
+        }
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
