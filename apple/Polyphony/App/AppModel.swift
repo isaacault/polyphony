@@ -183,17 +183,22 @@ final class AppModel {
             self.history.record(context, trackID: trackID, index: index, positionMs: ms)
             self.saveHistory()
         }
-        player.persist = { snapshot in
+        player.persist = { [weak self] snapshot in
+            guard let self, self.server != nil else { return }
             let defaults = UserDefaults.standard
             if let snapshot, let data = try? JSONEncoder().encode(snapshot) {
-                defaults.set(data, forKey: Self.queueKey)
-            } else {
-                defaults.removeObject(forKey: Self.queueKey)
+                defaults.set(data, forKey: self.queueKey)
+            } else if !self.detaching {
+                defaults.removeObject(forKey: self.queueKey)
             }
         }
     }
 
-    private static let queueKey = "queue.snapshot"
+    /// Set while letting go of a server: stopping its player mustn't forget its queue.
+    @ObservationIgnored private var detaching = false
+
+    /// Each server's queue on its own: switching servers and back carries on where it was.
+    private var queueKey: String { "queue.snapshot." + (server?.key ?? "") }
 
     /// Rate songs with stars (1–5) instead of the heart, as the Android app's Ratings mode.
     private(set) var usesRatings = UserDefaults.standard.bool(forKey: "feedback.ratings")
@@ -216,30 +221,64 @@ final class AppModel {
     // MARK: Signing in and out
 
     func start() async {
-        if let saved = await store.load() {
+        let list = await store.load()
+        servers = list.servers
+        if let saved = list.active {
             await attach(saved)
         } else {
             state = .signedOut
         }
     }
 
+    /// Every server signed in to (Settings > Servers switches between them).
+    private(set) var servers: [SavedServer] = []
+    /// Adding another server: the sign-in form, over the app.
+    var addingServer = false
+
     func signIn(address: String, username: String, password: String) async throws {
         let device = Host.current().localizedName ?? "Mac"
         let saved = try await Connector.connect(address: address, username: username, password: password,
                                                 deviceName: "Polyphony on \(device)")
-        await store.save(saved)
+        var list = await store.load()
+        list.add(saved)
+        await store.save(list)
+        servers = list.servers
+        addingServer = false
+        if server != nil { detach(to: .loading) }
         await attach(saved)
     }
 
+    /// Shows another signed-in server's library: this one's queue is kept for when it comes back.
+    func switchTo(_ key: String) async {
+        guard key != server?.key else { return }
+        var list = await store.load()
+        guard list.activate(key), let next = list.active else { return }
+        await store.save(list)
+        detach(to: .loading)
+        await attach(next)
+    }
+
+    /// Signs out of the server showing; the next one signed in to takes over.
     func signOut() async {
+        if let account = continuo?.account { await account.signOut() }
+        var list = await store.load()
+        if let key = server?.key { list.remove(key) }
+        await store.save(list)
+        servers = list.servers
+        UserDefaults.standard.removeObject(forKey: queueKey)
+        detach(to: list.active == nil ? .signedOut : .loading)
+        if let next = list.active { await attach(next) }
+    }
+
+    /// Lets go of the server showing (its playback, downloads, caches), signed in or not.
+    private func detach(to next: State = .signedOut) {
         if speaker != nil { play(on: nil) }
+        detaching = true
         player.stop()
+        detaching = false
         arrivals.stop()
         inboxTask?.cancel()
         unreadCount = 0
-        if let account = continuo?.account { await account.signOut() }
-        await store.save(nil)
-        UserDefaults.standard.removeObject(forKey: Self.queueKey)
         downloads.detach()
         server = nil
         subsonic = nil
@@ -249,7 +288,7 @@ final class AppModel {
         artistList = nil
         playlists = []
         originalNames = [:]
-        state = .signedOut
+        state = next
     }
 
     private func attach(_ saved: SavedServer) async {
@@ -259,7 +298,7 @@ final class AppModel {
         downloads.attach(server: saved, library: client) { track in client.downloadURL(trackID: track.id) }
         if saved.kind == .continuo {
             let account = ContinuoAccount(client: ContinuoClient(baseURL: saved.address),
-                                          store: ServerSessionStore(store))
+                                          store: ServerSessionStore(store, key: saved.key))
             _ = await account.restore()
             let service = ContinuoService(account: account)
             continuo = service
@@ -284,7 +323,7 @@ final class AppModel {
         }
         state = .signedIn
         // Where last session left off, paused: Play carries on.
-        if player.current == nil, let data = UserDefaults.standard.data(forKey: Self.queueKey),
+        if player.current == nil, let data = UserDefaults.standard.data(forKey: queueKey),
            let snapshot = try? JSONDecoder().decode(PlayQueue.Snapshot.self, from: data) {
             player.restore(snapshot)
         }

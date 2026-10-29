@@ -284,7 +284,22 @@ struct SettingsView: View {
                     LabeledContent("Signed in as", value: server.subsonicUsername)
                     LabeledContent("Server", value: server.address.absoluteString)
                     LabeledContent("Kind", value: server.kind == .continuo ? "continuo (search, requests, Play now)" : "Subsonic (library only)")
-                    Button("Sign Out", role: .destructive) { Task { await model.signOut() } }
+                    Button("Sign Out of This Server", role: .destructive) { Task { await model.signOut() } }
+                }
+                Section("Servers") {
+                    ForEach(model.servers, id: \.key) { other in
+                        HStack {
+                            Image(systemName: other.kind == .continuo ? "sparkles" : "server.rack").foregroundStyle(.secondary).frame(width: 18)
+                            Text(other.displayName)
+                            Spacer()
+                            if other.key == server.key {
+                                Text("Showing").foregroundStyle(.secondary)
+                            } else {
+                                Button("Switch") { Task { await model.switchTo(other.key) } }
+                            }
+                        }
+                    }
+                    Button("Add Server…") { model.addingServer = true }
                 }
             } else {
                 Text("Not signed in.")
