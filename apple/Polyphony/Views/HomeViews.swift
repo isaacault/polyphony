@@ -34,6 +34,23 @@ struct HomeView: View {
                         }
                     } header: { SectionTitle("New Releases", subtitle: "From artists in your library") }
                 }
+                if !discovery.artists.isEmpty {
+                    Section { CatalogArtistShelf(artists: discovery.artists) } header: {
+                        SectionTitle("Artists for You", subtitle: "Like the ones you play")
+                    }
+                }
+                if !discovery.albums.isEmpty {
+                    Section {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(alignment: .top, spacing: 18) {
+                                ForEach(discovery.albums) { album in
+                                    NavigationLink(value: catalogRoute(album)) { CatalogAlbumTile(album: album).frame(width: 160) }
+                                        .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    } header: { SectionTitle("Albums for You") }
+                }
                 if !discovery.playlists.isEmpty {
                     Section {
                         ScrollView(.horizontal, showsIndicators: false) {

@@ -411,3 +411,24 @@ enum CatalogTrackBuilder {
                      recordingID: entry.recordingID, artworkURL: album.artworkURL)
     }
 }
+
+/// Catalogue artists in a row of circles, each opening its page (in the library or not).
+struct CatalogArtistShelf: View {
+    let artists: [CatalogArtist]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(alignment: .top, spacing: 18) {
+                ForEach(artists) { artist in
+                    NavigationLink(value: Route.catalogArtist(artist)) {
+                        VStack {
+                            Artwork(url: artist.artworkURL, cornerRadius: 60, symbol: "music.mic").frame(width: 120, height: 120)
+                            Text(artist.name).font(.callout).lineLimit(1).frame(width: 120)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
