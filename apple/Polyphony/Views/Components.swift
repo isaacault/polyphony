@@ -249,6 +249,7 @@ private struct TrackContextMenu: ViewModifier {
                 }
             }
             AddToPlaylistMenu(trackIDs: [track.id])
+            Button("Song Info") { model.songInfo = track }
             if let onRemove {
                 Button("Remove from Playlist", role: .destructive, action: onRemove)
             }
