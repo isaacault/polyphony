@@ -53,6 +53,11 @@ public struct DLNAControl: Sendable {
     public func setVolume(_ percent: Int) async throws {
         try await call("SetVolume", [("Channel", "Master"), ("DesiredVolume", "\(min(max(percent, 0), 100))")], rendering: true)
     }
+
+    /// The speaker's volume now (0–100), nil when it won't say.
+    public func volume() async throws -> Int? {
+        (try await call("GetVolume", [("Channel", "Master")], rendering: true)["CurrentVolume"]).flatMap { Int($0) }
+    }
 }
 
 /// PolyphonyKit's AudioEngine on a DLNA speaker: the speaker fetches the audio itself (the URL must
@@ -61,12 +66,36 @@ public struct DLNAControl: Sendable {
 @MainActor
 public final class DLNAEngine: AudioEngine {
     public var onEvent: ((AudioEvent) -> Void)?
+    /// Starts at the speaker's own volume (read as the engine connects) so the slider doesn't jump it.
+    /// Changes go one at a time, the latest winning: a slider dragged sends a few, in order, not dozens.
     public var volume: Float = 0.5 {
         didSet {
-            let percent = Int(volume * 100)
-            let control = self.control
-            Task { try? await control.setVolume(percent) }
+            guard !adoptingVolume else { return }
+            wantedVolume = Int((min(max(volume, 0), 1) * 100).rounded())
+            guard volumeSender == nil else { return }
+            volumeSender = Task { [weak self] in await self?.sendVolumes() }
         }
+    }
+    private var adoptingVolume = false
+    private var wantedVolume: Int?
+    private var sentVolume: Int?
+    private var volumeSender: Task<Void, Never>?
+
+    private func sendVolumes() async {
+        while let wanted = wantedVolume, wanted != sentVolume {
+            sentVolume = wanted
+            try? await control.setVolume(wanted)
+        }
+        volumeSender = nil
+    }
+
+    /// Reads the speaker's volume into [volume] without sending it back.
+    public func adoptSpeakerVolume() async {
+        guard let percent = try? await control.volume() else { return }
+        sentVolume = percent
+        adoptingVolume = true
+        volume = Float(percent) / 100
+        adoptingVolume = false
     }
 
     public var renderer: Renderer { control.renderer }
@@ -85,7 +114,10 @@ public final class DLNAEngine: AudioEngine {
     public init(control: DLNAControl, pollInterval: Duration = .seconds(1), autoPoll: Bool = true) {
         self.control = control
         self.pollInterval = pollInterval
-        if autoPoll { startPolling() }
+        if autoPoll {
+            startPolling()
+            Task { [weak self] in await self?.adoptSpeakerVolume() }
+        }
     }
 
     public func load(_ source: AudioSource, startAt: TimeInterval, autoplay: Bool) {
