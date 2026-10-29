@@ -37,7 +37,29 @@ public protocol HTTPTransport: Sendable {
 /// A transport that never got an answer: no network, a timeout, a refused connection.
 public struct TransportError: Error, Sendable, CustomStringConvertible {
     public let underlying: String
+    /// The server couldn't be reached at all (no network, no route, no such host, timed out): the app
+    /// goes offline rather than reporting each failure.
+    public let unreachable: Bool
     public var description: String { "Network error: \(underlying)" }
+
+    public init(underlying: String, unreachable: Bool = false) {
+        self.underlying = underlying
+        self.unreachable = unreachable
+    }
+
+    public static func isUnreachable(_ error: Error) -> Bool {
+        guard let e = error as? URLError else { return false }
+        return [.notConnectedToInternet, .cannotConnectToHost, .cannotFindHost, .timedOut, .networkConnectionLost,
+                .dnsLookupFailed, .internationalRoamingOff, .dataNotAllowed].contains(e.code)
+    }
+
+    /// What a URLSession failure becomes: a cancelled request stays a cancellation (the caller moved
+    /// on, as a search does on the next keystroke), anything else a TransportError.
+    public static func from(_ error: Error) -> Error {
+        if error is CancellationError { return error }
+        if let e = error as? URLError, e.code == .cancelled { return CancellationError() }
+        return TransportError(underlying: String(describing: error), unreachable: isUnreachable(error))
+    }
 }
 
 public struct URLSessionTransport: HTTPTransport {
@@ -59,7 +81,7 @@ public struct URLSessionTransport: HTTPTransport {
         do {
             (data, response) = try await session.data(for: r)
         } catch {
-            throw TransportError(underlying: String(describing: error))
+            throw TransportError.from(error)
         }
         guard let http = response as? HTTPURLResponse else {
             throw TransportError(underlying: "not an HTTP response")
