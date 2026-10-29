@@ -233,7 +233,7 @@ private struct RequestRow: View {
                 Text([request.artist, request.year.map(String.init)].compactMap { $0 }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary)
                 if !request.isDone {
-                    Text(statusLine).font(.caption).foregroundStyle(request.needsLook ? .orange : .secondary).lineLimit(2)
+                    Text(statusLine).font(.caption).foregroundStyle(request.needsLook ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary)).lineLimit(2)
                     if request.percent > 0 && request.percent < 100 {
                         ProgressView(value: Double(request.percent), total: 100).frame(maxWidth: 260)
                     }
