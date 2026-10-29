@@ -113,6 +113,19 @@ struct MainWindow: View {
         }
         .animation(.spring(duration: 0.35), value: model.nowPlayingExpanded)
         .overlay(alignment: .top) { NoticeBanner() }
+        .sheet(item: $model.songInfo) { track in
+            VStack(alignment: .leading, spacing: 14) {
+                Text(track.title).font(.title2.weight(.semibold))
+                Text([track.artistName, track.albumName].compactMap { $0 }.joined(separator: " — ")).foregroundStyle(.secondary)
+                SongInfo(track: track)
+                HStack {
+                    Spacer()
+                    Button("Done") { model.songInfo = nil }.keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(24)
+            .frame(minWidth: 340)
+        }
         .onAppear { installSpaceToPlay() }
         .onDisappear { if let keyMonitor { NSEvent.removeMonitor(keyMonitor) } }
     }

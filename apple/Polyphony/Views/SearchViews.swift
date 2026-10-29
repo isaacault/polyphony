@@ -10,11 +10,34 @@ struct SearchView: View {
     @State private var results = CatalogResults()
     @State private var library = SearchResults()
     @State private var searching = false
+    @State private var recent = RecentSearches(UserDefaults.standard.stringArray(forKey: "search.recent") ?? [])
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
-                if query.isEmpty {
+                if query.isEmpty, !recent.items.isEmpty {
+                    Section {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(recent.items, id: \.self) { item in
+                                HStack {
+                                    Button { query = item } label: {
+                                        Label(item, systemImage: "clock.arrow.circlepath").frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .buttonStyle(.plain)
+                                    Button { remember { $0.remove(item) } } label: { Image(systemName: "xmark") }
+                                        .buttonStyle(.borderless).foregroundStyle(.secondary).help("Remove")
+                                }
+                                .padding(.vertical, 5)
+                            }
+                        }
+                        .frame(maxWidth: 420, alignment: .leading)
+                    } header: {
+                        HStack {
+                            SectionTitle("Recent Searches")
+                            Button("Clear") { remember { $0.clear() } }.buttonStyle(.link)
+                        }
+                    }
+                } else if query.isEmpty {
                     Placeholder(title: "Search", symbol: "magnifyingglass",
                                 message: model.isContinuo ? "Your library and everything else, ranked by what people listen to."
                                                          : "Search your library.")
@@ -29,6 +52,7 @@ struct SearchView: View {
         }
         .navigationTitle("Search")
         .searchable(text: $query, placement: .toolbar, prompt: model.isContinuo ? "Artists, albums, songs" : "Your library")
+        .onSubmit(of: .search) { remember { $0.add(query) } }
         .task(id: query) { await search() }
         .overlay(alignment: .topTrailing) { if searching { ProgressView().controlSize(.small).padding() } }
     }
@@ -87,6 +111,11 @@ struct SearchView: View {
         }
     }
 
+    private func remember(_ change: (inout RecentSearches) -> Void) {
+        change(&recent)
+        UserDefaults.standard.set(recent.items, forKey: "search.recent")
+    }
+
     private func search() async {
         let text = query.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else {
@@ -110,6 +139,11 @@ struct SearchView: View {
                 results = full
             } else if let subsonic = model.subsonic {
                 library = try await subsonic.search(text)
+            }
+            // A query left standing a moment (not one on the way to another) is remembered.
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                if query.trimmingCharacters(in: .whitespaces) == text { remember { $0.add(text) } }
             }
         } catch is CancellationError {
         } catch {

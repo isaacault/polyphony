@@ -693,7 +693,7 @@ private struct NowPlayingActions: View {
 }
 
 /// The song's file: format, resolution, bitrate, size.
-private struct SongInfo: View {
+struct SongInfo: View {
     let track: Track
 
     var body: some View {

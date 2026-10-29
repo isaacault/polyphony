@@ -173,9 +173,18 @@ struct TrackList: View {
     /// A playlist's songs can be taken out of it (by position: the same song can be there twice).
     var onRemove: ((Int) -> Void)?
 
+    /// An album on more than one disc gets a "Disc 2" heading where each disc starts.
+    private var discs: Bool { numbered && Set(tracks.map { $0.discNumber ?? 1 }).count > 1 }
+
     var body: some View {
         LazyVStack(spacing: 0) {
             ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
+                if discs, index == 0 || tracks[index - 1].discNumber != track.discNumber {
+                    Text("Disc \(track.discNumber ?? 1)")
+                        .font(.headline).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, index == 0 ? 0 : 18).padding(.bottom, 6).padding(.horizontal, 8)
+                }
                 TrackRow(track: track, index: index, numbered: numbered, showArtwork: showArtwork, albumBadge: albumBadge,
                          isCurrent: model.player.current?.libraryTrack?.id == track.id)
                     .contentShape(Rectangle())
@@ -484,6 +493,7 @@ struct PlaylistsView: View {
     @State private var playlists: [Playlist] = []
     @State private var naming = false
     @State private var newName = ""
+    @State private var renaming: Playlist?
 
     var body: some View {
         List(playlists) { playlist in
@@ -499,6 +509,10 @@ struct PlaylistsView: View {
             }
             .contextMenu {
                 KeepDownloadedButton(target: .playlist(id: playlist.id, name: playlist.name))
+                Button("Rename…") {
+                    renaming = playlist
+                    newName = playlist.name
+                }
                 Divider()
                 Button("Delete Playlist", role: .destructive) {
                     Task {
@@ -523,6 +537,28 @@ struct PlaylistsView: View {
                 }
             }
             Button("Cancel", role: .cancel) { newName = "" }
+        }
+        .alert("Rename Playlist", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $newName)
+            Button("Rename") {
+                guard let playlist = renaming else { return }
+                let name = newName.trimmingCharacters(in: .whitespaces)
+                newName = ""
+                renaming = nil
+                guard !name.isEmpty, name != playlist.name else { return }
+                Task {
+                    do {
+                        try await model.subsonic?.updatePlaylist(id: playlist.id, name: name)
+                    } catch {
+                        model.handle(error)
+                    }
+                    await load()
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                newName = ""
+                renaming = nil
+            }
         }
         .task { await load() }
     }
