@@ -50,7 +50,7 @@ public struct Album: Sendable, Hashable, Identifiable {
     }
 }
 
-public struct Track: Sendable, Hashable, Identifiable {
+public struct Track: Sendable, Hashable, Identifiable, Codable {
     public let id: String
     public var title: String
     public var albumID: String?

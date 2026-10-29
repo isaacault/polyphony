@@ -125,6 +125,51 @@ struct DiscoveryPlaylistView: View {
     }
 }
 
+/// Albums taken out of the library, restorable for a while.
+struct RemovedAlbumsView: View {
+    @Environment(AppModel.self) private var model
+    @State private var removed: [RemovedAlbum] = []
+    @State private var loaded = false
+
+    var body: some View {
+        List(removed) { album in
+            HStack {
+                VStack(alignment: .leading) {
+                    Text(album.title)
+                    Text([album.artist, album.restorableUntil.map { "restorable until \(String($0.prefix(10)))" }]
+                        .compactMap { $0 }.joined(separator: " · "))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Restore") {
+                    Task {
+                        do {
+                            try await model.continuo?.restoreAlbum(removedID: album.id)
+                            model.albumLists = [:]
+                            model.notice = "\(album.title) is back in your library."
+                            await load()
+                        } catch {
+                            model.handle(error)
+                        }
+                    }
+                }
+            }
+        }
+        .overlay { if loaded && removed.isEmpty { Placeholder(title: "Nothing removed", symbol: "trash") } }
+        .navigationTitle("Recently Removed")
+        .task { await load() }
+    }
+
+    private func load() async {
+        do {
+            removed = try await model.continuo?.removedAlbums() ?? []
+            loaded = true
+        } catch {
+            model.handle(error)
+        }
+    }
+}
+
 /// continuo's requests: where each album is (searching, downloading, importing…), and what to do
 /// with one that needs a look.
 struct RequestsView: View {

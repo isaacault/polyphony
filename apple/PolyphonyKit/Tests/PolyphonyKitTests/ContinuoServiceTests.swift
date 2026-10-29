@@ -104,3 +104,36 @@ struct ContinuoServiceTests {
         #expect(s.playNowAudioURL(id: "s1").absoluteString == "https://continuo.ault.me/v1/play-now/s1/audio")
     }
 }
+
+struct ContinuoLibraryTests {
+    @Test func removedAlbumsAndRestoring() async throws {
+        let fake = FakeTransport { request in
+            request.url.path == "/v1/library/removed"
+                ? json(200, #"[{"id":3,"title":"Honeycomb","artist":"Deafheaven","removedAt":"2026-10-20T10:00:00Z"}]"#)
+                : json(200, #"{"ok":true}"#)
+        }
+        let s = try await service(fake)
+        let removed = try await s.removedAlbums()
+        #expect(removed.map(\.title) == ["Honeycomb"])
+        try await s.restoreAlbum(removedID: 3)
+        try await s.removeAlbum(libraryAlbumID: "al-9")
+        #expect(fake.calls.map(\.url.path) == ["/v1/library/removed", "/v1/library/removed/3/restore", "/v1/library/albums/al-9/remove"])
+    }
+
+    @Test func scrobbleLinks() async throws {
+        let links = #"{"listenbrainz":{"available":true,"connected":true,"account":"isaac"},"lastfm":{"available":true,"connected":false}}"#
+        let fake = FakeTransport { request in
+            request.url.path == "/v1/scrobbling/lastfm/connect"
+                ? json(200, #"{"token":"tok","url":"https://www.last.fm/api/auth?token=tok"}"#)
+                : json(200, links)
+        }
+        let s = try await service(fake)
+        let now = try #require(try await s.scrobbling())
+        #expect(now.listenBrainz.connected && now.listenBrainz.account == "isaac" && !now.lastFm.connected)
+        let (token, url) = try await s.startLastFm()
+        #expect(token == "tok" && url.host == "www.last.fm")
+        _ = try await s.linkListenBrainz(token: "  abc  ")
+        let body = try JSONSerialization.jsonObject(with: try #require(fake.calls.last?.body)) as? [String: String]
+        #expect(body?["token"] == "abc" && fake.calls.last?.method == "PUT")
+    }
+}

@@ -1,8 +1,10 @@
+import AppKit
 import PolyphonyKit
 import SwiftUI
 
 @main
 struct PolyphonyApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model = AppModel()
 
     var body: some Scene {
@@ -10,7 +12,10 @@ struct PolyphonyApp: App {
             RootView()
                 .environment(model)
                 .frame(minWidth: 900, minHeight: 560)
-                .task { await model.start() }
+                .task {
+                    AppDelegate.player = model.player
+                    await model.start()
+                }
         }
         .windowToolbarStyle(.unified)
         .commands {
@@ -22,7 +27,44 @@ struct PolyphonyApp: App {
             SettingsView()
                 .environment(model)
         }
+
+        // A mini player in the menu bar, for when the window is out of the way.
+        MenuBarExtra("Polyphony", systemImage: model.player.isPlaying ? "waveform" : "music.note") {
+            MiniPlayer()
+                .environment(model)
+                .onAppear { AppDelegate.player = model.player }
+        }
+        .menuBarExtraStyle(.window)
     }
+}
+
+/// The Dock icon's menu: Play/Pause, Next, Previous.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    @MainActor static weak var player: PlayerController?
+
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        MainActor.assumeIsolated {
+            guard let player = Self.player, player.current != nil else { return nil }
+            let menu = NSMenu()
+            menu.addItem(item(player.isPlaying ? "Pause" : "Play", #selector(togglePlay)))
+            menu.addItem(item("Next", #selector(next)))
+            menu.addItem(item("Previous", #selector(previous)))
+            return menu
+        }
+    }
+
+    // Keep playing with the window closed: music apps don't quit when their window does.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    private func item(_ title: String, _ action: Selector) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+        return item
+    }
+
+    @objc private func togglePlay() { MainActor.assumeIsolated { Self.player?.togglePlay() } }
+    @objc private func next() { MainActor.assumeIsolated { Self.player?.next() } }
+    @objc private func previous() { MainActor.assumeIsolated { Self.player?.previous() } }
 }
 
 /// The Controls menu, as Music has it: ⌥⌘P (or Space in the window) to play/pause, ⌘→/⌘← for next/previous.

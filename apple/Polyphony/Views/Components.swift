@@ -153,8 +153,8 @@ extension View {
         modifier(AlbumContextMenu(album: album))
     }
 
-    func trackContextMenu(_ track: Track, in tracks: [Track] = []) -> some View {
-        modifier(TrackContextMenu(track: track, tracks: tracks))
+    func trackContextMenu(_ track: Track, in tracks: [Track] = [], onRemove: (() -> Void)? = nil) -> some View {
+        modifier(TrackContextMenu(track: track, tracks: tracks, onRemove: onRemove))
     }
 }
 
@@ -172,8 +172,29 @@ private struct AlbumContextMenu: ViewModifier {
             Button(album.starred ? "Remove from Favourites" : "Add to Favourites") {
                 Task { try? await model.subsonic?.setStarred(.album(album.id), !album.starred) }
             }
+            if model.isContinuo {
+                Divider()
+                Button("Remove from Library…", role: .destructive) { confirming = true }
+            }
+        }
+        .confirmationDialog("Remove “\(album.name)” from your library?", isPresented: $confirming) {
+            Button("Remove", role: .destructive) {
+                Task {
+                    do {
+                        try await model.continuo?.removeAlbum(libraryAlbumID: album.id)
+                        model.albumLists = [:]
+                        model.notice = "Removed \(album.name). You can restore it from Recently Removed."
+                    } catch {
+                        model.handle(error)
+                    }
+                }
+            }
+        } message: {
+            Text("Its files go after a while; until then it can be restored.")
         }
     }
+
+    @State private var confirming = false
 
     private func load(_ then: @escaping ([Track]) -> Void) async {
         guard let subsonic = model.subsonic else { return }
@@ -189,6 +210,7 @@ private struct TrackContextMenu: ViewModifier {
     @Environment(AppModel.self) private var model
     let track: Track
     let tracks: [Track]
+    let onRemove: (() -> Void)?
 
     func body(content: Content) -> some View {
         content.contextMenu {
@@ -210,6 +232,9 @@ private struct TrackContextMenu: ViewModifier {
                 Task { try? await model.subsonic?.setStarred(.track(track.id), !track.starred) }
             }
             AddToPlaylistMenu(trackIDs: [track.id])
+            if let onRemove {
+                Button("Remove from Playlist", role: .destructive, action: onRemove)
+            }
         }
     }
 }

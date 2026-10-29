@@ -79,6 +79,11 @@ public final class PlayerController {
     /// Library tracks only: "now playing" when a track starts, a counted play once [ScrobbleRule] says so.
     @ObservationIgnored public var scrobble: @MainActor (Track, _ submission: Bool) -> Void = { _, _ in }
 
+    /// Called when there's something worth keeping for next launch (a new song, a pause, every half
+    /// minute of play): the app writes it to disk.
+    @ObservationIgnored public var persist: @MainActor (PlayQueue.Snapshot?) -> Void = { _ in }
+    @ObservationIgnored private var lastPersisted: TimeInterval = 0
+
     @ObservationIgnored private var playedOfCurrent: TimeInterval = 0
     @ObservationIgnored private var lastPosition: TimeInterval = 0
     @ObservationIgnored private var scrobbled = false
@@ -118,6 +123,30 @@ public final class PlayerController {
         let wasEmpty = queue.isEmpty
         queue.append(entries)
         if wasEmpty { loadCurrent(autoplay: true) } else { preloadNext() }
+    }
+
+    /// Last launch's queue, loaded paused at its place: Play carries on.
+    public func restore(_ snapshot: PlayQueue.Snapshot) {
+        queue = PlayQueue(snapshot: snapshot)
+        guard let item = queue.current else { return }
+        loadGeneration += 1
+        let generation = loadGeneration
+        duration = item.entry.duration
+        position = snapshot.position
+        lastPosition = snapshot.position
+        playedOfCurrent = 0
+        scrobbled = false
+        publishNowPlaying()
+        Task { @MainActor in
+            guard let source = await resolve(item.entry), generation == loadGeneration else { return }
+            engine.load(source, startAt: snapshot.position, autoplay: false)
+            preloadNext()
+        }
+    }
+
+    private func save() {
+        lastPersisted = position
+        persist(queue.snapshot(position: position))
     }
 
     // MARK: Controls
@@ -197,6 +226,7 @@ public final class PlayerController {
     public func stop() {
         engine.stop()
         queue = PlayQueue()
+        persist(nil)
         isPlaying = false
         position = 0
         duration = 0
@@ -224,6 +254,7 @@ public final class PlayerController {
         error = nil
         duration = item.entry.duration
         publishNowPlaying()
+        save()
         Task { @MainActor in
             guard let source = await resolve(item.entry) else {
                 if generation == loadGeneration { error = "Can't play \(item.entry.title)." }
@@ -257,6 +288,7 @@ public final class PlayerController {
             isBuffering = false
         case .paused:
             isPlaying = false
+            save()
         case let .buffering(on):
             isBuffering = on
         case let .position(time, total):
@@ -265,6 +297,7 @@ public final class PlayerController {
             if delta > 0 && delta < 5 { playedOfCurrent += delta }
             lastPosition = time
             position = time
+            if abs(time - lastPersisted) >= 30 { save() }
             if let total, total > 0 { duration = total }
             if !scrobbled, let track = current?.libraryTrack, ScrobbleRule.counts(played: playedOfCurrent, duration: duration) {
                 scrobbled = true

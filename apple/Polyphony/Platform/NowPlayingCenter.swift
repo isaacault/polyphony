@@ -69,7 +69,7 @@ final class NowPlayingCenter: NowPlayingPublisher {
         artwork = nil
         guard let url else { return }
         Task {
-            guard let (data, _) = try? await URLSession.shared.data(from: url), let image = NSImage(data: data) else { return }
+            guard let data = try? await URLSession.shared.data(from: url).0, let image = NSImage(data: data) else { return }
             guard url == artworkURL else { return }
             let art = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
             artwork = art

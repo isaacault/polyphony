@@ -139,6 +139,65 @@ public struct ContinuoService: Sendable {
                           uniquingKeysWith: { a, _ in a })
     }
 
+    // MARK: Removing albums
+
+    /// Takes an album out of the library; it can be restored for a while.
+    public func removeAlbum(libraryAlbumID: String) async throws {
+        let response = try await authorised("POST", "v1/library/albums/\(libraryAlbumID)/remove", body: Empty())
+        guard (200..<300).contains(response.status) else { throw ContinuoClient.error(from: response) }
+    }
+
+    public func removedAlbums() async throws -> [RemovedAlbum] {
+        let dtos: [RemovedDTO] = try await get("v1/library/removed")
+        return dtos.map { RemovedAlbum(id: $0.id, title: $0.title ?? "", artist: $0.artist, removedAt: $0.removedAt,
+                                       restorableUntil: $0.restorableUntil) }
+    }
+
+    public func restoreAlbum(removedID: Int) async throws {
+        let response = try await authorised("POST", "v1/library/removed/\(removedID)/restore", body: Empty())
+        guard (200..<300).contains(response.status) else { throw ContinuoClient.error(from: response) }
+    }
+
+    // MARK: Scrobbling for Play now songs
+
+    /// Nil when this continuo predates scrobbling.
+    public func scrobbling() async throws -> ScrobbleLinks? {
+        let response = try await authorised("GET", "v1/scrobbling")
+        if response.status == 404 { return nil }
+        guard (200..<300).contains(response.status) else { throw ContinuoClient.error(from: response) }
+        return try decode(ScrobbleLinksDTO.self, response).model
+    }
+
+    public func linkListenBrainz(token: String) async throws -> ScrobbleLinks {
+        try await scrobbleCall("PUT", "v1/scrobbling/listenbrainz", body: TokenBody(token: token.trimmingCharacters(in: .whitespaces)))
+    }
+
+    /// Last.fm: open [url] for the user to approve, then call [finishLastFm] with [token].
+    public func startLastFm() async throws -> (token: String, url: URL) {
+        let response = try await authorised("POST", "v1/scrobbling/lastfm/connect", body: Empty())
+        guard (200..<300).contains(response.status) else { throw ContinuoClient.error(from: response) }
+        let dto = try decode(LastFmStartDTO.self, response)
+        guard let url = URL(string: dto.url) else {
+            throw ContinuoError(status: response.status, code: "unexpected_response", message: "Last.fm gave no address.",
+                                retryable: false)
+        }
+        return (dto.token, url)
+    }
+
+    public func finishLastFm(token: String) async throws -> ScrobbleLinks {
+        try await scrobbleCall("POST", "v1/scrobbling/lastfm/finish", body: TokenBody(token: token))
+    }
+
+    public func unlinkScrobbler(_ service: String) async throws -> ScrobbleLinks {
+        try await scrobbleCall("DELETE", "v1/scrobbling/\(service)", body: Optional<Empty>.none)
+    }
+
+    private func scrobbleCall<B: Encodable>(_ method: String, _ path: String, body: B?) async throws -> ScrobbleLinks {
+        let response = try await authorised(method, path, body: body)
+        guard (200..<300).contains(response.status) else { throw ContinuoClient.error(from: response) }
+        return try decode(ScrobbleLinksDTO.self, response).model
+    }
+
     // MARK: Plumbing
 
     private struct Empty: Encodable {}
@@ -459,6 +518,40 @@ private struct LyricsDTO: Decodable {
         return Lyrics(lines: (lines ?? []).map { LyricLine(startMs: synced ? $0.startMs : nil, text: $0.text ?? "") },
                       synced: synced, instrumental: instrumental ?? false,
                       source: source == "lrclib" ? "LRCLIB" : source)
+    }
+}
+
+private struct RemovedDTO: Decodable {
+    let id: Int
+    let title: String?
+    let artist: String?
+    let removedAt: String?
+    let restorableUntil: String?
+}
+
+private struct TokenBody: Encodable { let token: String }
+
+private struct LastFmStartDTO: Decodable {
+    let token: String
+    let url: String
+}
+
+private struct ScrobbleLinksDTO: Decodable {
+    struct Link: Decodable {
+        let available: Bool?
+        let connected: Bool?
+        let account: String?
+        var model: ScrobbleLinks.Link {
+            ScrobbleLinks.Link(available: available ?? false, connected: connected ?? false,
+                               account: account?.isEmpty == false ? account : nil)
+        }
+    }
+    let listenbrainz: Link?
+    let lastfm: Link?
+
+    var model: ScrobbleLinks {
+        ScrobbleLinks(listenBrainz: listenbrainz?.model ?? .init(available: false, connected: false, account: nil),
+                      lastFm: lastfm?.model ?? .init(available: false, connected: false, account: nil))
     }
 }
 

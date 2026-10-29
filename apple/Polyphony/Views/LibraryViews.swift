@@ -52,7 +52,10 @@ struct AlbumsView: View {
 
     private func load() async {
         guard let subsonic = model.subsonic else { return }
-        loading = true
+        if let cached = model.albumLists[sort] {
+            albums = cached
+        }
+        loading = albums.isEmpty
         defer { loading = false }
         var all: [Album] = []
         do {
@@ -60,10 +63,11 @@ struct AlbumsView: View {
             for offset in stride(from: 0, to: 20_000, by: 500) {
                 let page = try await subsonic.albums(sort, size: 500, offset: offset)
                 all += page
-                if offset == 0 { albums = all }
+                if offset == 0 && albums.isEmpty { albums = all }
                 if page.count < 500 { break }
             }
             albums = all
+            model.albumLists[sort] = all
         } catch {
             model.handle(error)
         }
@@ -162,15 +166,17 @@ struct TrackList: View {
     var numbered = false
     var showArtwork = false
     var albumBadge: String?
+    /// A playlist's songs can be taken out of it (by position: the same song can be there twice).
+    var onRemove: ((Int) -> Void)?
 
     var body: some View {
         LazyVStack(spacing: 0) {
-            ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+            ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
                 TrackRow(track: track, index: index, numbered: numbered, showArtwork: showArtwork, albumBadge: albumBadge,
                          isCurrent: model.player.current?.libraryTrack?.id == track.id)
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) { model.player.play(tracks, startAt: index) }
-                    .trackContextMenu(track, in: tracks)
+                    .trackContextMenu(track, in: tracks, onRemove: onRemove.map { remove in { remove(index) } })
                 Divider().opacity(0.4)
             }
         }
@@ -254,9 +260,11 @@ struct ArtistsView: View {
         .navigationTitle("Artists")
         .searchable(text: $filter, placement: .toolbar, prompt: "Filter artists")
         .task {
+            if let cached = model.artistList { artists = cached }
             defer { loading = false }
             do {
                 artists = try await model.subsonic?.artists() ?? []
+                model.artistList = artists
             } catch {
                 model.handle(error)
             }
@@ -517,7 +525,12 @@ struct PlaylistDetailView: View {
                             .controlSize(.large)
                         }
                     }
-                    TrackList(tracks: playlist.tracks, showArtwork: true)
+                    TrackList(tracks: playlist.tracks, showArtwork: true, onRemove: { index in
+                        Task {
+                            try? await model.subsonic?.updatePlaylist(id: playlist.id, removingIndices: [index])
+                            self.playlist = try? await model.subsonic?.playlist(id: playlistID)
+                        }
+                    })
                 }
                 .padding(24)
             } else {
