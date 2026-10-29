@@ -8,6 +8,7 @@ struct HomeView: View {
     @State private var recentlyAdded: [Album] = []
     @State private var recentlyPlayed: [Album] = []
     @State private var mostPlayed: [Album] = []
+    @State private var random: [Album] = []
     @State private var discovery = Discovery()
 
     var body: some View {
@@ -52,6 +53,7 @@ struct HomeView: View {
                         }
                     } header: { SectionTitle("Playlists for You") }
                 }
+                shelf("Random Picks", random)
                 shelf("Most Played", mostPlayed)
                 if recentlyAdded.isEmpty && recentlyPlayed.isEmpty && mostPlayed.isEmpty {
                     ProgressView().frame(maxWidth: .infinity).padding(60)
@@ -93,9 +95,11 @@ struct HomeView: View {
         async let added = subsonic.albums(.newest, size: 30)
         async let played = subsonic.albums(.recent, size: 30)
         async let most = subsonic.albums(.frequent, size: 30)
+        async let picks = subsonic.albums(.random, size: 30)
         recentlyAdded = (try? await added) ?? []
         recentlyPlayed = (try? await played) ?? []
         mostPlayed = (try? await most) ?? []
+        random = (try? await picks) ?? []
         if let continuo = model.continuo {
             discovery = (try? await continuo.discovery()) ?? Discovery()
         }

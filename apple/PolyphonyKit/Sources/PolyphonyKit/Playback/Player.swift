@@ -65,6 +65,9 @@ public final class PlayerController {
     public private(set) var position: TimeInterval = 0
     public private(set) var duration: TimeInterval = 0
     public private(set) var error: String?
+    /// The sleep timer: pause at this time, or (with [sleepAtEndOfSong]) when the song ends.
+    public private(set) var sleepAt: Date?
+    public private(set) var sleepAtEndOfSong = false
 
     public var volume: Float {
         get { engine.volume }
@@ -84,6 +87,7 @@ public final class PlayerController {
     @ObservationIgnored public var persist: @MainActor (PlayQueue.Snapshot?) -> Void = { _ in }
     @ObservationIgnored private var lastPersisted: TimeInterval = 0
 
+    @ObservationIgnored public var now: @MainActor () -> Date = Date.init
     @ObservationIgnored private var playedOfCurrent: TimeInterval = 0
     @ObservationIgnored private var lastPosition: TimeInterval = 0
     @ObservationIgnored private var scrobbled = false
@@ -147,6 +151,33 @@ public final class PlayerController {
     private func save() {
         lastPersisted = position
         persist(queue.snapshot(position: position))
+    }
+
+    // MARK: Sleep timer
+
+    public enum SleepTimer: Sendable, Equatable {
+        case minutes(Int)
+        case endOfSong
+    }
+
+    public func setSleepTimer(_ timer: SleepTimer?) {
+        switch timer {
+        case let .minutes(m)?:
+            sleepAt = now().addingTimeInterval(TimeInterval(m * 60))
+            sleepAtEndOfSong = false
+        case .endOfSong?:
+            sleepAt = nil
+            sleepAtEndOfSong = true
+        case nil:
+            sleepAt = nil
+            sleepAtEndOfSong = false
+        }
+    }
+
+    private func sleepIfDue() {
+        guard let sleepAt, now() >= sleepAt else { return }
+        self.sleepAt = nil
+        pause()
     }
 
     // MARK: Controls
@@ -298,13 +329,19 @@ public final class PlayerController {
             lastPosition = time
             position = time
             if abs(time - lastPersisted) >= 30 { save() }
+            sleepIfDue()
             if let total, total > 0 { duration = total }
             if !scrobbled, let track = current?.libraryTrack, ScrobbleRule.counts(played: playedOfCurrent, duration: duration) {
                 scrobbled = true
                 scrobble(track, true)
             }
         case .ended:
-            if queue.advanceOnEnd() {
+            if sleepAtEndOfSong {
+                // The timer stops at the end of this song: move on to the next, paused.
+                sleepAtEndOfSong = false
+                if queue.advanceOnEnd() { loadCurrent(autoplay: false) }
+                isPlaying = false
+            } else if queue.advanceOnEnd() {
                 loadCurrent(autoplay: true)
             } else {
                 isPlaying = false
