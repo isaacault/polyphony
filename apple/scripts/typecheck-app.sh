@@ -4,7 +4,8 @@
 # Builds PolyphonyKit first (its ci.sh). Exit 0 = they type-check.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-PolyphonyKit/scripts/ci.sh >/dev/null || { echo "typecheck-app: PolyphonyKit's ci.sh failed (run it to see why)" >&2; exit 1; }
+# Twice: the Jetson's Swift build now and then crashes (see PolyphonyKit/scripts/ci.sh).
+PolyphonyKit/scripts/ci.sh >/dev/null || PolyphonyKit/scripts/ci.sh >/dev/null || { echo "typecheck-app: PolyphonyKit's ci.sh failed (run it to see why)" >&2; exit 1; }
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/typecheck-app.XXXXXX")
 trap 'rm -rf "$TMP"' EXIT
 FILES=(Polyphony/App/AppModel.swift Polyphony/Platform/Downloads.swift)
