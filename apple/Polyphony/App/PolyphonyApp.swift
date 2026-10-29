@@ -1,6 +1,7 @@
 import AppKit
 import PolyphonyKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 @main
 struct PolyphonyApp: App {
@@ -22,6 +23,13 @@ struct PolyphonyApp: App {
             PlaybackCommands(player: model.player)
             GoCommands(model: model)
             SidebarCommands()
+            CommandGroup(after: .help) {
+                Button("Copy Diagnostics") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(model.diagnostics(), forType: .string)
+                }
+                Button("Save Diagnostics…") { saveDiagnostics(model.diagnostics()) }
+            }
         }
 
         Settings {
@@ -140,4 +148,17 @@ extension RepeatMode {
         case .one: "One"
         }
     }
+}
+
+/// Help > Save Diagnostics: a text file to send when something's wrong (no passwords or tokens in it).
+@MainActor
+private func saveDiagnostics(_ text: String) {
+    let panel = NSSavePanel()
+    let format = DateFormatter()
+    format.dateFormat = "yyyyMMdd-HHmmss"
+    let stamp = format.string(from: Date())
+    panel.nameFieldStringValue = "polyphony-diagnostics-\(stamp).txt"
+    panel.allowedContentTypes = [.plainText]
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    try? text.write(to: url, atomically: true, encoding: .utf8)
 }

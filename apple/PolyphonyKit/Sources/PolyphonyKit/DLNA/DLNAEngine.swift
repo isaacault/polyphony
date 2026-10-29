@@ -107,6 +107,7 @@ public final class DLNAEngine: AudioEngine {
                 if autoplay { try await control.play() }
                 if startAt > 0 { try? await control.seek(ms: Int(startAt * 1000)) }
             } catch {
+                DiagnosticLog.shared.log("dlna", "\(control.renderer.name): hand-off of \(url) failed: \(error)")
                 self.onEvent?(.failed(Self.explain(error, url: url)))
             }
         }
