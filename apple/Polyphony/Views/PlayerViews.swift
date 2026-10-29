@@ -321,6 +321,10 @@ struct SettingsView: View {
                 ScrobblingSection()
                 DevicesSection()
             }
+            Section("Appearance") {
+                Toggle("Artwork colours in Now Playing",
+                       isOn: Binding(get: { model.artworkColours }, set: { model.setArtworkColours($0) }))
+            }
             Section("Favourites") {
                 Picker("Mark songs with", selection: Binding(get: { model.usesRatings }, set: { model.setUsesRatings($0) })) {
                     Text("A heart (favourite or not)").tag(false)
@@ -471,6 +475,7 @@ private struct ScrobblingSection: View {
 /// artwork in the bar closes it.
 struct NowPlayingView: View {
     @Environment(AppModel.self) private var model
+    @State private var palette: ArtworkPalette?
 
     var body: some View {
         if let entry = model.player.current {
@@ -482,6 +487,12 @@ struct NowPlayingView: View {
                     .opacity(0.45)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
+                // Its colours over it (Settings > Appearance).
+                if model.artworkColours, let palette {
+                    LinearGradient(colors: [Color(palette.vibrant).opacity(0.55), Color(palette.darkMuted).opacity(0.75)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                        .transition(.opacity)
+                }
                 Rectangle().fill(.ultraThinMaterial)
                 HStack(spacing: 48) {
                     VStack(alignment: .leading, spacing: 14) {
@@ -514,6 +525,12 @@ struct NowPlayingView: View {
                 }
             }
             .onExitCommand { model.nowPlayingExpanded = false }
+            .tint(model.artworkColours ? palette.map { Color($0.vibrant) } : nil)
+            .animation(.easeInOut(duration: 0.6), value: palette)
+            .task(id: model.artworkURL(for: entry, size: 300)) {
+                guard let url = model.artworkURL(for: entry, size: 300) else { palette = nil; return }
+                palette = await ArtworkColors.palette(for: url)
+            }
         }
     }
 }
