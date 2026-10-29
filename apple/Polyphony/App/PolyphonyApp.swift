@@ -92,6 +92,17 @@ struct PlaybackCommands: Commands {
                 .keyboardShortcut(.upArrow, modifiers: .command)
             Button("Volume Down") { player.volume = max(0, player.volume - 0.1) }
                 .keyboardShortcut(.downArrow, modifiers: .command)
+            Divider()
+            Menu("Sleep Timer") {
+                ForEach([15, 30, 45, 60, 90], id: \.self) { minutes in
+                    Button("\(minutes) Minutes") { player.setSleepTimer(.minutes(minutes)) }
+                }
+                Button("End of Song") { player.setSleepTimer(.endOfSong) }
+                if player.sleepAt != nil || player.sleepAtEndOfSong {
+                    Divider()
+                    Button("Turn Off") { player.setSleepTimer(nil) }
+                }
+            }
         }
     }
 }

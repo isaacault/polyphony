@@ -1,3 +1,4 @@
+import AppKit
 import PolyphonyKit
 import SwiftUI
 
@@ -46,8 +47,20 @@ struct PlayerBar: View {
                 Text([entry.artist, entry.album].compactMap { $0 }.joined(separator: " — "))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
-            if case .playNow = entry {
+            if case let .playNow(stream, _) = entry {
                 Image(systemName: "bolt.fill").font(.caption).foregroundStyle(.secondary).help("Play now: streamed while it downloads")
+                Button("Keep") {
+                    Task {
+                        do {
+                            try await model.continuo?.keepPlayNow(id: stream.id)
+                            model.notice = "Keeping \(entry.title): it'll be added to your library in full quality."
+                        } catch {
+                            model.handle(error)
+                        }
+                    }
+                }
+                .controlSize(.small)
+                .help("Add this song to your library")
             }
         }
     }
@@ -101,6 +114,12 @@ struct PlayerBar: View {
                 Image(systemName: "list.bullet").foregroundStyle(inspector == .queue ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
             }
             .help("Queue")
+            if player.sleepAt != nil || player.sleepAtEndOfSong {
+                Image(systemName: "moon.zzz.fill").foregroundStyle(.tint)
+                    .help(player.sleepAtEndOfSong ? "Sleep timer: end of song"
+                                                  : "Sleep timer: \(player.sleepAt!.formatted(date: .omitted, time: .shortened))")
+            }
+            AirPlayButton().frame(width: 22, height: 22).help("AirPlay")
             Image(systemName: "speaker.fill").foregroundStyle(.secondary).font(.caption)
             Slider(value: Binding(get: { Double(player.volume) }, set: { player.volume = Float($0) }), in: 0...1)
                 .controlSize(.mini)
@@ -133,6 +152,7 @@ struct QueueView: View {
                     HStack {
                         Text(player.queue.title.map { "Up Next · \($0)" } ?? "Up Next")
                         Spacer()
+                        Button("Save as Playlist") { saveAsPlaylist() }.buttonStyle(.link).font(.caption)
                         Button("Clear") { player.clearUpNext() }.buttonStyle(.link).font(.caption)
                     }
                 }
@@ -144,6 +164,21 @@ struct QueueView: View {
             }
         }
         .overlay { if player.queue.isEmpty { Placeholder(title: "Nothing queued", symbol: "list.bullet") } }
+    }
+
+    /// The queue's library songs, in play order, as a new playlist.
+    private func saveAsPlaylist() {
+        let ids = ([player.queue.current].compactMap { $0 } + player.queue.upNext).compactMap { $0.entry.libraryTrack?.id }
+        let name = player.queue.title.map { "\($0) (queue)" }
+            ?? "Queue \(Date().formatted(date: .abbreviated, time: .shortened))"
+        Task {
+            do {
+                try await model.subsonic?.createPlaylist(name: name, trackIDs: ids)
+                model.notice = "Saved as “\(name)”"
+            } catch {
+                model.handle(error)
+            }
+        }
     }
 }
 

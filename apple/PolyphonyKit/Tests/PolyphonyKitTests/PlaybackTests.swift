@@ -256,3 +256,53 @@ private final class RestoreEngine: AudioEngine {
     func seek(to time: TimeInterval) {}
     func stop() {}
 }
+
+@MainActor
+struct SleepTimerTests {
+    @Test func aTimedSleepPausesWhenItsDue() async {
+        var clock = Date(timeIntervalSince1970: 0)
+        var paused = false
+        let spy = PauseSpy()
+        spy.onPause = { paused = true }
+        let p = PlayerController(engine: spy)
+        p.now = { clock }
+        p.resolve = { _ in AudioSource(url: URL(string: "https://x/y")!) }
+        p.play([Track(id: "a", title: "a", duration: 3600)])
+        p.setSleepTimer(.minutes(15))
+        clock = clock.addingTimeInterval(14 * 60)
+        spy.onEvent?(.position(10, duration: 3600))
+        #expect(!paused)
+        clock = clock.addingTimeInterval(61)
+        spy.onEvent?(.position(11, duration: 3600))
+        #expect(paused && p.sleepAt == nil)
+    }
+
+    @Test func endOfSongStopsAfterThisOne() async {
+        let spy = PauseSpy()
+        let p = PlayerController(engine: spy)
+        p.resolve = { entry in AudioSource(url: URL(string: "https://x/\(entry.libraryTrack!.id)")!) }
+        p.play([Track(id: "a", title: "a"), Track(id: "b", title: "b")])
+        for _ in 0..<20 { await Task.yield() }
+        p.setSleepTimer(.endOfSong)
+        spy.onEvent?(.ended)
+        for _ in 0..<20 { await Task.yield() }
+        #expect(!p.isPlaying && p.current?.libraryTrack?.id == "b" && spy.loads.last?.autoplay == false)
+    }
+}
+
+@MainActor
+private final class PauseSpy: AudioEngine {
+    var onEvent: ((AudioEvent) -> Void)?
+    var volume: Float = 1
+    var onPause: () -> Void = {}
+    var loads: [(url: URL, autoplay: Bool)] = []
+    func load(_ source: AudioSource, startAt: TimeInterval, autoplay: Bool) {
+        loads.append((source.url, autoplay))
+        if autoplay { onEvent?(.started) }
+    }
+    func preload(_ next: AudioSource?) {}
+    func play() {}
+    func pause() { onPause(); onEvent?(.paused) }
+    func seek(to time: TimeInterval) {}
+    func stop() {}
+}
