@@ -26,3 +26,7 @@ build-*.log
 .swiftpm/
 xcuserdata/
 DerivedData/
+
+# XcodeGen output (apple/project.yml is the source)
+apple/Polyphony.xcodeproj/
+apple/Polyphony/Resources/Info.plist

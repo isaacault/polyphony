@@ -59,6 +59,19 @@ public struct CatalogTrack: Sendable, Hashable, Identifiable {
     /// The MusicBrainz recording, which Play now and song requests need.
     public var recordingID: String?
     public var artworkURL: URL?
+
+    public init(key: String, title: String, artist: String?, durationMs: Int?, albumTitle: String?,
+                albumReleaseGroupID: String?, availability: Availability, recordingID: String?, artworkURL: URL?) {
+        self.key = key
+        self.title = title
+        self.artist = artist
+        self.durationMs = durationMs
+        self.albumTitle = albumTitle
+        self.albumReleaseGroupID = albumReleaseGroupID
+        self.availability = availability
+        self.recordingID = recordingID
+        self.artworkURL = artworkURL
+    }
 }
 
 public struct CatalogResults: Sendable, Hashable {
