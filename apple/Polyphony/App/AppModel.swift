@@ -124,6 +124,8 @@ final class AppModel {
 
     /// Plays on [renderer] (nil: this Mac), carrying on from where the song is.
     func play(on renderer: Renderer?) {
+        DiagnosticLog.shared.log("output", renderer.map { "to \($0.name) (\($0.model ?? "?"), \($0.avTransport.host ?? "?"))" } ?? "to this Mac"
+                                 + (receiverAddress.isEmpty ? ", no receiver address" : ", receiver \(receiverAddress)"))
         speakerEngine?.detach()
         if let renderer {
             let engine = DLNAEngine(control: DLNAControl(renderer: renderer))
@@ -250,8 +252,15 @@ final class AppModel {
 
     func signIn(address: String, username: String, password: String) async throws {
         let device = Host.current().localizedName ?? "Mac"
-        let saved = try await Connector.connect(address: address, username: username, password: password,
+        let saved: SavedServer
+        do {
+            saved = try await Connector.connect(address: address, username: username, password: password,
                                                 deviceName: "Polyphony on \(device)")
+        } catch {
+            DiagnosticLog.shared.log("sign-in", "\(address) as \(username): \(error)")
+            throw error
+        }
+        DiagnosticLog.shared.log("sign-in", "signed in to \(saved.address.host ?? "?") as \(saved.kind.rawValue)")
         var list = await store.load()
         list.add(saved)
         await store.save(list)
@@ -266,6 +275,7 @@ final class AppModel {
         guard key != server?.key else { return }
         var list = await store.load()
         guard list.activate(key), let next = list.active else { return }
+        DiagnosticLog.shared.log("servers", "switched to \(next.address.host ?? "?")")
         await store.save(list)
         detach(to: .loading)
         await attach(next)
@@ -354,11 +364,43 @@ final class AppModel {
 
     /// A call that failed because the session ended sends the app back to sign-in.
     func handle(_ error: Error) {
+        DiagnosticLog.shared.log("error", String(describing: error))
         if let e = error as? ContinuoError, e.needsSignIn {
             Task { await signOut() }
             return
         }
         notice = (error as? CustomStringConvertible)?.description ?? error.localizedDescription
+    }
+
+    // MARK: Diagnostics
+
+    /// Help > Save Diagnostics: what's set up and what went on lately, with no passwords or tokens.
+    func diagnostics() -> String {
+        let info = Bundle.main.infoDictionary
+        let version = "\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"
+        let os = ProcessInfo.processInfo.operatingSystemVersionString
+        let rows = servers.map { s in
+            Diagnostics.Server(kind: s.kind.rawValue, host: s.address.host ?? s.address.absoluteString, user: s.subsonicUsername,
+                               showing: s.key == server?.key,
+                               receiverAddress: UserDefaults.standard.string(forKey: "receiver." + (s.address.host ?? ""))
+                                   ?? s.session?.library.receiverBaseUrl,
+                               libraryHost: s.subsonic.baseURL.host)
+        }
+        let settings: [(String, String)] = [
+            ("Streaming quality", streamingBitrate == 0 ? "Original" : "MP3 \(streamingBitrate) kbps"),
+            ("Volume levelling", "\(replayGain.mode.rawValue), pre-amp \(replayGain.preampDb) dB, prevent clipping \(replayGain.preventClipping)"),
+            ("Mark songs with", usesRatings ? "stars" : "hearts"),
+            ("Output", speaker.map { "\($0.name) (\($0.model ?? "?"))" } ?? "this Mac"),
+            ("Speakers found", speakers.renderers.map { "\($0.name) (\($0.avTransport.host ?? "?"))" }.joined(separator: ", ")),
+            ("Downloads", "\(downloads.index.entries.count) songs, \(ByteCountFormatter.string(fromByteCount: downloads.usedBytes, countStyle: .file)), limit \(downloads.limitGB == 0 ? "none" : "\(downloads.limitGB) GB"), \(downloads.active.count) queued, \(downloads.failed.count) failed"),
+            ("Playing", player.current.map { "\($0.title), \(player.isPlaying ? "playing" : "paused") at \(Int(player.position)) s" } ?? "nothing"),
+            ("Player error", player.error ?? "none"),
+        ]
+        let rules = downloads.rules.map { r in
+            "\(r.target.label)\(r.enabled ? "" : " (paused)")\(r.maxTracks > 0 ? ", up to \(r.maxTracks)" : ""): \(downloads.index.entries.values.filter { $0.ruleID == r.id }.count) kept"
+        }
+        return Diagnostics.report(app: version, system: os, servers: rows, settings: settings,
+                                  sections: [("Download rules", rules)], log: DiagnosticLog.shared.recent)
     }
 
     // MARK: Artwork and audio
