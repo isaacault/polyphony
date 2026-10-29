@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import PolyphonyKit
+import SwiftUI
 
 /// The app's state: who's signed in where, the clients for that server, and the player.
 @MainActor
@@ -16,6 +17,21 @@ final class AppModel {
     private(set) var singleSongAlbumIDs: Set<String> = []
     /// What the app is saying right now ("Requested Parachutes"), shown briefly.
     var notice: String?
+    /// Where the window is: the sidebar's choice and the pages opened from it. Here rather than in the
+    /// view so menu commands (⌘F, ⌘L) can move it.
+    var sidebar: SidebarItem? = .home
+    var path = NavigationPath()
+
+    func go(to item: SidebarItem) {
+        sidebar = item
+        path = NavigationPath()
+    }
+
+    /// ⌘L: the album that's playing.
+    func showCurrentAlbum() {
+        guard let albumID = player.current?.libraryTrack?.albumID else { return }
+        path.append(Route.album(albumID))
+    }
     /// A Play now song being fetched before it can play.
     private(set) var pendingPlayNow: PlayNowStream?
 
