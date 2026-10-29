@@ -1,7 +1,5 @@
 package app.polyphony.core.domain.transcode
 
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Inputs that influence which profile is picked for a stream. */
 data class TranscodeContext(
@@ -37,8 +35,7 @@ data class TranscodeDecision(
 }
 
 /** Pure function from policy + context to a profile. No Android dependencies; fully unit-testable. */
-@Singleton
-class TranscodeResolver @Inject constructor() {
+class TranscodeResolver {
 
     fun resolve(
         policy: TranscodePolicy,

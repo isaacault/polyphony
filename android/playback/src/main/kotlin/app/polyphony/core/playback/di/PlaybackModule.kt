@@ -2,6 +2,7 @@ package app.polyphony.core.playback.di
 
 import app.polyphony.core.domain.playback.CastController
 import app.polyphony.core.domain.playback.PlaybackController
+import app.polyphony.core.domain.transcode.TranscodeResolver
 import app.polyphony.core.playback.cast.CastManager
 import app.polyphony.core.playback.controller.PlaybackControllerImpl
 import app.polyphony.core.playback.util.Clock
@@ -36,4 +37,9 @@ object PlaybackProvidesModule {
     @Provides
     @Singleton
     fun provideClock(): Clock = Clock.SYSTEM
+
+    // shared:domain is multiplatform and so has no javax.inject: the stateless resolver is provided here.
+    @Provides
+    @Singleton
+    fun provideTranscodeResolver(): TranscodeResolver = TranscodeResolver()
 }

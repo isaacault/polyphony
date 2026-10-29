@@ -40,12 +40,13 @@ cd "$root"
 sha=$(git rev-parse HEAD)
 short=${sha:0:7}
 if $quick; then
-  # core:domain is plain Kotlin (`test`); every other module is Android (`testDebugUnitTest`).
-  # The app has unit tests, so this compiles it too.
-  tasks=${CI_TASKS:-":shared:domain:test testDebugUnitTest"}
+  # shared:domain is Kotlin Multiplatform (`jvmTest`; a generic `test` would skip it, and
+  # compileCommonMainKotlinMetadata proves its common code uses only common APIs); every other
+  # module is Android (`testDebugUnitTest`). The app has unit tests, so this compiles it too.
+  tasks=${CI_TASKS:-":shared:domain:compileCommonMainKotlinMetadata :shared:domain:jvmTest testDebugUnitTest"}
   what="compile and unit tests"
 else
-  tasks=${CI_TASKS:-"test lintDebug :android:app:assembleDebug"}
+  tasks=${CI_TASKS:-":shared:domain:compileCommonMainKotlinMetadata :shared:domain:jvmTest test lintDebug :android:app:assembleDebug"}
   what="test, lint and assemble"
 fi
 lock=${CI_LOCK:-/ssd/Personal/repositories/.locks/docker-ci.lock}
