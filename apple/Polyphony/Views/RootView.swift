@@ -3,7 +3,7 @@ import PolyphonyKit
 import SwiftUI
 
 enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
-    case home, search, artists, albums, songs, playlists, genres, favourites, requests, removed
+    case home, search, artists, albums, songs, playlists, genres, favourites, downloads, requests, removed
 
     var id: String { rawValue }
 
@@ -17,6 +17,7 @@ enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
         case .playlists: "Playlists"
         case .genres: "Genres"
         case .favourites: "Favourites"
+        case .downloads: "Downloads"
         case .requests: "Requests"
         case .removed: "Recently Removed"
         }
@@ -32,6 +33,7 @@ enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
         case .playlists: "music.note.list"
         case .genres: "guitars"
         case .favourites: "heart"
+        case .downloads: "arrow.down.to.line"
         case .requests: "arrow.down.circle"
         case .removed: "trash"
         }
@@ -69,7 +71,7 @@ struct MainWindow: View {
                     row(.search)
                 }
                 Section("Library") {
-                    ForEach([SidebarItem.artists, .albums, .songs, .playlists, .genres, .favourites]) { row($0) }
+                    ForEach([SidebarItem.artists, .albums, .songs, .playlists, .genres, .favourites, .downloads]) { row($0) }
                 }
                 if model.isContinuo {
                     Section("Server") {
@@ -118,6 +120,7 @@ struct MainWindow: View {
         case .playlists: PlaylistsView()
         case .genres: GenresView()
         case .favourites: FavouritesView()
+        case .downloads: DownloadsView()
         case .requests: RequestsView()
         case .removed: RemovedAlbumsView()
         }

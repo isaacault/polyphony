@@ -40,6 +40,7 @@ final class AppModel {
     @ObservationIgnored var artistList: [Artist]?
 
     let player: PlayerController
+    let downloads = Downloads()
     @ObservationIgnored private let nowPlaying = NowPlayingCenter()
     @ObservationIgnored private let store = KeychainServerStore()
     @ObservationIgnored private let arrivals = ArrivalNotifier()
@@ -99,6 +100,7 @@ final class AppModel {
         if let account = continuo?.account { await account.signOut() }
         await store.save(nil)
         UserDefaults.standard.removeObject(forKey: Self.queueKey)
+        downloads.detach()
         server = nil
         subsonic = nil
         continuo = nil
@@ -110,7 +112,9 @@ final class AppModel {
 
     private func attach(_ saved: SavedServer) async {
         server = saved
-        subsonic = SubsonicClient(credentials: saved.subsonic)
+        let client = SubsonicClient(credentials: saved.subsonic)
+        subsonic = client
+        downloads.attach(server: saved) { track in client.downloadURL(trackID: track.id) }
         if saved.kind == .continuo {
             let account = ContinuoAccount(client: ContinuoClient(baseURL: saved.address),
                                           store: ServerSessionStore(store))
@@ -163,6 +167,8 @@ final class AppModel {
     private func source(for entry: QueueEntry) async -> AudioSource? {
         switch entry {
         case let .track(t):
+            // A downloaded copy plays from disk: no network, original quality.
+            if let local = downloads.localURL(t.id) { return AudioSource(url: local) }
             let bitrate = streamingBitrate
             return subsonic.map {
                 AudioSource(url: bitrate > 0 ? $0.streamURL(trackID: t.id, maxBitRateKbps: bitrate, format: "mp3")

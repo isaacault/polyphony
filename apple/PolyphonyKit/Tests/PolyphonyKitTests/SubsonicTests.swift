@@ -28,6 +28,11 @@ struct SubsonicTests {
         #expect(q["id"] == "tr-1" && q["maxBitRate"] == "192" && q["format"] == "mp3")
     }
 
+    @Test func downloadsAskForTheOriginalFile() {
+        let url = SubsonicClient(credentials: credentials).downloadURL(trackID: "tr-1")
+        #expect(url.path == "/rest/download" && query(url)["id"] == "tr-1")
+    }
+
     @Test func aPlusInASearchStaysAPlus() async throws {
         let fake = FakeTransport { _ in HTTPResponse(status: 200, body: Data(#"{"subsonic-response":{"status":"ok","searchResult3":{}}}"#.utf8)) }
         _ = try await SubsonicClient(credentials: credentials, transport: fake).search("C+C Music Factory")
