@@ -281,6 +281,8 @@ struct ArtistDetailView: View {
     @State private var info: ArtistInfo?
     @State private var catalog: CatalogArtistPage?
     @State private var discography: [CatalogAlbum] = []
+    /// Albums by others with a track crediting this artist.
+    @State private var appearsOn: [Album] = []
 
     /// The catalogue's albums that aren't in the library (continuo), to request.
     private var missing: [CatalogAlbum] {
@@ -312,6 +314,11 @@ struct ArtistDetailView: View {
                     Section {
                         AlbumGrid(albums: albums.filter { !model.singleSongAlbumIDs.contains($0.id) })
                     } header: { SectionTitle("Albums") }
+                }
+                if !appearsOn.isEmpty {
+                    Section {
+                        AlbumGrid(albums: appearsOn)
+                    } header: { SectionTitle("Appears On") }
                 }
                 if !missing.isEmpty {
                     Section {
@@ -359,6 +366,16 @@ struct ArtistDetailView: View {
             return
         }
         info = try? await subsonic.artistInfo(id: artistID)
+        if let a = artist {
+            // The library's songs naming them, kept when the credit really is theirs, on others' albums.
+            let found = (try? await subsonic.search(a.name, artists: 0, albums: 0, tracks: 300).tracks) ?? []
+            let own = Set(albums.map(\.id))
+            var others: [Album] = []
+            for id in ArtistCredits.appearsOn(a, among: found).filter({ !own.contains($0) }).prefix(18) {
+                if let album = try? await subsonic.album(id: id) { others.append(album) }
+            }
+            appearsOn = others.sorted { ($0.year ?? 0) > ($1.year ?? 0) }
+        }
         guard let continuo = model.continuo, let name = artist?.name else { return }
         // The catalogue artist of the same name: its top songs and what isn't in the library yet.
         if let hit = try? await continuo.search(name, limit: 5).artists.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }),
