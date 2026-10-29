@@ -100,6 +100,12 @@ struct MainWindow: View {
             }
             .inspectorColumnWidth(min: 260, ideal: 320, max: 460)
         }
+        .overlay {
+            if model.nowPlayingExpanded, model.player.current != nil {
+                NowPlayingView().transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(duration: 0.35), value: model.nowPlayingExpanded)
         .overlay(alignment: .top) { NoticeBanner() }
         .onAppear { installSpaceToPlay() }
         .onDisappear { if let keyMonitor { NSEvent.removeMonitor(keyMonitor) } }
