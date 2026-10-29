@@ -1,0 +1,20 @@
+{
+  "about": "ReplayGain volume levelling: the player's volume (0 to 1) for a song's tags. Android: android/playback ReplayGain.volumeFor; Swift: PolyphonyKit ReplayGain.volume. mode is off, track, album or auto (album gain when the next or previous song is from the same album). Volumes are within 0.002.",
+  "cases": [
+    {"name": "off is unity", "mode": "off", "trackGain": -6.0, "volume": 1.0},
+    {"name": "no tags is unity", "mode": "track", "volume": 1.0},
+    {"name": "negative gain attenuates", "mode": "track", "trackGain": -6.0, "volume": 0.501},
+    {"name": "positive gain clamps at unity", "mode": "track", "trackGain": 4.0, "preventClipping": false, "volume": 1.0},
+    {"name": "preamp is added", "mode": "track", "trackGain": -6.0, "preampDb": 3.0, "volume": 0.708},
+    {"name": "a peak under 1 doesn't limit", "mode": "track", "trackGain": -1.0, "trackPeak": 0.95, "volume": 0.891},
+    {"name": "clipping prevention respects the peak", "mode": "track", "trackGain": -1.0, "trackPeak": 2.0, "volume": 0.5},
+    {"name": "without clipping prevention the peak is ignored", "mode": "track", "trackGain": -1.0, "trackPeak": 2.0, "preventClipping": false, "volume": 0.891},
+    {"name": "auto: album gain beside a song from the same album", "mode": "auto", "trackGain": -6.0, "albumGain": -12.0, "sameAlbum": true, "volume": 0.251},
+    {"name": "auto: track gain on a mix", "mode": "auto", "trackGain": -6.0, "albumGain": -12.0, "sameAlbum": false, "volume": 0.501},
+    {"name": "album mode uses album gain", "mode": "album", "trackGain": -6.0, "albumGain": -12.0, "volume": 0.251},
+    {"name": "album mode falls back to track gain", "mode": "album", "trackGain": -6.0, "volume": 0.501},
+    {"name": "track mode falls back to album gain", "mode": "track", "albumGain": -12.0, "volume": 0.251},
+    {"name": "album mode takes the album peak", "mode": "album", "albumGain": 0.0, "albumPeak": 1.25, "trackPeak": 0.5, "volume": 0.8},
+    {"name": "a boost the peak allows still stops at unity", "mode": "track", "trackGain": 3.0, "preampDb": 3.0, "trackPeak": 0.5, "volume": 1.0}
+  ]
+}
