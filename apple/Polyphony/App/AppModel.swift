@@ -576,8 +576,10 @@ final class AppModel {
         }
     }
 
-    func request(_ album: CatalogAlbum) async {
-        guard let continuo, let rg = album.releaseGroupID else { return }
+    /// Whether continuo took it (or already had it): the page's button says Requested only then.
+    @discardableResult
+    func request(_ album: CatalogAlbum) async -> Bool {
+        guard let continuo, let rg = album.releaseGroupID else { return false }
         do {
             switch try await continuo.requestAlbum(releaseGroupID: rg) {
             case .requested: notice = "Requested \(album.title). It'll appear in Requests."
@@ -585,8 +587,10 @@ final class AppModel {
             case .inLibrary: notice = "\(album.title) is already in your library."
             case .addedBack: notice = "\(album.title) is back in your library."
             }
+            return true
         } catch {
             handle(error)
+            return false
         }
     }
 
