@@ -42,6 +42,15 @@ final class AppModel {
     /// Lists already fetched this session, shown at once when a page opens again (then refreshed).
     @ObservationIgnored var albumLists: [SubsonicClient.AlbumListType: [Album]] = [:]
     @ObservationIgnored var artistList: [Artist]?
+    /// Artists' names in their own script (continuo), by ContinuoService.nameKey of the library's name.
+    private(set) var originalNames: [String: String] = [:]
+
+    func originalName(of artist: String?) -> String? {
+        guard let artist, let original = originalNames[ContinuoService.nameKey(artist)],
+              original.caseInsensitiveCompare(artist) != .orderedSame else { return nil }
+        return original
+    }
+
     /// Unread notifications in continuo's inbox, for the sidebar's badge.
     private(set) var unreadCount = 0
     @ObservationIgnored private var inboxTask: Task<Void, Never>?
@@ -173,6 +182,7 @@ final class AppModel {
         albumLists = [:]
         artistList = nil
         playlists = []
+        originalNames = [:]
         state = .signedOut
     }
 
@@ -212,6 +222,7 @@ final class AppModel {
         }
         await refreshSingles()
         await refreshPlaylists()
+        if let continuo { originalNames = (try? await continuo.originalArtistNames()) ?? [:] }
     }
 
     func refreshSingles() async {

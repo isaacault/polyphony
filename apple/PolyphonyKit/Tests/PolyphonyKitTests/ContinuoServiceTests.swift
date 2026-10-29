@@ -173,3 +173,16 @@ struct ContinuoInboxTests {
         #expect(all?["all"] == true)
     }
 }
+
+struct ArtistNamesTests {
+    @Test func originalNamesByTheLibrarysName() async throws {
+        let fake = FakeTransport { _ in json(200, #"[{"name":"Ichiko Aoba","originalName":"青葉市子"},{"name":"Fishmans","originalName":""}]"#) }
+        let names = try await service(fake).originalArtistNames()
+        #expect(names[ContinuoService.nameKey("ichiko aoba")] == "青葉市子" && names.count == 1)
+    }
+
+    @Test func anOlderContinuoHasNone() async throws {
+        let fake = FakeTransport { _ in json(404, #"{"error":{"code":"not_found","message":"x"}}"#) }
+        #expect(try await service(fake).originalArtistNames().isEmpty)
+    }
+}
