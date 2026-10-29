@@ -1,0 +1,12 @@
+{
+  "about": "Where Continue listening resumes a collection (ResumePoint). Tracks are 200 s long unless given. Read by shared/domain's ContractCasesTest and apple/PolyphonyKit's ContractCasesTests.",
+  "cases": [
+    {"about": "the remembered track, where it was", "tracks": ["a", "b", "c"], "trackId": "c", "trackIndex": 0, "positionMs": 61000, "index": 2, "resumeMs": 61000},
+    {"about": "the track is gone: the remembered index, from the start", "tracks": ["a", "b", "c", "d"], "trackId": "missing", "trackIndex": 1, "positionMs": 50000, "index": 1, "resumeMs": 0},
+    {"about": "a gone track's index past the end: the last track", "tracks": ["a", "b", "c", "d"], "trackId": "missing", "trackIndex": 99, "positionMs": 0, "index": 3, "resumeMs": 0},
+    {"about": "played to the end: from the start", "tracks": ["a", "b", "c", "d"], "trackId": null, "trackIndex": 3, "positionMs": 10000, "index": 0, "resumeMs": 0},
+    {"about": "within 3 s of a track's end: the next one", "tracks": ["a", "b", "c"], "trackId": "b", "trackIndex": 1, "positionMs": 198500, "index": 2, "resumeMs": 0},
+    {"about": "within 3 s of the last track's end: from the start", "tracks": ["a", "b"], "trackId": "b", "trackIndex": 1, "positionMs": 199000, "index": 0, "resumeMs": 0},
+    {"about": "past the end of the track: held at its end, so the next one", "tracks": ["a", "b"], "trackId": "a", "trackIndex": 0, "positionMs": 999000, "index": 1, "resumeMs": 0}
+  ]
+}

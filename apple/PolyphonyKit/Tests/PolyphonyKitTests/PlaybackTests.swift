@@ -306,3 +306,22 @@ private final class PauseSpy: AudioEngine {
     func seek(to time: TimeInterval) {}
     func stop() {}
 }
+
+@MainActor
+struct HistoryRecordingTests {
+    @Test func aCollectionsPlaceIsRecordedAndItsEnd() async {
+        let spy = PauseSpy()
+        let p = PlayerController(engine: spy)
+        p.resolve = { _ in AudioSource(url: URL(string: "https://x/y")!) }
+        var log: [(String?, Int, Int)] = []
+        p.history = { _, track, index, ms in log.append((track, index, ms)) }
+        let album = PlayContext(kind: .album, id: "al", title: "Album")
+        p.play([Track(id: "a", title: "a", duration: 200), Track(id: "b", title: "b", duration: 200)], startAt: 1,
+               context: album, position: 42)
+        for _ in 0..<20 { await Task.yield() }
+        #expect(log.first?.0 == "b" && log.first?.1 == 1 && log.first?.2 == 42_000 && spy.loads.last?.autoplay == true)
+        spy.onEvent?(.ended)
+        #expect(log.last?.0 == nil, "played to the end")
+        #expect(p.queue.title == "Album", "the context names the queue")
+    }
+}

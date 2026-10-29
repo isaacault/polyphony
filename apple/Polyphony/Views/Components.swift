@@ -164,8 +164,8 @@ private struct AlbumContextMenu: ViewModifier {
 
     func body(content: Content) -> some View {
         content.contextMenu {
-            Button("Play") { Task { await load { model.player.play($0, title: album.name) } } }
-            Button("Shuffle") { Task { await load { model.player.play($0, shuffle: true, title: album.name) } } }
+            Button("Play") { Task { await load { model.player.play($0, context: .album(album)) } } }
+            Button("Shuffle") { Task { await load { model.player.play($0, shuffle: true, context: .album(album)) } } }
             Button("Play Next") { Task { await load { model.player.playNext($0.map(QueueEntry.track)) } } }
             Button("Add to Queue") { Task { await load { model.player.addToQueue($0.map(QueueEntry.track)) } } }
             Button("Download") { Task { await load { model.downloads.download($0) } } }
