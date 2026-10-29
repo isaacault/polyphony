@@ -274,9 +274,12 @@ extension PlayQueue {
 
 /// When a play counts, as Last.fm counts it: half the song or four minutes, whichever comes first,
 /// and never for songs under 30 seconds.
+/// When a play counts (a scrobble), as the Android app's PlaybackReporter has it: after half the song
+/// or four minutes, whichever comes first, never under ten seconds; four minutes when the length isn't
+/// known.
 public enum ScrobbleRule {
-    public static func counts(played: TimeInterval, duration: TimeInterval) -> Bool {
-        guard duration >= 30 else { return false }
-        return played >= min(duration / 2, 240)
+    public static func counts(played: TimeInterval, duration: TimeInterval, threshold: Double = 0.5) -> Bool {
+        let needed = duration > 0 ? min(duration * threshold, 240) : 240
+        return played >= max(needed, 10)
     }
 }

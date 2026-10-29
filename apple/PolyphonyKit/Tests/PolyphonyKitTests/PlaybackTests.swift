@@ -69,7 +69,11 @@ struct PlayQueueTests {
     @Test func aPlayCountsAtHalfOrFourMinutes() {
         #expect(!ScrobbleRule.counts(played: 99, duration: 200) && ScrobbleRule.counts(played: 100, duration: 200))
         #expect(ScrobbleRule.counts(played: 240, duration: 3600), "four minutes into a long mix")
-        #expect(!ScrobbleRule.counts(played: 25, duration: 25), "too short to count")
+        #expect(!ScrobbleRule.counts(played: 9, duration: 16) && ScrobbleRule.counts(played: 10, duration: 16),
+                "a short song: half of it, but never under ten seconds (as Android)")
+        #expect(!ScrobbleRule.counts(played: 200, duration: 0) && ScrobbleRule.counts(played: 240, duration: 0),
+                "length unknown: four minutes")
+        #expect(ScrobbleRule.counts(played: 60, duration: 200, threshold: 0.3), "another threshold")
     }
 }
 
