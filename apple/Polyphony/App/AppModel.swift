@@ -138,6 +138,14 @@ final class AppModel {
 
     private static let queueKey = "queue.snapshot"
 
+    /// Rate songs with stars (1–5) instead of the heart, as the Android app's Ratings mode.
+    private(set) var usesRatings = UserDefaults.standard.bool(forKey: "feedback.ratings")
+
+    func setUsesRatings(_ on: Bool) {
+        usesRatings = on
+        UserDefaults.standard.set(on, forKey: "feedback.ratings")
+    }
+
     /// Streaming quality: 0 for the file as it is, else transcoded to MP3 at this bitrate (kbps).
     private(set) var streamingBitrate = UserDefaults.standard.integer(forKey: "streaming.bitrate")
 

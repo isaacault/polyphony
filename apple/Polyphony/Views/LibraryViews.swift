@@ -225,7 +225,11 @@ private struct TrackRow: View {
                 }
             }
             Spacer()
-            if track.starred { Image(systemName: "heart.fill").font(.caption).foregroundStyle(.secondary) }
+            if model.usesRatings, let rating = track.rating {
+                Text(String(repeating: "★", count: rating)).font(.caption).foregroundStyle(.secondary)
+            } else if !model.usesRatings, track.starred {
+                Image(systemName: "heart.fill").font(.caption).foregroundStyle(.secondary)
+            }
             Text(formatDuration(track.duration)).foregroundStyle(.secondary).monospacedDigit()
         }
         .padding(.vertical, 6)
