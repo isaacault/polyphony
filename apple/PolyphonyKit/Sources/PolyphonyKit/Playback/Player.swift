@@ -57,6 +57,12 @@ public protocol AudioEngine: AnyObject {
     func pause()
     func seek(to time: TimeInterval)
     func stop()
+    /// ReplayGain's level for the song, on top of the user's volume (engines without one ignore it).
+    func setGain(_ gain: Float)
+}
+
+extension AudioEngine {
+    public func setGain(_ gain: Float) {}
 }
 
 /// What the system shows about the song (Now Playing, Control Centre, media keys' owner). The app
@@ -321,11 +327,23 @@ public final class PlayerController {
 
     // MARK: The engine
 
+    /// Levelling loudness between songs (Settings > Playback).
+    public var replayGain = ReplayGain.Settings() {
+        didSet { applyGain() }
+    }
+
+    private func applyGain() {
+        let track = queue.current?.entry.libraryTrack
+        let neighbour = (queue.nextOnEnd ?? queue.history.last)?.entry.libraryTrack
+        engine.setGain(ReplayGain.volume(for: track, replayGain, sameAlbumAsNeighbour: ReplayGain.sameAlbum(track, neighbour)))
+    }
+
     private func loadCurrent(autoplay: Bool, startAt: TimeInterval = 0) {
         guard let item = queue.current else {
             stop()
             return
         }
+        applyGain()
         loadGeneration += 1
         let generation = loadGeneration
         position = startAt

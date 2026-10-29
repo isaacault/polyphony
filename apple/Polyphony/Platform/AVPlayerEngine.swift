@@ -9,9 +9,15 @@ import PolyphonyKit
 final class AVPlayerEngine: AudioEngine {
     var onEvent: ((AudioEvent) -> Void)?
 
-    var volume: Float {
-        get { player.volume }
-        set { player.volume = newValue }
+    /// The user's volume; the player plays at it times the song's ReplayGain level.
+    var volume: Float = 1 {
+        didSet { player.volume = volume * gain }
+    }
+    private var gain: Float = 1
+
+    func setGain(_ gain: Float) {
+        self.gain = gain
+        player.volume = volume * gain
     }
 
     private let player = AVQueuePlayer()

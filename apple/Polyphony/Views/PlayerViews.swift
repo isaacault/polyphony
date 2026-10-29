@@ -329,6 +329,20 @@ struct SettingsView: View {
                 }
                 Text("Applies from the next song. Transcoding is done by the server.")
                     .font(.caption).foregroundStyle(.secondary)
+                Picker("Volume levelling", selection: gain(\.mode)) {
+                    Text("Off").tag(ReplayGain.Mode.off)
+                    Text("Automatic (album gain for whole albums)").tag(ReplayGain.Mode.auto)
+                    Text("Track gain").tag(ReplayGain.Mode.track)
+                    Text("Album gain").tag(ReplayGain.Mode.album)
+                }
+                if model.replayGain.mode != .off {
+                    Stepper(value: gain(\.preampDb), in: -12...12, step: 1) {
+                        LabeledContent("Pre-amp", value: String(format: "%+.0f dB", model.replayGain.preampDb))
+                    }
+                    Toggle("Prevent clipping", isOn: gain(\.preventClipping))
+                    Text("ReplayGain tags from the files: songs too loud are turned down to match (never up past full volume).")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             Section("About") {
                 LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–")
@@ -338,6 +352,10 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 460)
         .padding()
+    }
+
+    private func gain<V>(_ field: WritableKeyPath<ReplayGain.Settings, V>) -> Binding<V> {
+        Binding(get: { model.replayGain[keyPath: field] }, set: { model.replayGain[keyPath: field] = $0 })
     }
 }
 
