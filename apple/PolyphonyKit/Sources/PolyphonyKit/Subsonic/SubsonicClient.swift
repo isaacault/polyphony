@@ -63,6 +63,8 @@ public struct SubsonicClient: Sendable {
 
     public enum AlbumListType: String, Sendable {
         case newest, recent, frequent, random, starred
+        /// The user's top-rated albums (ratings mode's "Top rated").
+        case highest
         case alphabeticalByName, alphabeticalByArtist
     }
 
