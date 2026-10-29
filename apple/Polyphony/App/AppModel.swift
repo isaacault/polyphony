@@ -351,7 +351,13 @@ final class AppModel {
         server = saved
         let client = SubsonicClient(credentials: saved.subsonic)
         subsonic = client
-        downloads.attach(server: saved, library: client) { track in client.downloadURL(trackID: track.id) }
+        downloads.attach(server: saved, library: client) { track in
+            // The original file, unless this Mac can't play it: then MP3 at 320 kbps.
+            AppleFormats.plays(track.container)
+                ? (client.downloadURL(trackID: track.id), track.container)
+                : (client.streamURL(trackID: track.id, maxBitRateKbps: AppleFormats.fallbackBitrateKbps, format: AppleFormats.fallbackFormat),
+                   AppleFormats.fallbackFormat)
+        }
         if saved.kind == .continuo {
             let account = ContinuoAccount(client: ContinuoClient(baseURL: saved.address),
                                           store: ServerSessionStore(store, key: saved.key))
@@ -496,6 +502,16 @@ final class AppModel {
         }
     }
 
+    /// The stream this Mac can play: as the file is, or MP3 at the chosen quality; a format
+    /// AVFoundation can't play (Ogg, Opus, WMA…) comes as MP3 at 320 kbps at most.
+    private func macStreamURL(_ t: Track, _ subsonic: SubsonicClient, bitrate: Int) -> URL {
+        if bitrate > 0 { return subsonic.streamURL(trackID: t.id, maxBitRateKbps: bitrate, format: "mp3") }
+        if !AppleFormats.plays(t.container) {
+            return subsonic.streamURL(trackID: t.id, maxBitRateKbps: AppleFormats.fallbackBitrateKbps, format: AppleFormats.fallbackFormat)
+        }
+        return subsonic.streamURL(trackID: t.id)
+    }
+
     private func source(for entry: QueueEntry) async -> AudioSource? {
         switch entry {
         case let .track(t):
@@ -507,10 +523,7 @@ final class AppModel {
                     return AudioSource(url: local)
                 }
                 if offlineMode { return nil }
-                return subsonic.map {
-                    AudioSource(url: bitrate > 0 ? $0.streamURL(trackID: t.id, maxBitRateKbps: bitrate, format: "mp3")
-                                                 : $0.streamURL(trackID: t.id))
-                }
+                return subsonic.map { AudioSource(url: macStreamURL(t, $0, bitrate: bitrate)) }
             }
             // A speaker fetches the audio itself, from an address it can reach, and shows the song.
             guard let subsonic else { return nil }
