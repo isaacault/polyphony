@@ -450,40 +450,80 @@ struct SongsView: View {
     @Environment(AppModel.self) private var model
     @State private var tracks: [Track] = []
     @State private var exhausted = false
-    @State private var loading = false
+    @State private var selection = Set<Track.ID>()
+    @State private var sortOrder = [KeyPathComparator(\Track.title, comparator: .localizedStandard)]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading) {
-                HStack {
-                    Button { model.player.play(tracks, shuffle: true, title: "Songs") } label: { Label("Shuffle All", systemImage: "shuffle") }
-                        .disabled(tracks.isEmpty)
-                }
-                TrackList(tracks: tracks, showArtwork: true)
-                if !exhausted {
-                    ProgressView().padding().onAppear { Task { await more() } }
+        Table(tracks, selection: $selection, sortOrder: $sortOrder) {
+            TableColumn("Title", value: \.title, comparator: .localizedStandard) { track in
+                HStack(spacing: 6) {
+                    if model.player.current?.libraryTrack?.id == track.id {
+                        Image(systemName: "speaker.wave.2.fill").foregroundStyle(.tint).font(.caption)
+                    }
+                    Text(track.title)
+                    if let chip = AudioQuality.trackChip(track, albumBadge: nil) { QualityChip(label: chip) }
                 }
             }
-            .padding(20)
+            TableColumn("Artist", value: \.sortArtist, comparator: .localizedStandard) { Text($0.artistName ?? "") }
+            TableColumn("Album", value: \.sortAlbum, comparator: .localizedStandard) { Text($0.albumName ?? "") }
+            TableColumn("Time", value: \.duration) { Text(formatDuration($0.duration)).monospacedDigit() }
+                .width(min: 50, ideal: 60, max: 80)
         }
+        .contextMenu(forSelectionType: Track.ID.self) { ids in
+            let picked = tracks.filter { ids.contains($0.id) }
+            Button("Play") { play(picked) }
+            Button("Play Next") { model.player.playNext(picked.map(QueueEntry.track)) }
+            Button("Add to Queue") { model.player.addToQueue(picked.map(QueueEntry.track)) }
+            Button("Download") { model.downloads.download(picked) }
+            AddToPlaylistMenu(trackIDs: picked.map(\.id))
+            if picked.count == 1, let track = picked.first {
+                Divider()
+                if let albumID = track.albumID { Button("Go to Album") { model.path.append(Route.album(albumID)) } }
+                if let artistID = track.artistID { Button("Go to Artist") { model.path.append(Route.artist(artistID)) } }
+                Button("Song Info") { model.songInfo = track }
+            }
+        } primaryAction: { ids in
+            // Double-click: the list from that song on, in the order shown.
+            guard let first = tracks.firstIndex(where: { ids.contains($0.id) }) else { return }
+            model.player.play(tracks, startAt: first, title: "Songs")
+        }
+        .onChange(of: sortOrder) { tracks.sort(using: sortOrder) }
         .navigationTitle("Songs")
-        .task { if tracks.isEmpty { await more() } }
+        .navigationSubtitle(exhausted ? "\(tracks.count) songs" : "\(tracks.count) songs, loading…")
+        .toolbar {
+            Button { model.player.play(tracks, shuffle: true, title: "Songs") } label: { Label("Shuffle All", systemImage: "shuffle") }
+                .disabled(tracks.isEmpty)
+        }
+        .task { if tracks.isEmpty { await loadAll() } }
     }
 
-    /// The next page: Navidrome lists every song for an empty search.
-    private func more() async {
-        guard !loading, !exhausted, let subsonic = model.subsonic else { return }
-        loading = true
-        defer { loading = false }
-        do {
-            let page = try await subsonic.search("", artists: 0, albums: 0, tracks: 200, trackOffset: tracks.count).tracks
-            tracks += page
-            if page.count < 200 { exhausted = true }
-        } catch {
-            exhausted = true
-            model.handle(error)
-        }
+    private func play(_ picked: [Track]) {
+        model.player.play(picked.count == 1 ? Array(tracks.drop { $0.id != picked[0].id }) : picked, title: "Songs")
     }
+
+    /// Every song, a page at a time (Navidrome lists them all for an empty search), so the table can
+    /// sort the whole library; the first page shows at once.
+    private func loadAll() async {
+        guard let subsonic = model.subsonic else { return }
+        var loaded: [Track] = []
+        while !Task.isCancelled {
+            do {
+                let page = try await subsonic.search("", artists: 0, albums: 0, tracks: 500, trackOffset: loaded.count).tracks
+                loaded += page
+                tracks = loaded.sorted(using: sortOrder)
+                if page.count < 500 { break }
+            } catch {
+                model.handle(error)
+                break
+            }
+        }
+        exhausted = true
+    }
+}
+
+private extension Track {
+    var sortArtist: String { artistName ?? "" }
+    var sortAlbum: String { albumName ?? "" }
 }
 
 // MARK: Playlists
