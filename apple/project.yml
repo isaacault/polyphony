@@ -29,6 +29,8 @@ targets:
         LSApplicationCategoryType: public.app-category.music
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: "GPL-3.0"
+        # Finding DLNA speakers (SSDP multicast) needs Local Network access, which macOS asks for once.
+        NSLocalNetworkUsageDescription: "Polyphony looks for speakers on your network (DLNA) so it can play to them."
         # Navidrome on the LAN is often plain http (http://192.168.x.x:4533): allow it.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true

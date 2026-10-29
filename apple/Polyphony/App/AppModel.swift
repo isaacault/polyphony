@@ -105,6 +105,61 @@ final class AppModel {
 
     let player: PlayerController
     let downloads = Downloads()
+    let speakers = SpeakerDiscovery()
+    /// Where the music plays: this Mac, or a DLNA speaker.
+    private(set) var speaker: Renderer?
+    @ObservationIgnored private let macEngine: AVPlayerEngine
+    @ObservationIgnored private var speakerEngine: DLNAEngine?
+
+    /// The address speakers are given instead of the server's, per server: they fetch the audio
+    /// themselves and many can't do HTTPS (for continuo: http://192.168.0.101, its LAN door).
+    private(set) var receiverAddress = ""
+
+    private var receiverKey: String { "receiver." + (server?.address.host ?? "") }
+
+    func setReceiverAddress(_ address: String) {
+        receiverAddress = address.trimmingCharacters(in: .whitespaces)
+        UserDefaults.standard.set(receiverAddress, forKey: receiverKey)
+    }
+
+    /// Plays on [renderer] (nil: this Mac), carrying on from where the song is.
+    func play(on renderer: Renderer?) {
+        speakerEngine?.detach()
+        if let renderer {
+            let engine = DLNAEngine(control: DLNAControl(renderer: renderer))
+            speakerEngine = engine
+            speaker = renderer
+            player.switchOutput(to: engine)
+        } else {
+            speakerEngine = nil
+            speaker = nil
+            player.switchOutput(to: macEngine)
+        }
+    }
+
+    /// A URL a speaker can fetch: the receiver address in place of the server's own.
+    private func forSpeaker(_ url: URL) -> URL {
+        guard !receiverAddress.isEmpty, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let base = URLComponents(string: receiverAddress.contains("://") ? receiverAddress : "http://" + receiverAddress)
+        else { return url }
+        parts.scheme = base.scheme
+        parts.host = base.host
+        parts.port = base.port
+        parts.path = base.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).isEmpty
+            ? parts.path : "/" + base.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + parts.path
+        return parts.url ?? url
+    }
+
+    private static func mime(for container: String?) -> String {
+        switch container?.lowercased() {
+        case "mp3": "audio/mpeg"
+        case "m4a", "aac", "alac": "audio/mp4"
+        case "ogg", "oga": "audio/ogg"
+        case "opus": "audio/opus"
+        case "wav": "audio/wav"
+        default: "audio/flac"
+        }
+    }
     @ObservationIgnored private let nowPlaying: NowPlayingCenter
     @ObservationIgnored private let store = KeychainServerStore()
     @ObservationIgnored private let arrivals = ArrivalNotifier()
@@ -113,7 +168,9 @@ final class AppModel {
         // Every stored property is set before `self` is used.
         let center = NowPlayingCenter()
         nowPlaying = center
-        player = PlayerController(engine: AVPlayerEngine(), nowPlaying: center)
+        let engine = AVPlayerEngine()
+        macEngine = engine
+        player = PlayerController(engine: engine, nowPlaying: center)
         center.attach(player)
         player.resolve = { [weak self] entry in await self?.source(for: entry) }
         player.artwork = { [weak self] entry in self?.artworkURL(for: entry, size: 600) }
@@ -175,6 +232,7 @@ final class AppModel {
     }
 
     func signOut() async {
+        if speaker != nil { play(on: nil) }
         player.stop()
         arrivals.stop()
         inboxTask?.cancel()
@@ -216,6 +274,7 @@ final class AppModel {
         } else {
             continuo = nil
         }
+        receiverAddress = UserDefaults.standard.string(forKey: receiverKey) ?? ""
         if let data = UserDefaults.standard.data(forKey: historyKey),
            let saved = try? JSONDecoder().decode(ListeningHistory.self, from: data) {
             history = saved
@@ -266,13 +325,22 @@ final class AppModel {
     private func source(for entry: QueueEntry) async -> AudioSource? {
         switch entry {
         case let .track(t):
-            // A downloaded copy plays from disk: no network, original quality.
-            if let local = downloads.localURL(t.id) { return AudioSource(url: local) }
             let bitrate = streamingBitrate
-            return subsonic.map {
-                AudioSource(url: bitrate > 0 ? $0.streamURL(trackID: t.id, maxBitRateKbps: bitrate, format: "mp3")
-                                             : $0.streamURL(trackID: t.id))
+            if speaker == nil {
+                // A downloaded copy plays from disk: no network, original quality.
+                if let local = downloads.localURL(t.id) { return AudioSource(url: local) }
+                return subsonic.map {
+                    AudioSource(url: bitrate > 0 ? $0.streamURL(trackID: t.id, maxBitRateKbps: bitrate, format: "mp3")
+                                                 : $0.streamURL(trackID: t.id))
+                }
             }
+            // A speaker fetches the audio itself, from an address it can reach, and shows the song.
+            guard let subsonic else { return nil }
+            let url = bitrate > 0 ? subsonic.streamURL(trackID: t.id, maxBitRateKbps: bitrate, format: "mp3") : subsonic.streamURL(trackID: t.id)
+            let art = coverURL(t.coverArtID ?? t.albumID, size: 600).map(forSpeaker)
+            return AudioSource(url: forSpeaker(url), info: .init(title: t.title, artist: t.artistName, album: t.albumName, artworkURL: art,
+                                                                mimeType: bitrate > 0 ? "audio/mpeg" : Self.mime(for: t.container),
+                                                                durationMs: Int(t.duration * 1000)))
         case let .playNow(stream, _):
             guard let continuo, let token = try? await continuo.account.accessToken() else { return nil }
             return AudioSource(url: continuo.playNowAudioURL(id: stream.id), headers: ["Authorization": "Bearer \(token)"])
