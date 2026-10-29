@@ -240,15 +240,14 @@ private struct TrackContextMenu: ViewModifier {
     }
 }
 
-/// "Add to Playlist ▸" with the user's playlists and a new one.
+/// "Add to Playlist ▸" with the user's playlists.
 struct AddToPlaylistMenu: View {
     @Environment(AppModel.self) private var model
     let trackIDs: [String]
-    @State private var playlists: [Playlist] = []
 
     var body: some View {
         Menu("Add to Playlist") {
-            ForEach(playlists) { playlist in
+            ForEach(model.playlists) { playlist in
                 Button(playlist.name) {
                     Task {
                         // Songs already there aren't added twice.
@@ -259,11 +258,14 @@ struct AddToPlaylistMenu: View {
                         } else {
                             try? await model.subsonic?.updatePlaylist(id: playlist.id, adding: fresh)
                             model.notice = "Added to \(playlist.name)"
+                            await model.refreshPlaylists()
                         }
                     }
                 }
             }
+            if model.playlists.isEmpty {
+                Text("No playlists yet")
+            }
         }
-        .task { playlists = (try? await model.subsonic?.playlists()) ?? [] }
     }
 }

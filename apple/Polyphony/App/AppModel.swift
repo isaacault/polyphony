@@ -32,22 +32,33 @@ final class AppModel {
         guard let albumID = player.current?.libraryTrack?.albumID else { return }
         path.append(Route.album(albumID))
     }
+
+
     /// A Play now song being fetched before it can play.
     private(set) var pendingPlayNow: PlayNowStream?
 
     /// Lists already fetched this session, shown at once when a page opens again (then refreshed).
     @ObservationIgnored var albumLists: [SubsonicClient.AlbumListType: [Album]] = [:]
     @ObservationIgnored var artistList: [Artist]?
+    /// The user's playlists, for "Add to Playlist" menus (which can't load anything as they open).
+    private(set) var playlists: [Playlist] = []
+
+    func refreshPlaylists() async {
+        if let list = try? await subsonic?.playlists() { playlists = list }
+    }
 
     let player: PlayerController
     let downloads = Downloads()
-    @ObservationIgnored private let nowPlaying = NowPlayingCenter()
+    @ObservationIgnored private let nowPlaying: NowPlayingCenter
     @ObservationIgnored private let store = KeychainServerStore()
     @ObservationIgnored private let arrivals = ArrivalNotifier()
 
     init() {
-        player = PlayerController(engine: AVPlayerEngine(), nowPlaying: nowPlaying)
-        nowPlaying.attach(player)
+        // Every stored property is set before `self` is used.
+        let center = NowPlayingCenter()
+        nowPlaying = center
+        player = PlayerController(engine: AVPlayerEngine(), nowPlaying: center)
+        center.attach(player)
         player.resolve = { [weak self] entry in await self?.source(for: entry) }
         player.artwork = { [weak self] entry in self?.artworkURL(for: entry, size: 600) }
         player.scrobble = { [weak self] track, submission in
@@ -107,6 +118,7 @@ final class AppModel {
         singleSongAlbumIDs = []
         albumLists = [:]
         artistList = nil
+        playlists = []
         state = .signedOut
     }
 
@@ -132,6 +144,7 @@ final class AppModel {
             player.restore(snapshot)
         }
         await refreshSingles()
+        await refreshPlaylists()
     }
 
     func refreshSingles() async {
