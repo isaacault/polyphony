@@ -325,3 +325,22 @@ struct HistoryRecordingTests {
         #expect(p.queue.title == "Album", "the context names the queue")
     }
 }
+
+@MainActor
+struct OutputSwitchTests {
+    @Test func switchingCarriesTheSongOnFromWhereItWas() async {
+        let mac = PauseSpy()
+        let speaker = PauseSpy()
+        let p = PlayerController(engine: mac)
+        p.resolve = { entry in AudioSource(url: URL(string: "https://x/\(entry.libraryTrack!.id)")!) }
+        p.play([Track(id: "a", title: "a", duration: 200)])
+        for _ in 0..<20 { await Task.yield() }
+        mac.onEvent?(.position(42, duration: 200))
+        p.switchOutput(to: speaker)
+        for _ in 0..<20 { await Task.yield() }
+        #expect(speaker.loads.count == 1 && speaker.loads.first?.autoplay == true && p.position == 42)
+        #expect(mac.onEvent == nil, "the old engine is let go")
+        speaker.onEvent?(.ended)
+        #expect(!p.isPlaying, "the new engine's events drive the player")
+    }
+}
