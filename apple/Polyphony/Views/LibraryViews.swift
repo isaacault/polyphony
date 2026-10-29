@@ -137,13 +137,27 @@ private struct AlbumHeader: View {
                     Button { model.player.play(album.tracks, context: .album(album)) } label: { Label("Play", systemImage: "play.fill") }
                         .buttonStyle(.borderedProminent)
                     Button { model.player.play(album.tracks, shuffle: true, context: .album(album)) } label: { Label("Shuffle", systemImage: "shuffle") }
-                    Button {
-                        Task {
-                            try? await model.subsonic?.setStarred(.album(album.id), !album.starred)
-                            album.starred.toggle()
+                    if model.usesRatings {
+                        Menu {
+                            ForEach(1...5, id: \.self) { stars in
+                                Button(String(repeating: "★", count: stars)) { rate(stars) }
+                            }
+                            Button("No Rating") { rate(0) }
+                        } label: {
+                            let stars = album.rating ?? 0
+                            Text(String(repeating: "★", count: stars) + String(repeating: "☆", count: 5 - stars))
                         }
-                    } label: { Image(systemName: album.starred ? "heart.fill" : "heart") }
-                        .help(album.starred ? "Remove from Favourites" : "Add to Favourites")
+                        .fixedSize()
+                        .help("Rate the album")
+                    } else {
+                        Button {
+                            Task {
+                                try? await model.subsonic?.setStarred(.album(album.id), !album.starred)
+                                album.starred.toggle()
+                            }
+                        } label: { Image(systemName: album.starred ? "heart.fill" : "heart") }
+                            .help(album.starred ? "Remove from Favourites" : "Add to Favourites")
+                    }
                     DownloadButton(tracks: album.tracks)
                     Menu {
                         Button("Play Next") { model.player.playNext(album.tracks.map(QueueEntry.track)) }
@@ -157,6 +171,11 @@ private struct AlbumHeader: View {
                 .padding(.top, 6)
             }
         }
+    }
+
+    private func rate(_ stars: Int) {
+        album.rating = stars == 0 ? nil : stars
+        Task { try? await model.subsonic?.setRating(id: album.id, stars) }
     }
 }
 
@@ -320,6 +339,8 @@ struct ArtistDetailView: View {
     @State private var discography: [CatalogAlbum] = []
     /// Albums by others with a track crediting this artist.
     @State private var appearsOn: [Album] = []
+    @State private var starred = false
+    @State private var bioExpanded = false
 
     /// The catalogue's albums that aren't in the library (continuo), to request.
     private var missing: [CatalogAlbum] {
@@ -342,6 +363,11 @@ struct ArtistDetailView: View {
                                 .buttonStyle(.borderedProminent)
                             Button { Task { await playAll(shuffle: true) } } label: { Label("Shuffle", systemImage: "shuffle") }
                             if let artist {
+                                Button {
+                                    starred.toggle()
+                                    Task { try? await model.subsonic?.setStarred(.artist(artist.id), starred) }
+                                } label: { Image(systemName: starred ? "heart.fill" : "heart") }
+                                    .help(starred ? "Remove from Favourites" : "Add to Favourites")
                                 KeepDownloadedButton(target: .artist(id: artist.id, name: artist.name))
                                     .labelStyle(.iconOnly).help("Keep this artist's albums downloaded")
                             }
@@ -371,7 +397,12 @@ struct ArtistDetailView: View {
                 }
                 if let bio = catalog?.biography ?? info?.biography, !bio.isEmpty {
                     Section {
-                        Text(stripHTML(bio)).foregroundStyle(.secondary).textSelection(.enabled).frame(maxWidth: 700, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(stripHTML(bio)).foregroundStyle(.secondary).textSelection(.enabled)
+                                .lineLimit(bioExpanded ? nil : 5)
+                            Button(bioExpanded ? "Show Less" : "Read More") { bioExpanded.toggle() }.buttonStyle(.link)
+                        }
+                        .frame(maxWidth: 700, alignment: .leading)
                     } header: { SectionTitle("About") }
                 }
                 if let similar = info?.similarArtists, !similar.isEmpty {
@@ -404,6 +435,7 @@ struct ArtistDetailView: View {
         do {
             let (a, list) = try await subsonic.artist(id: artistID)
             artist = a
+            starred = a.starred
             albums = list.sorted { ($0.year ?? 0) > ($1.year ?? 0) }
         } catch {
             model.handle(error)
@@ -665,6 +697,17 @@ struct PlaylistDetailView: View {
                                 }
                                 KeepDownloadedButton(target: .playlist(id: playlist.id, name: playlist.name))
                                     .labelStyle(.iconOnly).help("Keep this playlist downloaded, as it changes")
+                                Menu {
+                                    Button("Play Next") { model.player.playNext(playlist.tracks.map(QueueEntry.track)) }
+                                    Button("Add to Queue") { model.player.addToQueue(playlist.tracks.map(QueueEntry.track)) }
+                                    Divider()
+                                    Toggle("Public", isOn: Binding(get: { playlist.isPublic }, set: { on in
+                                        self.playlist?.isPublic = on
+                                        Task { try? await model.subsonic?.updatePlaylist(id: playlist.id, isPublic: on) }
+                                    }))
+                                } label: { Image(systemName: "ellipsis") }
+                                    .menuIndicator(.hidden)
+                                    .fixedSize()
                             }
                             .controlSize(.large)
                         }
