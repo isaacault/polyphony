@@ -35,6 +35,16 @@ struct SubsonicLibraryTests {
         let items = URLComponents(url: try #require(fake.calls.first?.url), resolvingAgainstBaseURL: false)?.queryItems ?? []
         #expect(items.filter { $0.name == "songIdToAdd" }.map(\.value) == ["t3", "t4"])
         #expect(items.filter { $0.name == "songIndexToRemove" }.map(\.value) == ["0", "2"])
+        #expect(!items.contains { $0.name == "public" }, "left as it is unless asked")
+    }
+
+    @Test func aPlaylistGoesPublicAndAlbumsCarryTheirRating() async throws {
+        let fake = FakeTransport { _ in ok("") }
+        try await SubsonicClient(credentials: credentials, transport: fake).updatePlaylist(id: "pl-1", isPublic: true)
+        #expect(query(try #require(fake.calls.first?.url))["public"] == "true")
+        let album = try JSONDecoder().decode(AlbumDTO.self, from: Data(#"{"id":"al","name":"A","userRating":4}"#.utf8)).model
+        #expect(album.rating == 4)
+        #expect(try JSONDecoder().decode(AlbumDTO.self, from: Data(#"{"id":"al","name":"A","userRating":0}"#.utf8)).model.rating == nil)
     }
 
     @Test func scrobblesCarryTheTimeAndKind() async throws {

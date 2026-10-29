@@ -28,6 +28,7 @@ struct AlbumDTO: Decodable, Sendable {
     let year: Int?
     let genre: String?
     let starred: String?
+    let userRating: Int?
     let song: [ChildDTO]?
 }
 
@@ -138,7 +139,7 @@ extension AlbumDTO {
     var model: Album {
         Album(id: id, name: name ?? "", artistName: artist, artistID: artistId, year: year, genre: genre,
               songCount: songCount ?? 0, duration: duration ?? 0, coverArtID: coverArt, starred: starred != nil,
-              tracks: (song ?? []).map(\.model))
+              rating: userRating.flatMap { $0 > 0 ? $0 : nil }, tracks: (song ?? []).map(\.model))
     }
 }
 
