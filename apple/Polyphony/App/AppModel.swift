@@ -31,6 +31,12 @@ final class AppModel {
         path = NavigationPath()
     }
 
+    /// Opens a page over whatever is showing (a notification's album, a menu's Go to).
+    func open(_ route: Route) {
+        nowPlayingExpanded = false
+        path.append(route)
+    }
+
     /// ⌘L: the album that's playing.
     func showCurrentAlbum() {
         guard let albumID = player.current?.libraryTrack?.albumID else { return }
