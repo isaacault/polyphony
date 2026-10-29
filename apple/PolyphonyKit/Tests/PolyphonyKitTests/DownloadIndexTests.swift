@@ -36,3 +36,15 @@ struct DownloadIndexTests {
         #expect(try JSONDecoder().decode(DownloadIndex.self, from: JSONEncoder().encode(index)) == index)
     }
 }
+
+struct DownloadSearchTests {
+    @Test func everyWordAnyCaseAnyAccentInAlbumOrder() {
+        var i = DownloadIndex()
+        i.add(Track(id: "2", title: "Dayvan Cowboy", albumName: "Trans Canada Highway", artistName: "Boards of Canada", trackNumber: 1), file: "2", bytes: 1)
+        i.add(Track(id: "1", title: "Roygbiv", albumName: "Music Has the Right to Children", artistName: "Boards of Canada", trackNumber: 3), file: "1", bytes: 1)
+        i.add(Track(id: "3", title: "Pérdida", albumName: "Lo Que Fue", artistName: "Ana Tijoux"), file: "3", bytes: 1)
+        #expect(i.search("boards canada").map(\.id) == ["1", "2"], "album order: Music… before Trans…")
+        #expect(i.search("perdida").map(\.id) == ["3"] && i.search("COWBOY").map(\.id) == ["2"])
+        #expect(i.search("boards autechre").isEmpty && i.search("  ").isEmpty)
+    }
+}

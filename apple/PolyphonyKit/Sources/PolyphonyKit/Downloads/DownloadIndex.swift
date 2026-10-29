@@ -85,6 +85,19 @@ public struct DownloadIndex: Sendable, Codable, Equatable {
             .sorted { $0.newest > $1.newest }
     }
 
+    /// Downloaded songs whose title, artist or album has every word of [query] (any case or accent),
+    /// in album order: search with no connection.
+    public func search(_ query: String) -> [Track] {
+        let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard !words.isEmpty else { return [] }
+        return entries.values.map(\.track).filter { track in
+            let text = [track.title, track.artistName, track.albumName].compactMap { $0 }.joined(separator: " ")
+            return words.allSatisfy { text.range(of: $0, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+        }
+        .sorted { ($0.albumName ?? "", $0.discNumber ?? 1, $0.trackNumber ?? .max, $0.title)
+                  < ($1.albumName ?? "", $1.discNumber ?? 1, $1.trackNumber ?? .max, $1.title) }
+    }
+
     /// How many of an album's songs are downloaded: the album page's download button says so.
     public func count(of tracks: [Track]) -> Int {
         tracks.filter { contains($0.id) }.count

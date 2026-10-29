@@ -42,6 +42,18 @@ struct SearchView: View {
                                 message: model.isContinuo ? "Your library and everything else, ranked by what people listen to."
                                                          : "Search your library.")
                         .padding(.top, 60)
+                } else if model.offline {
+                    // No server: what's on this Mac.
+                    let found = model.downloads.index.search(query)
+                    if found.isEmpty {
+                        Placeholder(title: "Nothing downloaded matches", symbol: "wifi.slash",
+                                    message: "You're offline: search looks through your downloads only.")
+                            .padding(.top, 60)
+                    } else {
+                        Section { TrackList(tracks: found, showArtwork: true) } header: {
+                            SectionTitle("Downloaded", subtitle: "You're offline: these are on this Mac")
+                        }
+                    }
                 } else if model.isContinuo {
                     catalogResults
                 } else {
@@ -125,7 +137,7 @@ struct SearchView: View {
         }
         // Debounce typing: a newer keystroke cancels this task before it asks.
         try? await Task.sleep(for: .milliseconds(250))
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, !model.offline else { return }
         searching = true
         defer { searching = false }
         do {
