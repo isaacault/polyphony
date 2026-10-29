@@ -142,6 +142,12 @@ public struct Starred: Sendable, Hashable {
     public var artists: [Artist] = []
     public var albums: [Album] = []
     public var tracks: [Track] = []
+
+    public init(artists: [Artist] = [], albums: [Album] = [], tracks: [Track] = []) {
+        self.artists = artists
+        self.albums = albums
+        self.tracks = tracks
+    }
 }
 
 public struct SearchResults: Sendable, Hashable {

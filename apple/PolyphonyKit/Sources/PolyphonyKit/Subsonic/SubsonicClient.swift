@@ -72,9 +72,12 @@ public struct SubsonicClient: Sendable {
         return (dto?.album ?? []).map(\.model)
     }
 
-    public func search(_ query: String, artists: Int = 10, albums: Int = 20, tracks: Int = 30) async throws -> SearchResults {
+    /// [query] "" lists everything (Navidrome), a page at a time: how the Songs list is read.
+    public func search(_ query: String, artists: Int = 10, albums: Int = 20, tracks: Int = 30,
+                       trackOffset: Int = 0) async throws -> SearchResults {
         let dto = try await call("search3", ["query": query, "artistCount": "\(artists)",
-                                             "albumCount": "\(albums)", "songCount": "\(tracks)"],
+                                             "albumCount": "\(albums)", "songCount": "\(tracks)",
+                                             "songOffset": "\(trackOffset)"],
                                  payload: "searchResult3", as: SearchResult3DTO.self)
         return SearchResults(artists: (dto?.artist ?? []).map(\.model), albums: (dto?.album ?? []).map(\.model),
                              tracks: (dto?.song ?? []).map(\.model))
