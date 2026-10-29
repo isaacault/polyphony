@@ -21,8 +21,8 @@ kotlin {
 }
 
 dependencies {
-    api(project(":core:domain"))
-    implementation(project(":core:network"))
+    api(project(":shared:domain"))
+    implementation(project(":shared:network"))
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)

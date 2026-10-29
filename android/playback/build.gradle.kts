@@ -31,9 +31,9 @@ kotlin {
 }
 
 dependencies {
-    api(project(":core:domain"))
-    implementation(project(":core:network"))
-    implementation(project(":core:dlna"))
+    api(project(":shared:domain"))
+    implementation(project(":shared:network"))
+    implementation(project(":android:dlna"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)

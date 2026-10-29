@@ -38,12 +38,12 @@ jobs:
         run: ./gradlew lintDebug --console=plain
 
       - name: Assemble debug APK
-        run: ./gradlew :app:assembleDebug --console=plain
+        run: ./gradlew :android:app:assembleDebug --console=plain
 
       - uses: actions/upload-artifact@v4
         with:
           name: polyphony-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
   docker:
@@ -56,4 +56,4 @@ jobs:
       - name: Build image
         run: docker build -t polyphony-build .
       - name: Build APK inside the image
-        run: docker run --rm -v "$PWD":/src polyphony-build sh -c "./gradlew --no-daemon :app:assembleDebug"
+        run: docker run --rm -v "$PWD":/src polyphony-build sh -c "./gradlew --no-daemon :android:app:assembleDebug"

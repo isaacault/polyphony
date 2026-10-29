@@ -5,7 +5,7 @@ feel physical. Everything below is a rule unless marked "prefer".
 
 ## Foundations
 
-- **Material 3 Expressive** via `PolyphonyTheme` (`core:ui`). Dynamic colour (Material You) by
+- **Material 3 Expressive** via `PolyphonyTheme` (`android:ui`). Dynamic colour (Material You) by
   default; a user-chosen seed colour otherwise; optional pure-black dark mode.
 - **Edge-to-edge always.** Content draws behind the status and navigation bars. Use
   `WindowInsets` padding, never hard-coded top/bottom spacing.
@@ -89,7 +89,7 @@ feel physical. Everything below is a rule unless marked "prefer".
 
 - Collect flows with `collectAsStateWithLifecycle`; hoist state to ViewModels; expose
   `StateFlow<UiState>` built with `stateIn(WhileSubscribed(5_000))`.
-- UI state lists are `ImmutableList`s; models from `core:domain` are stable via the compiler
+- UI state lists are `ImmutableList`s; models from `shared:domain` are stable via the compiler
   config. Avoid lambdas capturing unstable objects in list items — pass ids.
 - Heavy work (palette extraction, sorting) off the main thread; palette results cached per URL.
 - No blocking network in composables. Local Room data first; remote refresh in the background.

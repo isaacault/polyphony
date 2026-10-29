@@ -42,7 +42,7 @@ composeCompiler {
 }
 
 dependencies {
-    api(project(":core:domain"))
+    api(project(":shared:domain"))
 
     val composeBom = platform(libs.androidx.compose.bom)
     api(composeBom)

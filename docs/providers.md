@@ -11,27 +11,27 @@ on the provider layer.
 ## Where providers live
 
 ```
-app → core:ui, core:playback, core:data, core:dlna, core:downloads, provider:* → core:network → core:domain
+android:app → android:ui, android:playback, shared:data, android:dlna, android:downloads, shared:providers:* → shared:network → shared:domain
 ```
 
-- Each backend is its own Gradle module under `provider:*` (e.g. `:provider:subsonic`,
-  `:provider:jellyfin`). A provider module depends only on `:core:domain` (the contracts and
-  models) and `:core:network` (the per-server OkHttp client factory). It must **not** depend on
-  `:app` or on any other `:core` module.
-- `:app` depends on each provider module purely so Hilt can discover its DI module at compile
+- Each backend is its own Gradle module under `shared:providers:*` (e.g. `:shared:providers:subsonic`,
+  `:shared:providers:jellyfin`). A provider module depends only on `:shared:domain` (the contracts and
+  models) and `:shared:network` (the per-server OkHttp client factory). It must **not** depend on
+  `:android:app` or on any other `:core` module.
+- `:android:app` depends on each provider module purely so Hilt can discover its DI module at compile
   time. No app or `core` code references a concrete provider class — everything goes through the
   `MediaProvider` / `MediaProviderFactory` interfaces and the `ProviderRegistry`.
-- The contracts and all domain models are pure Kotlin in `:core:domain`
-  (`core/domain/src/main/kotlin/app/polyphony/core/domain/`): no Android dependencies, which keeps
+- The contracts and all domain models are pure Kotlin in `:shared:domain`
+  (`shared/domain/src/main/kotlin/app/polyphony/core/domain/`): no Android dependencies, which keeps
   providers unit-testable on the JVM.
 
 This is the whole extension point: add a module, implement two interfaces, bind a factory into a
-Hilt set. Nothing in `:app`, `:core:data`, `:core:playback`, or the UI needs to change for the
+Hilt set. Nothing in `:android:app`, `:shared:data`, `:android:playback`, or the UI needs to change for the
 provider to work end to end (one onboarding card is the only UI touch — see below).
 
 ## The `MediaProvider` contract
 
-Source: `core/domain/src/main/kotlin/app/polyphony/core/domain/provider/MediaProvider.kt`.
+Source: `shared/domain/src/main/kotlin/app/polyphony/core/domain/provider/MediaProvider.kt`.
 
 ### Threading and exception contract
 
@@ -143,7 +143,7 @@ Map every failure to one of these (defined in the same file):
 
 ### Capabilities
 
-`Capability` (in `core/domain/.../model/Library.kt`) is the set of optional features. The UI hides
+`Capability` (in `shared/domain/.../model/Library.kt`) is the set of optional features. The UI hides
 what a provider does not advertise. Current flags: `LYRICS`, `SYNCED_LYRICS`, `RATINGS`,
 `FAVORITES`, `PLAYLIST_EDIT`, `SCROBBLE`, `SIMILAR_ARTISTS`, `TOP_TRACKS`, `GENRES`,
 `RANDOM_TRACKS`, `TRANSCODE_FORMAT_SELECTION`, `DOWNLOAD_ORIGINAL`, `FULL_TRACK_LISTING`.
@@ -157,7 +157,7 @@ There is no manual registry wiring. Each provider module declares a Hilt module 
 factory `@IntoSet`:
 
 ```kotlin
-// provider/subsonic/.../SubsonicProviderModule.kt
+// shared/providers/subsonic/.../SubsonicProviderModule.kt
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class SubsonicProviderModule {
@@ -170,17 +170,17 @@ abstract class SubsonicProviderModule {
 (Jellyfin keeps the equivalent `@Module` at the bottom of `JellyfinProviderFactory.kt` — either
 placement is fine.)
 
-`:core:data` declares the set so it exists even when empty, and binds the registry:
+`:shared:data` declares the set so it exists even when empty, and binds the registry:
 
 ```kotlin
-// core/data/.../di/DataModule.kt
+// shared/data/.../di/DataModule.kt
 @Multibinds
 abstract fun providerFactories(): Set<MediaProviderFactory>
 
 @Binds abstract fun bindProviderRegistry(impl: ProviderRegistryImpl): ProviderRegistry
 ```
 
-`ProviderRegistryImpl` (`core/data/.../repository/ProviderRegistryImpl.kt`) receives
+`ProviderRegistryImpl` (`shared/data/.../repository/ProviderRegistryImpl.kt`) receives
 `Set<MediaProviderFactory>`, indexes them by `type`, and resolves/caches `MediaProvider` instances
 per server:
 
@@ -200,7 +200,7 @@ to `activeProvider` / `forServer(server)`.
 ## Step-by-step: add a new provider
 
 The two existing modules are the reference implementations:
-`provider/subsonic/` (hand-rolled REST + kotlinx.serialization) and `provider/jellyfin/` (official
+`shared/providers/subsonic/` (hand-rolled REST + kotlinx.serialization) and `shared/providers/jellyfin/` (official
 Jellyfin Kotlin SDK). Pick whichever is the closer shape for your backend and mirror it.
 
 ### 1. Create the module
@@ -217,7 +217,7 @@ provider/<name>/
   src/test/kotlin/...                   # JVM unit tests
 ```
 
-Use a `build.gradle.kts` modelled on `provider/subsonic/build.gradle.kts`:
+Use a `build.gradle.kts` modelled on `shared/providers/subsonic/build.gradle.kts`:
 
 ```kotlin
 plugins {
@@ -236,8 +236,8 @@ android {
 }
 
 dependencies {
-    api(project(":core:domain"))
-    implementation(project(":core:network"))
+    api(project(":shared:domain"))
+    implementation(project(":shared:network"))
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
@@ -255,15 +255,15 @@ dependencies {
 ### 2. Register the module in `settings.gradle.kts`
 
 ```kotlin
-include(":provider:<name>")
+include(":shared:providers:<name>")
 ```
 
-### 3. Add it to `:app`
+### 3. Add it to `:android:app`
 
-In `app/build.gradle.kts`, next to the existing provider lines:
+In `android/app/build.gradle.kts`, next to the existing provider lines:
 
 ```kotlin
-implementation(project(":provider:<name>"))
+implementation(project(":shared:providers:<name>"))
 ```
 
 This is only so Hilt sees the provider's `@Module` at compile time — no app code references the
@@ -277,7 +277,7 @@ existing `okhttp`, `kotlinx-serialization-json`, `hilt-*`, and `junit` entries w
 
 ### 5. Add a `ServerType`
 
-In `core/domain/.../model/Server.kt`:
+In `shared/domain/.../model/Server.kt`:
 
 ```kotlin
 enum class ServerType(val displayName: String, val defaultPort: Int?) {
@@ -293,7 +293,7 @@ read them from `Server.options` / `ConnectRequest.options` (that is how `LEGACY_
 
 ### 6. Implement the factory, provider and mappers
 
-- **Factory** — inject `ServerHttpClientFactory` from `:core:network` and use
+- **Factory** — inject `ServerHttpClientFactory` from `:shared:network` and use
   `clientFor(options)` (during `authenticate`) / `clientFor(server)` (in `create`) so custom
   headers and "trust self-signed" apply to every request. Normalise the base URL, validate
   credentials, and return a `Server`. Wrap failures in `ProviderException`.
@@ -320,7 +320,7 @@ That is all the data/registry wiring — `ProviderRegistryImpl` picks it up from
 
 Onboarding currently lists the two backends explicitly (it is not auto-generated from
 `ServerType`). Add a card in `ServerTypeStep` in
-`app/src/main/kotlin/app/polyphony/ui/onboarding/ConnectServerScreen.kt`:
+`android/app/src/main/kotlin/app/polyphony/ui/onboarding/ConnectServerScreen.kt`:
 
 ```kotlin
 ServerTypeCard(
@@ -360,7 +360,7 @@ data class StreamRequest(
   caching.
 - For Cast and DLNA the receiver fetches the URL itself, so the URL must embed whatever auth the
   receiver needs (query-string token, not an app-only header). If auth can only travel as a header,
-  put it in `StreamRequest.headers`; `:core:playback` decides how receivers get it. Receiver URLs
+  put it in `StreamRequest.headers`; `:android:playback` decides how receivers get it. Receiver URLs
   are further rewritten by `RemoteUrlResolver` / `ServerOptions.REMOTE_BASE_URL` (LAN address
   substitution) — see the transcoding section of [ARCHITECTURE.md](../ARCHITECTURE.md).
 
@@ -370,32 +370,32 @@ Providers are built to be unit-tested on the JVM without a live server. Keep all
 (mappers, URL builders, stream-param resolvers, auth/error mapping) in pure classes and test them
 directly. Examples to copy:
 
-- `provider/subsonic/src/test/kotlin/.../SubsonicMapperTest.kt` — album-list-type and codec/format
+- `shared/providers/subsonic/src/test/kotlin/.../SubsonicMapperTest.kt` — album-list-type and codec/format
   mapping, ISO-date parsing.
-- `provider/subsonic/src/test/kotlin/.../SubsonicUrlBuilderTest.kt` — URL construction, including
+- `shared/providers/subsonic/src/test/kotlin/.../SubsonicUrlBuilderTest.kt` — URL construction, including
   auth parameters.
-- `provider/subsonic/src/test/kotlin/.../SubsonicProviderTest.kt` — drives the provider against a
+- `shared/providers/subsonic/src/test/kotlin/.../SubsonicProviderTest.kt` — drives the provider against a
   fake `Call.Factory` / canned responses (see `TestSupport.kt`) to exercise paging, fallbacks and
   error mapping end to end without a network.
-- `provider/jellyfin/src/test/kotlin/.../JellyfinStreamParamsTest.kt` — transcode-profile →
+- `shared/providers/jellyfin/src/test/kotlin/.../JellyfinStreamParamsTest.kt` — transcode-profile →
   stream-parameter decisions (direct play vs. transcode, bitrate/sample-rate caps, MIME type).
-- `provider/jellyfin/src/test/kotlin/.../JellyfinUrlNormalizerTest.kt` — base-URL normalisation.
+- `shared/providers/jellyfin/src/test/kotlin/.../JellyfinUrlNormalizerTest.kt` — base-URL normalisation.
 
 Guidelines:
 
 - Put the pieces that decide URLs, formats and mappings behind pure functions/classes so a test
-  needs no Android or network. The `TranscodeResolver` is tested the same way in `:core:domain`.
+  needs no Android or network. The `TranscodeResolver` is tested the same way in `:shared:domain`.
 - Cover the awkward cases real servers produce: empty/legacy envelopes, missing fields, servers
   that don't support an endpoint (assert `ProviderException.Unsupported`), and date/number formats.
-- Run `./gradlew test` (or `./gradlew :provider:<name>:test`) before pushing; CI must be green.
+- Run `./gradlew test` (or `./gradlew :shared:providers:<name>:test`) before pushing; CI must be green.
 
 ## Checklist
 
 - [ ] `provider/<name>/` module with `build.gradle.kts`, empty `AndroidManifest.xml`.
-- [ ] `include(":provider:<name>")` in `settings.gradle.kts`.
-- [ ] `implementation(project(":provider:<name>"))` in `app/build.gradle.kts`.
+- [ ] `include(":shared:providers:<name>")` in `settings.gradle.kts`.
+- [ ] `implementation(project(":shared:providers:<name>"))` in `android/app/build.gradle.kts`.
 - [ ] New SDK deps (if any) in `gradle/libs.versions.toml`.
-- [ ] New `ServerType` (and any `ServerOptions` keys) in `core/domain/.../model/Server.kt`.
+- [ ] New `ServerType` (and any `ServerOptions` keys) in `shared/domain/.../model/Server.kt`.
 - [ ] `<Name>ProviderFactory` implementing `authenticate` + `create`, errors as `ProviderException`.
 - [ ] `<Name>MediaProvider` implementing every `MediaProvider` method; I/O on `Dispatchers.IO`;
       `serverId` stamped; pure URL methods.

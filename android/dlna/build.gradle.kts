@@ -40,8 +40,8 @@ androidComponents {
 }
 
 dependencies {
-    api(project(":core:domain"))
-    implementation(project(":core:network"))
+    api(project(":shared:domain"))
+    implementation(project(":shared:network"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)

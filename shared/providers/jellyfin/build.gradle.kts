@@ -6,14 +6,14 @@ plugins {
 }
 
 android {
-    namespace = "app.polyphony.core.network"
+    namespace = "app.polyphony.provider.jellyfin"
     compileSdk = 37
     defaultConfig { minSdk = 26 }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { buildConfig = true }
+    buildFeatures { buildConfig = false }
 }
 
 kotlin {
@@ -21,11 +21,14 @@ kotlin {
 }
 
 dependencies {
-    api(project(":core:domain"))
-    api(libs.okhttp)
-    implementation(libs.okhttp.logging)
-    api(libs.kotlinx.serialization.json)
+    api(project(":shared:domain"))
+    implementation(project(":shared:network"))
+
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
+    implementation(libs.jellyfin.core)
+
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 

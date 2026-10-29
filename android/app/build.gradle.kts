@@ -111,16 +111,16 @@ composeCompiler {
 }
 
 dependencies {
-    implementation(project(":core:domain"))
-    implementation(project(":core:network"))
-    implementation(project(":core:data"))
-    implementation(project(":core:playback"))
-    implementation(project(":core:ui"))
-    implementation(project(":core:downloads"))
-    implementation(project(":core:dlna"))
-    implementation(project(":core:requests"))
-    implementation(project(":provider:subsonic"))
-    implementation(project(":provider:jellyfin"))
+    implementation(project(":shared:domain"))
+    implementation(project(":shared:network"))
+    implementation(project(":shared:data"))
+    implementation(project(":android:playback"))
+    implementation(project(":android:ui"))
+    implementation(project(":android:downloads"))
+    implementation(project(":android:dlna"))
+    implementation(project(":shared:requests"))
+    implementation(project(":shared:providers:subsonic"))
+    implementation(project(":shared:providers:jellyfin"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

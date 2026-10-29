@@ -6,24 +6,14 @@ plugins {
 }
 
 android {
-    namespace = "app.polyphony.core.data"
+    namespace = "app.polyphony.core.downloads"
     compileSdk = 37
-    defaultConfig {
-        minSdk = 26
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
+    defaultConfig { minSdk = 26 }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { buildConfig = false }
-}
-
-androidComponents {
-    onVariants { variant ->
-        // Exported Room schemas double as fixtures for the instrumented migration test.
-        variant.androidTest?.sources?.assets?.addStaticSourceDirectory("$projectDir/schemas")
-    }
 }
 
 kotlin {
@@ -35,25 +25,20 @@ kotlin {
 
 ksp {
     arg("room.generateKotlin", "true")
-    // One JSON per schema version under core/data/schemas; commit them with every version bump.
-    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
-    api(project(":core:domain"))
-    implementation(project(":core:network"))
+    api(project(":shared:domain"))
+    implementation(project(":shared:network"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
 
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
-    implementation(libs.androidx.room.paging)
     ksp(libs.androidx.room.compiler)
-
-    implementation(libs.androidx.datastore.preferences)
-    implementation(libs.androidx.datastore)
 
     implementation(libs.androidx.work.runtime)
     implementation(libs.hilt.work)
@@ -65,8 +50,4 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
-
-    androidTestImplementation(libs.androidx.room.testing)
-    androidTestImplementation(libs.androidx.test.ext.junit)
-    androidTestImplementation(libs.androidx.test.runner)
 }
