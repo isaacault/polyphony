@@ -57,14 +57,13 @@ enum InspectorPane: String { case queue, lyrics }
 
 struct MainWindow: View {
     @Environment(AppModel.self) private var model
-    @State private var selection: SidebarItem? = .home
-    @State private var path = NavigationPath()
     @State private var inspector: InspectorPane?
     @State private var keyMonitor: Any?
 
     var body: some View {
+        @Bindable var model = model
         NavigationSplitView {
-            List(selection: $selection) {
+            List(selection: $model.sidebar) {
                 Section {
                     row(.home)
                     row(.search)
@@ -81,12 +80,12 @@ struct MainWindow: View {
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 200)
         } detail: {
-            NavigationStack(path: $path) {
-                detail(for: selection ?? .home)
+            NavigationStack(path: $model.path) {
+                detail(for: model.sidebar ?? .home)
                     .navigationDestination(for: Route.self) { route in destination(route) }
             }
         }
-        .onChange(of: selection) { path = NavigationPath() }
+        .onChange(of: model.sidebar) { model.path = NavigationPath() }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             PlayerBar(inspector: $inspector)
         }
