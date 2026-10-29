@@ -167,6 +167,15 @@ final class AppModel {
     @ObservationIgnored private let nowPlaying: NowPlayingCenter
     @ObservationIgnored private let store = KeychainServerStore()
     @ObservationIgnored private let arrivals = ArrivalNotifier()
+    @ObservationIgnored private let outputs = OutputWatcher()
+
+    /// Settings > Playback: pause when headphones go and the speakers would take over (on by default).
+    private(set) var pauseOnDisconnect = UserDefaults.standard.object(forKey: "playback.pauseOnDisconnect") as? Bool ?? true
+
+    func setPauseOnDisconnect(_ on: Bool) {
+        pauseOnDisconnect = on
+        UserDefaults.standard.set(on, forKey: "playback.pauseOnDisconnect")
+    }
 
     init() {
         // Every stored property is set before `self` is used.
@@ -180,6 +189,12 @@ final class AppModel {
             player.replayGain = saved
         }
         center.attach(player)
+        outputs.onHeadphonesGone = { [weak self] in
+            guard let self, self.pauseOnDisconnect, self.speaker == nil, self.player.isPlaying else { return }
+            DiagnosticLog.shared.log("output", "headphones gone: paused")
+            self.player.pause()
+        }
+        outputs.start()
         player.resolve = { [weak self] entry in await self?.source(for: entry) }
         player.artwork = { [weak self] entry in self?.artworkURL(for: entry, size: 600) }
         player.scrobble = { [weak self] track, submission in

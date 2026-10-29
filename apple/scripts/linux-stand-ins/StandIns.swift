@@ -67,6 +67,13 @@ final class ArrivalNotifier {
     func stop() {}
 }
 
+// Platform/OutputWatcher.swift
+@MainActor
+final class OutputWatcher {
+    var onHeadphonesGone: () -> Void = {}
+    func start() {}
+}
+
 // Platform/SpeakerDiscovery.swift
 @MainActor
 @Observable

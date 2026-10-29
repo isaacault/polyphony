@@ -340,6 +340,8 @@ struct SettingsView: View {
                 }
                 Text("Applies from the next song. Transcoding is done by the server.")
                     .font(.caption).foregroundStyle(.secondary)
+                Toggle("Pause when headphones disconnect",
+                       isOn: Binding(get: { model.pauseOnDisconnect }, set: { model.setPauseOnDisconnect($0) }))
                 Toggle("Offline mode", isOn: Binding(get: { model.offlineMode }, set: { model.setOfflineMode($0) }))
                 Text("Only what's downloaded plays; nothing is streamed (as on a plane).")
                     .font(.caption).foregroundStyle(.secondary)
