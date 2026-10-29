@@ -42,6 +42,37 @@ final class AppModel {
     /// Lists already fetched this session, shown at once when a page opens again (then refreshed).
     @ObservationIgnored var albumLists: [SubsonicClient.AlbumListType: [Album]] = [:]
     @ObservationIgnored var artistList: [Artist]?
+    /// Recently played albums and playlists with where they were left, for Continue Listening.
+    private(set) var history = ListeningHistory()
+
+    private var historyKey: String { "history." + (server?.address.host ?? "") + "." + (server?.subsonicUsername ?? "") }
+
+    /// Picks a collection up where it was left (the same song, a few seconds from where it stopped).
+    func resume(_ entry: RecentContext) async {
+        guard let subsonic else { return }
+        do {
+            let tracks: [Track]
+            switch entry.context.kind {
+            case .album: tracks = try await subsonic.album(id: entry.context.id).tracks
+            case .playlist: tracks = try await subsonic.playlist(id: entry.context.id).tracks
+            default: return
+            }
+            let point = ResumePoint.of(tracks, entry)
+            player.play(tracks, startAt: point.index, context: entry.context, position: TimeInterval(point.positionMs) / 1000)
+        } catch {
+            handle(error)
+        }
+    }
+
+    func forget(_ context: PlayContext) {
+        history.remove(context)
+        saveHistory()
+    }
+
+    private func saveHistory() {
+        if let data = try? JSONEncoder().encode(history) { UserDefaults.standard.set(data, forKey: historyKey) }
+    }
+
     /// The user's playlists, for "Add to Playlist" menus (which can't load anything as they open).
     private(set) var playlists: [Playlist] = []
 
@@ -66,6 +97,11 @@ final class AppModel {
         player.scrobble = { [weak self] track, submission in
             guard let subsonic = self?.subsonic else { return }
             Task { try? await subsonic.scrobble(trackID: track.id, submission: submission) }
+        }
+        player.history = { [weak self] context, trackID, index, ms in
+            guard let self else { return }
+            self.history.record(context, trackID: trackID, index: index, positionMs: ms)
+            self.saveHistory()
         }
         player.persist = { snapshot in
             let defaults = UserDefaults.standard
@@ -138,6 +174,12 @@ final class AppModel {
             arrivals.start(service)
         } else {
             continuo = nil
+        }
+        if let data = UserDefaults.standard.data(forKey: historyKey),
+           let saved = try? JSONDecoder().decode(ListeningHistory.self, from: data) {
+            history = saved
+        } else {
+            history = ListeningHistory()
         }
         state = .signedIn
         // Where last session left off, paused: Play carries on.

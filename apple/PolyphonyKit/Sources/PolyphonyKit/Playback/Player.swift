@@ -85,6 +85,8 @@ public final class PlayerController {
     /// Called when there's something worth keeping for next launch (a new song, a pause, every half
     /// minute of play): the app writes it to disk.
     @ObservationIgnored public var persist: @MainActor (PlayQueue.Snapshot?) -> Void = { _ in }
+    /// Where in its collection the queue is (a nil track: played to the end), for Continue listening.
+    @ObservationIgnored public var history: @MainActor (PlayContext, _ trackID: String?, _ index: Int, _ positionMs: Int) -> Void = { _, _, _, _ in }
     @ObservationIgnored private var lastPersisted: TimeInterval = 0
 
     @ObservationIgnored public var now: @MainActor () -> Date = Date.init
@@ -106,15 +108,19 @@ public final class PlayerController {
 
     // MARK: Starting
 
-    public func play(_ tracks: [Track], startAt index: Int = 0, shuffle: Bool = false, title: String? = nil) {
-        play(entries: tracks.map(QueueEntry.track), startAt: index, shuffle: shuffle, title: title)
+    public func play(_ tracks: [Track], startAt index: Int = 0, shuffle: Bool = false, title: String? = nil,
+                     context: PlayContext? = nil, position: TimeInterval = 0) {
+        play(entries: tracks.map(QueueEntry.track), startAt: index, shuffle: shuffle, title: title ?? context?.title,
+             context: context, position: position)
     }
 
-    public func play(entries: [QueueEntry], startAt index: Int = 0, shuffle: Bool = false, title: String? = nil) {
+    public func play(entries: [QueueEntry], startAt index: Int = 0, shuffle: Bool = false, title: String? = nil,
+                     context: PlayContext? = nil, position: TimeInterval = 0) {
         let repeatMode = queue.repeatMode
         queue = PlayQueue(entries, startAt: index, shuffle: shuffle, title: title)
         queue.repeatMode = repeatMode
-        loadCurrent(autoplay: true)
+        queue.context = context
+        loadCurrent(autoplay: true, startAt: position)
     }
 
     public func playNext(_ entries: [QueueEntry]) {
@@ -151,6 +157,11 @@ public final class PlayerController {
     private func save() {
         lastPersisted = position
         persist(queue.snapshot(position: position))
+        if let context = queue.context, let item = queue.current, let track = item.entry.libraryTrack {
+            // The index in the collection's own order (shuffle plays it in another).
+            let index = queue.items.firstIndex { $0.id == item.id } ?? 0
+            history(context, track.id, index, Int(position * 1000))
+        }
     }
 
     // MARK: Sleep timer
@@ -271,15 +282,15 @@ public final class PlayerController {
 
     // MARK: The engine
 
-    private func loadCurrent(autoplay: Bool) {
+    private func loadCurrent(autoplay: Bool, startAt: TimeInterval = 0) {
         guard let item = queue.current else {
             stop()
             return
         }
         loadGeneration += 1
         let generation = loadGeneration
-        position = 0
-        lastPosition = 0
+        position = startAt
+        lastPosition = startAt
         playedOfCurrent = 0
         scrobbled = false
         error = nil
@@ -293,7 +304,7 @@ public final class PlayerController {
             }
             // A newer choice (next pressed again) wins over a slow resolve.
             guard generation == loadGeneration else { return }
-            engine.load(source, startAt: 0, autoplay: autoplay)
+            engine.load(source, startAt: startAt, autoplay: autoplay)
             if let track = item.entry.libraryTrack { scrobble(track, false) }
             preloadNext()
         }
@@ -346,6 +357,8 @@ public final class PlayerController {
             } else {
                 isPlaying = false
                 position = duration
+                // The collection was played to its end: Continue listening starts it over.
+                if let context = queue.context { history(context, nil, 0, 0) }
             }
         case let .failed(message):
             error = message
