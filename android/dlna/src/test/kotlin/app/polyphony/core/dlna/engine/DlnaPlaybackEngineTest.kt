@@ -267,6 +267,25 @@ class DlnaPlaybackEngineTest {
     }
 
     @Test
+    fun `a failed https load says the speaker may need a plain-HTTP receiver address, and is logged`() = runTest {
+        val clock = { testScheduler.currentTime }
+        val transport = FakeTransport(clock).apply { failAll = true }
+        val logged = mutableListOf<String>()
+        val e = DlnaPlaybackEngine<String>(
+            transport = transport,
+            resolver = { id -> ResolvedStream(url = "https://continuo.example/rest/stream?id=$id&t=secret", mimeType = "audio/flac", durationMs = 1_000, title = id) },
+            scope = backgroundScope,
+            clock = clock,
+            log = { logged += it },
+        )
+        e.setMediaItems(listOf("a")).join()
+        e.prepare().join()
+        val message = e.state.value.error?.message.orEmpty()
+        assertTrue(message, message.contains("receiver address"))
+        assertTrue(logged.toString(), logged.any { it.startsWith("renderer failed") } && logged.none { "secret" in it })
+    }
+
+    @Test
     fun `volume is forwarded and clamped`() = runTest {
         val (t, e) = fixture()
         e.setInitialVolume(30)

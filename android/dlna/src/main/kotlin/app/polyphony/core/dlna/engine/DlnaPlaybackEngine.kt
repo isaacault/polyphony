@@ -398,8 +398,10 @@ class DlnaPlaybackEngine<T : Any>(
         playedMsSinceLoad = 0L
         lastPollAt = 0L
         _state.update { it.copy(playbackState = EnginePlaybackState.BUFFERING, isLoading = true, error = null, durationMs = -1) }
+        var url: String? = null
         try {
             val resolved = resolve(item) ?: throw DlnaException(716, "No playable stream for this track")
+            url = resolved.url
             val metadata = DidlLite.build(resolved, itemId = item.uid.toString())
             if (loaded != null) stopRendererQuietly()
             tx { transport.setUri(resolved.url, metadata) }
@@ -420,7 +422,7 @@ class DlnaPlaybackEngine<T : Any>(
         } catch (c: CancellationException) {
             throw c
         } catch (t: Throwable) {
-            fail("Could not start playback on renderer", t)
+            fail(withHttpsHint("Could not start playback on renderer", url), t)
         }
     }
 
@@ -458,6 +460,8 @@ class DlnaPlaybackEngine<T : Any>(
         stopPolling()
         loaded = null
         armedNext = null
+        // Into the log too (never the URL: it carries the library credential), so diagnostics show it.
+        log("renderer failed: $detail" + (if (code != 0) " (UPnP error $code)" else ""))
         _state.update { it.copy(playbackState = EnginePlaybackState.IDLE, isLoading = false, error = EngineError(detail, code, cause)) }
     }
 
@@ -728,6 +732,15 @@ class DlnaPlaybackEngine<T : Any>(
     }
 
     private companion object {
+        /** Many speakers (the Yamaha RX-V483 among them) fetch only plain-HTTP links. */
+        fun withHttpsHint(message: String, url: String?): String =
+            if (url?.startsWith("https://", ignoreCase = true) == true) {
+                "$message. This speaker may not play HTTPS links: give the server a plain-HTTP receiver address " +
+                    "(Settings → Servers → Receiver address)."
+            } else {
+                message
+            }
+
         const val MAX_POLL_FAILURES = 5
         const val SETTLE_MS = 1_800L
         const val END_TOLERANCE_MS = 3_500L
