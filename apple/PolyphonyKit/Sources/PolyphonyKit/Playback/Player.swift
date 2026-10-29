@@ -83,6 +83,8 @@ public struct NowPlayingInfo: Sendable, Equatable {
     public var position: TimeInterval
     public var isPlaying: Bool
     public var artworkURL: URL?
+    /// The speed it plays at (0 when paused), so Control Centre's progress keeps pace.
+    public var rate: Double = 1
 }
 
 /// The player as the UI sees it: the queue, what's playing, where, and the controls. Platform
@@ -337,7 +339,10 @@ public final class PlayerController {
 
     /// Playback speed, kept from song to song (as the Android app's Speed).
     public var speed: Float = 1 {
-        didSet { engine.setRate(speed) }
+        didSet {
+            engine.setRate(speed)
+            publishNowPlaying()
+        }
     }
 
     public static let speeds: [Float] = [0.75, 1, 1.25, 1.5, 2]
@@ -450,6 +455,6 @@ public final class PlayerController {
         }
         nowPlaying?.publish(NowPlayingInfo(title: entry.title, artist: entry.artist, album: entry.album,
                                            duration: duration, position: position, isPlaying: isPlaying,
-                                           artworkURL: artwork(entry)))
+                                           artworkURL: artwork(entry), rate: isPlaying ? Double(speed) : 0))
     }
 }
