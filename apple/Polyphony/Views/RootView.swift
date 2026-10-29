@@ -53,6 +53,9 @@ struct RootView: View {
             SignInView()
         case .signedIn:
             MainWindow()
+                .sheet(isPresented: Binding(get: { model.addingServer }, set: { model.addingServer = $0 })) {
+                    SignInView(adding: true).frame(width: 520, height: 520)
+                }
         }
     }
 }
