@@ -170,9 +170,11 @@ public struct SubsonicClient: Sendable {
                        as: PlaylistDTO.self)?.model
     }
 
-    public func updatePlaylist(id: String, name: String? = nil, adding: [String] = [], removingIndices: [Int] = []) async throws {
+    public func updatePlaylist(id: String, name: String? = nil, isPublic: Bool? = nil, adding: [String] = [],
+                               removingIndices: [Int] = []) async throws {
         var params = [("playlistId", id)]
         if let name { params.append(("name", name)) }
+        if let isPublic { params.append(("public", isPublic ? "true" : "false")) }
         params += adding.map { ("songIdToAdd", $0) }
         params += removingIndices.map { ("songIndexToRemove", "\($0)") }
         _ = try await call("updatePlaylist", params, payload: nil, as: Empty.self)

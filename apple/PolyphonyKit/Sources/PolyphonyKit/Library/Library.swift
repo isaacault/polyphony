@@ -31,11 +31,13 @@ public struct Album: Sendable, Hashable, Identifiable {
     public var coverArtID: String?
     public var starred: Bool
     /// Filled in by `SubsonicClient.album(id:)`; empty in lists.
+    /// The user's 1–5 stars for the album (ratings mode); nil when unrated.
+    public var rating: Int?
     public var tracks: [Track]
 
     public init(id: String, name: String, artistName: String? = nil, artistID: String? = nil, year: Int? = nil,
                 genre: String? = nil, songCount: Int = 0, duration: TimeInterval = 0, coverArtID: String? = nil,
-                starred: Bool = false, tracks: [Track] = []) {
+                starred: Bool = false, rating: Int? = nil, tracks: [Track] = []) {
         self.id = id
         self.name = name
         self.artistName = artistName
@@ -46,6 +48,7 @@ public struct Album: Sendable, Hashable, Identifiable {
         self.duration = duration
         self.coverArtID = coverArtID
         self.starred = starred
+        self.rating = rating
         self.tracks = tracks
     }
 }
