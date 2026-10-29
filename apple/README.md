@@ -20,7 +20,7 @@ your sign-ins in, and once for Local Network access when it looks for DLNA speak
 
 To play to a speaker (the Yamaha), pick it from the speaker menu in the player bar. Speakers fetch the
 music themselves and many can't do HTTPS: continuo hands out its plain-HTTP LAN address
-(`RECEIVER_BASE_URL`), or set one in Settings > Speakers.
+(`RECEIVER_BASE_URL`), or set one in Settings > Servers > Speakers.
 
 Something wrong? Help > Save Diagnostics writes what's set up and the recent log (no passwords or
 tokens) to a file to send.
