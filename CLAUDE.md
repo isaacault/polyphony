@@ -1,6 +1,10 @@
 # Working rules for coding agents
 
 - Follow ARCHITECTURE.md (module boundaries, contracts) and DESIGN.md (UI rules).
+- One repo for every client (ARCHITECTURE.md): `shared/` must not depend on `android/` or on Android
+  APIs; `apple/PolyphonyKit` builds and tests with `apple/PolyphonyKit/scripts/ci.sh` (Swift in Docker),
+  the Apple apps only in Xcode on a Mac. continuo's API is `contract/continuo-openapi.json`
+  (`scripts/update_contract.sh`).
 - Build and test with `scripts/ci.sh` (Docker, any checkout or worktree; exit 0 = green), or natively
   with `source scripts/env.sh && ./gradlew assembleDebug test`; see docs/testing.md for local CI and
   the local Navidrome + emulator loop.

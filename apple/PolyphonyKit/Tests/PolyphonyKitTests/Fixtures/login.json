@@ -1,0 +1,3 @@
+{"accessToken":"acc-1","expiresIn":3600,"refreshToken":"ref-1","user":{"id":1,"username":"isaac","role":"admin"},
+ "device":{"id":"dev-1","name":"Isaac's Mac"},
+ "library":{"type":"subsonic","baseUrl":"https://continuo.ault.me","username":"isaac","password":"device-secret"}}

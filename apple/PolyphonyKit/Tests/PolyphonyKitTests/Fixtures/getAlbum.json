@@ -1,0 +1,11 @@
+{"subsonic-response":{"status":"ok","version":"1.16.1","type":"navidrome","serverVersion":"0.58.0","openSubsonic":true,
+"album":{"id":"al-1","name":"We All Speak in Poems","artist":"Alaskan Tapes","artistId":"ar-1","coverArt":"al-1_0","songCount":2,
+"duration":343.4,"year":2016,"genre":"Ambient","created":"2026-10-29T11:05:04Z",
+"song":[
+ {"id":"tr-1","parent":"al-1","isDir":false,"title":"Speaker","album":"We All Speak in Poems","artist":"Alaskan Tapes","track":1,
+  "year":2016,"coverArt":"mf-1","size":24117435,"contentType":"audio/flac","suffix":"flac","duration":180,"bitRate":1071,
+  "bitDepth":24,"samplingRate":44100,"channelCount":2,"discNumber":1,"albumId":"al-1","artistId":"ar-1","type":"music"},
+ {"id":"tr-2","parent":"al-1","isDir":false,"title":"I Dreamt I Still Knew Myself","album":"We All Speak in Poems",
+  "artist":"Alaskan Tapes","track":2,"size":23820658,"suffix":"flac","duration":163.4,"bitDepth":16,"samplingRate":44100,
+  "discNumber":1,"albumId":"al-1","artistId":"ar-1","starred":"2026-10-29T12:00:00Z"}
+]}}}
