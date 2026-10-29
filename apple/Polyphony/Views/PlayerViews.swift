@@ -657,6 +657,8 @@ private struct NowPlayingActions: View {
                         if !model.downloads.isDownloaded(track.id) {
                             Button("Download") { model.downloads.download([track]) }
                         }
+                        Divider()
+                        SpeedMenu()
                     } label: { Image(systemName: "ellipsis.circle") }
                         .menuStyle(.borderlessButton)
                         .menuIndicator(.hidden)
@@ -726,4 +728,23 @@ struct SongInfo: View {
 
 private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+/// Speed ▸ 0.75×, 1×, 1.25×, 1.5×, 2× (Now Playing's menu, and the Controls menu).
+struct SpeedMenu: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Menu("Speed") {
+            ForEach(PlayerController.speeds, id: \.self) { speed in
+                Button {
+                    model.player.speed = speed
+                } label: {
+                    if model.player.speed == speed { Label(Self.label(speed), systemImage: "checkmark") } else { Text(Self.label(speed)) }
+                }
+            }
+        }
+    }
+
+    static func label(_ speed: Float) -> String { String(format: "%g×", speed) }
 }

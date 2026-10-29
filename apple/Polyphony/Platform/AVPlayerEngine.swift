@@ -15,6 +15,12 @@ final class AVPlayerEngine: AudioEngine {
     }
     private var gain: Float = 1
 
+    /// The speed play() starts at (and the current one, while playing).
+    func setRate(_ rate: Float) {
+        player.defaultRate = rate
+        if player.rate != 0 { player.rate = rate }
+    }
+
     func setGain(_ gain: Float) {
         self.gain = gain
         player.volume = volume * gain

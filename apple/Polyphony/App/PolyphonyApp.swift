@@ -125,6 +125,9 @@ struct PlaybackCommands: Commands {
                 .keyboardShortcut(.upArrow, modifiers: .command)
             Button("Volume Down") { player.volume = max(0, player.volume - 0.1) }
                 .keyboardShortcut(.downArrow, modifiers: .command)
+            Picker("Speed", selection: Binding(get: { player.speed }, set: { player.speed = $0 })) {
+                ForEach(PlayerController.speeds, id: \.self) { Text(SpeedMenu.label($0)).tag($0) }
+            }
             Divider()
             Menu("Sleep Timer") {
                 ForEach([15, 30, 45, 60, 90], id: \.self) { minutes in

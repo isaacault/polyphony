@@ -59,10 +59,13 @@ public protocol AudioEngine: AnyObject {
     func stop()
     /// ReplayGain's level for the song, on top of the user's volume (engines without one ignore it).
     func setGain(_ gain: Float)
+    /// Playback speed (1 = as recorded); engines that can't change it ignore it.
+    func setRate(_ rate: Float)
 }
 
 extension AudioEngine {
     public func setGain(_ gain: Float) {}
+    public func setRate(_ rate: Float) {}
 }
 
 /// What the system shows about the song (Now Playing, Control Centre, media keys' owner). The app
@@ -204,6 +207,7 @@ public final class PlayerController {
         engine.stop()
         engine = newEngine
         newEngine.onEvent = { [weak self] event in self?.handle(event) }
+        newEngine.setRate(speed)
         isPlaying = false
         guard queue.current != nil else { return }
         loadCurrent(autoplay: wasPlaying, startAt: at)
@@ -326,6 +330,13 @@ public final class PlayerController {
     }
 
     // MARK: The engine
+
+    /// Playback speed, kept from song to song (as the Android app's Speed).
+    public var speed: Float = 1 {
+        didSet { engine.setRate(speed) }
+    }
+
+    public static let speeds: [Float] = [0.75, 1, 1.25, 1.5, 2]
 
     /// Levelling loudness between songs (Settings > Playback).
     public var replayGain = ReplayGain.Settings() {
