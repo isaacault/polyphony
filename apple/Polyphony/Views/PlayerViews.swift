@@ -285,89 +285,112 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        Form {
-            if let server = model.server {
-                Section("Account") {
-                    LabeledContent("Signed in as", value: server.subsonicUsername)
-                    LabeledContent("Server", value: server.address.absoluteString)
-                    LabeledContent("Kind", value: server.kind == .continuo ? "continuo (search, requests, Play now)" : "Subsonic (library only)")
-                    Button("Sign Out of This Server", role: .destructive) { Task { await model.signOut() } }
-                }
-                Section("Servers") {
-                    ForEach(model.servers, id: \.key) { other in
-                        HStack {
-                            Image(systemName: other.kind == .continuo ? "sparkles" : "server.rack").foregroundStyle(.secondary).frame(width: 18)
-                            Text(other.displayName)
-                            Spacer()
-                            if other.key == server.key {
-                                Text("Showing").foregroundStyle(.secondary)
-                            } else {
-                                Button("Switch") { Task { await model.switchTo(other.key) } }
-                            }
+        // Tabs, as Mac settings windows have them; each scrolls on its own.
+        TabView {
+            Form { servers }.formStyle(.grouped)
+                .tabItem { Label("Servers", systemImage: "server.rack") }
+            Form { playback }.formStyle(.grouped)
+                .tabItem { Label("Playback", systemImage: "play.circle") }
+            Form { general }.formStyle(.grouped)
+                .tabItem { Label("General", systemImage: "gearshape") }
+        }
+        .frame(width: 540, height: 600)
+    }
+
+    @ViewBuilder
+    private var servers: some View {
+        if let server = model.server {
+            Section("Account") {
+                LabeledContent("Signed in as", value: server.subsonicUsername)
+                LabeledContent("Server", value: server.address.absoluteString)
+                LabeledContent("Kind", value: server.kind == .continuo ? "continuo (search, requests, Play now)" : "Subsonic (library only)")
+                Button("Sign Out of This Server", role: .destructive) { Task { await model.signOut() } }
+            }
+            Section("Servers") {
+                ForEach(model.servers, id: \.key) { other in
+                    HStack {
+                        Image(systemName: other.kind == .continuo ? "sparkles" : "server.rack").foregroundStyle(.secondary).frame(width: 18)
+                        Text(other.displayName)
+                        Spacer()
+                        if other.key == server.key {
+                            Text("Showing").foregroundStyle(.secondary)
+                        } else {
+                            Button("Switch") { Task { await model.switchTo(other.key) } }
                         }
                     }
-                    Button("Add Server…") { model.addingServer = true }
                 }
-            } else {
-                Text("Not signed in.")
+                Button("Add Server…") { model.addingServer = true }
             }
-            Section("Speakers") {
-                TextField("Receiver address", text: Binding(get: { model.receiverAddress }, set: { model.setReceiverAddress($0) }),
-                          prompt: Text("http://192.168.0.101"))
-                Text("What DLNA speakers are given instead of the server's address: they fetch the music themselves, and many can't do HTTPS. For continuo, its LAN address (http://192.168.0.101).")
-                    .font(.caption).foregroundStyle(.secondary)
+        } else {
+            Text("Not signed in.")
+        }
+        Section("Speakers") {
+            TextField("Receiver address", text: Binding(get: { model.receiverAddress }, set: { model.setReceiverAddress($0) }),
+                      prompt: Text("http://192.168.0.101"))
+            Text("What DLNA speakers are given instead of the server's address: they fetch the music themselves, and many can't do HTTPS. For continuo, its LAN address (http://192.168.0.101).")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        if model.isContinuo {
+            ScrobblingSection()
+            DevicesSection()
+        }
+    }
+
+    @ViewBuilder
+    private var playback: some View {
+        Section("Streaming") {
+            Picker("Streaming quality", selection: Binding(get: { model.streamingBitrate }, set: { model.setStreamingBitrate($0) })) {
+                Text("Original (as the file is)").tag(0)
+                Text("High (MP3 320 kbps)").tag(320)
+                Text("Normal (MP3 192 kbps)").tag(192)
+                Text("Data saver (MP3 128 kbps)").tag(128)
             }
-            if model.isContinuo {
-                ScrobblingSection()
-                DevicesSection()
+            Text("Applies from the next song. Transcoding is done by the server.")
+                .font(.caption).foregroundStyle(.secondary)
+            Toggle("Offline mode", isOn: Binding(get: { model.offlineMode }, set: { model.setOfflineMode($0) }))
+            Text("Only what's downloaded plays; nothing is streamed (as on a plane).")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        Section("Volume levelling") {
+            Picker("Level by", selection: gain(\.mode)) {
+                Text("Off").tag(ReplayGain.Mode.off)
+                Text("Automatic (album gain for whole albums)").tag(ReplayGain.Mode.auto)
+                Text("Track gain").tag(ReplayGain.Mode.track)
+                Text("Album gain").tag(ReplayGain.Mode.album)
             }
-            Section("Appearance") {
-                Toggle("Artwork colours in Now Playing",
-                       isOn: Binding(get: { model.artworkColours }, set: { model.setArtworkColours($0) }))
-            }
-            Section("Favourites") {
-                Picker("Mark songs with", selection: Binding(get: { model.usesRatings }, set: { model.setUsesRatings($0) })) {
-                    Text("A heart (favourite or not)").tag(false)
-                    Text("Stars (1 to 5)").tag(true)
+            if model.replayGain.mode != .off {
+                Stepper(value: gain(\.preampDb), in: -12...12, step: 1) {
+                    LabeledContent("Pre-amp", value: String(format: "%+.0f dB", model.replayGain.preampDb))
                 }
+                Toggle("Prevent clipping", isOn: gain(\.preventClipping))
             }
-            Section("Playback") {
-                Picker("Streaming quality", selection: Binding(get: { model.streamingBitrate }, set: { model.setStreamingBitrate($0) })) {
-                    Text("Original (as the file is)").tag(0)
-                    Text("High (MP3 320 kbps)").tag(320)
-                    Text("Normal (MP3 192 kbps)").tag(192)
-                    Text("Data saver (MP3 128 kbps)").tag(128)
-                }
-                Text("Applies from the next song. Transcoding is done by the server.")
-                    .font(.caption).foregroundStyle(.secondary)
-                Toggle("Pause when headphones disconnect",
-                       isOn: Binding(get: { model.pauseOnDisconnect }, set: { model.setPauseOnDisconnect($0) }))
-                Toggle("Offline mode", isOn: Binding(get: { model.offlineMode }, set: { model.setOfflineMode($0) }))
-                Text("Only what's downloaded plays; nothing is streamed (as on a plane).")
-                    .font(.caption).foregroundStyle(.secondary)
-                Picker("Volume levelling", selection: gain(\.mode)) {
-                    Text("Off").tag(ReplayGain.Mode.off)
-                    Text("Automatic (album gain for whole albums)").tag(ReplayGain.Mode.auto)
-                    Text("Track gain").tag(ReplayGain.Mode.track)
-                    Text("Album gain").tag(ReplayGain.Mode.album)
-                }
-                if model.replayGain.mode != .off {
-                    Stepper(value: gain(\.preampDb), in: -12...12, step: 1) {
-                        LabeledContent("Pre-amp", value: String(format: "%+.0f dB", model.replayGain.preampDb))
-                    }
-                    Toggle("Prevent clipping", isOn: gain(\.preventClipping))
-                    Text("ReplayGain tags from the files: songs too loud are turned down to match (never up past full volume).")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            Section("About") {
-                LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–")
-                Link("Polyphony on GitHub", destination: URL(string: "https://github.com/isaacault/polyphony")!)
+            Text("ReplayGain tags from the files: songs too loud are turned down to match (never up past full volume).")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        Section("Output") {
+            Toggle("Pause when headphones disconnect",
+                   isOn: Binding(get: { model.pauseOnDisconnect }, set: { model.setPauseOnDisconnect($0) }))
+        }
+    }
+
+    @ViewBuilder
+    private var general: some View {
+        Section("Appearance") {
+            Toggle("Artwork colours in Now Playing",
+                   isOn: Binding(get: { model.artworkColours }, set: { model.setArtworkColours($0) }))
+        }
+        Section("Favourites") {
+            Picker("Mark songs with", selection: Binding(get: { model.usesRatings }, set: { model.setUsesRatings($0) })) {
+                Text("A heart (favourite or not)").tag(false)
+                Text("Stars (1 to 5)").tag(true)
             }
         }
-        .formStyle(.grouped)
-        .frame(width: 460)
-        .padding()
+        Section("About") {
+            LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–")
+            Link("Polyphony on GitHub", destination: URL(string: "https://github.com/isaacault/polyphony")!)
+            Text("Something wrong? Help > Save Diagnostics writes a file to send (no passwords or tokens in it).")
+                .font(.caption).foregroundStyle(.secondary)
+        }
     }
 
     private func gain<V>(_ field: WritableKeyPath<ReplayGain.Settings, V>) -> Binding<V> {
@@ -492,7 +515,7 @@ struct NowPlayingView: View {
                     .opacity(0.45)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
-                // Its colours over it (Settings > Appearance).
+                // Its colours over it (Settings > General).
                 if model.artworkColours, let palette {
                     LinearGradient(colors: [Color(palette.vibrant).opacity(0.55), Color(palette.darkMuted).opacity(0.75)],
                                    startPoint: .topLeading, endPoint: .bottomTrailing)
