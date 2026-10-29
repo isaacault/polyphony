@@ -191,6 +191,24 @@ public struct RemovedAlbum: Sendable, Hashable, Identifiable {
     public var restorableUntil: String?
 }
 
+/// One message in continuo's inbox: a request arrived, needs a look, a policy check…
+public struct InboxNotification: Sendable, Hashable, Identifiable {
+    public let id: Int
+    public var type: String
+    public var title: String
+    public var body: String?
+    public var createdAt: String?
+    public var read: Bool
+    /// What it's about: the library album to open, or the request.
+    public var albumID: String?
+    public var requestID: Int?
+}
+
+public struct InboxPage: Sendable, Hashable {
+    public var items: [InboxNotification]
+    public var unreadCount: Int
+}
+
 /// A device signed in to this continuo account.
 public struct SignedInDevice: Sendable, Hashable, Identifiable {
     public let id: String

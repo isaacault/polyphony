@@ -42,6 +42,20 @@ final class AppModel {
     /// Lists already fetched this session, shown at once when a page opens again (then refreshed).
     @ObservationIgnored var albumLists: [SubsonicClient.AlbumListType: [Album]] = [:]
     @ObservationIgnored var artistList: [Artist]?
+    /// Unread notifications in continuo's inbox, for the sidebar's badge.
+    private(set) var unreadCount = 0
+    @ObservationIgnored private var inboxTask: Task<Void, Never>?
+
+    func refreshUnread() async {
+        guard let continuo else { return }
+        if let page = try? await continuo.notifications(limit: 1, unreadOnly: true) { unreadCount = page.unreadCount }
+    }
+
+    func markRead(_ ids: [Int]?) async {
+        guard let continuo else { return }
+        if let count = try? await continuo.markRead(ids) { unreadCount = count }
+    }
+
     /// Recently played albums and playlists with where they were left, for Continue Listening.
     private(set) var history = ListeningHistory()
 
@@ -146,6 +160,8 @@ final class AppModel {
     func signOut() async {
         player.stop()
         arrivals.stop()
+        inboxTask?.cancel()
+        unreadCount = 0
         if let account = continuo?.account { await account.signOut() }
         await store.save(nil)
         UserDefaults.standard.removeObject(forKey: Self.queueKey)
@@ -172,6 +188,13 @@ final class AppModel {
             let service = ContinuoService(account: account)
             continuo = service
             arrivals.start(service)
+            inboxTask?.cancel()
+            inboxTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    await self?.refreshUnread()
+                    try? await Task.sleep(for: .seconds(60))
+                }
+            }
         } else {
             continuo = nil
         }

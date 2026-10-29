@@ -3,7 +3,7 @@ import PolyphonyKit
 import SwiftUI
 
 enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
-    case home, search, artists, albums, songs, playlists, genres, favourites, downloads, requests, removed
+    case home, search, artists, albums, songs, playlists, genres, favourites, downloads, inbox, requests, removed
 
     var id: String { rawValue }
 
@@ -18,6 +18,7 @@ enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
         case .genres: "Genres"
         case .favourites: "Favourites"
         case .downloads: "Downloads"
+        case .inbox: "Inbox"
         case .requests: "Requests"
         case .removed: "Recently Removed"
         }
@@ -34,6 +35,7 @@ enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
         case .genres: "guitars"
         case .favourites: "heart"
         case .downloads: "arrow.down.to.line"
+        case .inbox: "tray"
         case .requests: "arrow.down.circle"
         case .removed: "trash"
         }
@@ -75,6 +77,7 @@ struct MainWindow: View {
                 }
                 if model.isContinuo {
                     Section("Server") {
+                        row(.inbox).badge(model.unreadCount)
                         row(.requests)
                         row(.removed)
                     }
@@ -127,6 +130,7 @@ struct MainWindow: View {
         case .genres: GenresView()
         case .favourites: FavouritesView()
         case .downloads: DownloadsView()
+        case .inbox: InboxView()
         case .requests: RequestsView()
         case .removed: RemovedAlbumsView()
         }
