@@ -314,6 +314,10 @@ struct ArtistDetailView: View {
                             Button { Task { await playAll(shuffle: false) } } label: { Label("Play", systemImage: "play.fill") }
                                 .buttonStyle(.borderedProminent)
                             Button { Task { await playAll(shuffle: true) } } label: { Label("Shuffle", systemImage: "shuffle") }
+                            if let artist {
+                                KeepDownloadedButton(target: .artist(id: artist.id, name: artist.name))
+                                    .labelStyle(.iconOnly).help("Keep this artist's albums downloaded")
+                            }
                         }
                         .controlSize(.large)
                     }
@@ -494,6 +498,8 @@ struct PlaylistsView: View {
                 }
             }
             .contextMenu {
+                KeepDownloadedButton(target: .playlist(id: playlist.id, name: playlist.name))
+                Divider()
                 Button("Delete Playlist", role: .destructive) {
                     Task {
                         try? await model.subsonic?.deletePlaylist(id: playlist.id)
@@ -549,6 +555,8 @@ struct PlaylistDetailView: View {
                                 Button { model.player.play(playlist.tracks, shuffle: true, context: .playlist(playlist)) } label: {
                                     Label("Shuffle", systemImage: "shuffle")
                                 }
+                                KeepDownloadedButton(target: .playlist(id: playlist.id, name: playlist.name))
+                                    .labelStyle(.iconOnly).help("Keep this playlist downloaded, as it changes")
                             }
                             .controlSize(.large)
                         }
@@ -621,6 +629,7 @@ struct GenreDetailView: View {
                     }
                 }
             } label: { Label("Shuffle Genre", systemImage: "shuffle") }
+            KeepDownloadedButton(target: .genre(genre)).help("Keep this genre's songs downloaded")
         }
         .task(id: genre) {
             albums = (try? await model.subsonic?.albums(genre: genre, size: 500)) ?? []
@@ -647,6 +656,7 @@ struct FavouritesView: View {
                             Button { model.player.play(starred.tracks, shuffle: true, title: "Favourites") } label: {
                                 Label("Shuffle", systemImage: "shuffle")
                             }
+                            KeepDownloadedButton(target: .favourites).labelStyle(.iconOnly).help("Keep favourite songs downloaded")
                         }
                     }
                 }
