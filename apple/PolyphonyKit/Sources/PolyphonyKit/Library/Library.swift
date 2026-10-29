@@ -99,6 +99,51 @@ public struct Track: Sendable, Hashable, Identifiable {
     }
 }
 
+public struct Playlist: Sendable, Hashable, Identifiable {
+    public let id: String
+    public var name: String
+    public var comment: String?
+    public var owner: String?
+    public var isPublic: Bool
+    public var songCount: Int
+    public var duration: TimeInterval
+    public var coverArtID: String?
+    /// Filled in by `SubsonicClient.playlist(id:)`; empty in lists.
+    public var tracks: [Track]
+
+    public init(id: String, name: String, comment: String? = nil, owner: String? = nil, isPublic: Bool = false,
+                songCount: Int = 0, duration: TimeInterval = 0, coverArtID: String? = nil, tracks: [Track] = []) {
+        self.id = id
+        self.name = name
+        self.comment = comment
+        self.owner = owner
+        self.isPublic = isPublic
+        self.songCount = songCount
+        self.duration = duration
+        self.coverArtID = coverArtID
+        self.tracks = tracks
+    }
+}
+
+public struct Genre: Sendable, Hashable, Identifiable {
+    public var id: String { name }
+    public var name: String
+    public var songCount: Int
+    public var albumCount: Int
+}
+
+public struct ArtistInfo: Sendable, Hashable {
+    public var biography: String?
+    public var imageURL: URL?
+    public var similarArtists: [Artist]
+}
+
+public struct Starred: Sendable, Hashable {
+    public var artists: [Artist] = []
+    public var albums: [Album] = []
+    public var tracks: [Track] = []
+}
+
 public struct SearchResults: Sendable, Hashable {
     public var artists: [Artist]
     public var albums: [Album]

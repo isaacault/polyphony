@@ -62,6 +62,57 @@ struct AlbumListDTO: Decodable, Sendable {
     let album: [AlbumDTO]?
 }
 
+struct PlaylistDTO: Decodable, Sendable {
+    let id: String
+    let name: String?
+    let comment: String?
+    let owner: String?
+    let `public`: Bool?
+    let songCount: Int?
+    let duration: Double?
+    let coverArt: String?
+    let entry: [ChildDTO]?
+
+    var model: Playlist {
+        Playlist(id: id, name: name ?? "", comment: comment, owner: owner, isPublic: `public` ?? false,
+                 songCount: songCount ?? 0, duration: duration ?? 0, coverArtID: coverArt, tracks: (entry ?? []).map(\.model))
+    }
+}
+
+struct PlaylistsDTO: Decodable, Sendable {
+    let playlist: [PlaylistDTO]?
+}
+
+struct GenreDTO: Decodable, Sendable {
+    let value: String?
+    let songCount: Int?
+    let albumCount: Int?
+}
+
+struct GenresDTO: Decodable, Sendable {
+    let genre: [GenreDTO]?
+}
+
+struct ArtistInfoDTO: Decodable, Sendable {
+    let biography: String?
+    let largeImageUrl: String?
+    let similarArtist: [ArtistDTO]?
+}
+
+struct SongsDTO: Decodable, Sendable {
+    let song: [ChildDTO]?
+}
+
+struct StructuredLyricsDTO: Decodable, Sendable {
+    struct Line: Decodable, Sendable { let start: Int?; let value: String? }
+    let synced: Bool?
+    let line: [Line]?
+}
+
+struct LyricsListDTO: Decodable, Sendable {
+    let structuredLyrics: [StructuredLyricsDTO]?
+}
+
 struct SearchResult3DTO: Decodable, Sendable {
     let artist: [ArtistDTO]?
     let album: [AlbumDTO]?
