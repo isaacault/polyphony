@@ -14,6 +14,7 @@ private func contract(_ name: String) throws -> [String: Any] {
 
 private func string(_ value: Any?) -> String? { value as? String }
 private func int(_ value: Any?) -> Int? { (value as? NSNumber)?.intValue }
+private func double(_ value: Any?) -> Double? { (value as? NSNumber)?.doubleValue }
 
 struct ContractCasesTests {
     @Test func artistNames() throws {
@@ -80,5 +81,23 @@ struct ContractCasesTests {
         #expect(h.entries.map(\.context.id) == ["a", "b"] && h.entry(for: a)?.trackID == "3")
         h.record(c, trackID: "4", index: 0, positionMs: 0)
         #expect(h.entries.map(\.context.id) == ["c", "a"], "at most the limit")
+    }
+}
+
+struct ReplayGainContractTests {
+    @Test func volumesAsTheContractHasThem() throws {
+        let cases = try #require(try contract("replaygain")["cases"] as? [[String: Any]])
+        #expect(cases.count >= 15)
+        for c in cases {
+            let tags = ReplayGain.Tags(trackGainDb: double(c["trackGain"]), albumGainDb: double(c["albumGain"]),
+                                       trackPeak: double(c["trackPeak"]), albumPeak: double(c["albumPeak"]))
+            let track = Track(id: "t", title: "t", albumID: "a", replayGain: tags)
+            let settings = ReplayGain.Settings(mode: try #require(ReplayGain.Mode(rawValue: string(c["mode"]) ?? "")),
+                                               preampDb: double(c["preampDb"]) ?? 0,
+                                               preventClipping: (c["preventClipping"] as? NSNumber)?.boolValue ?? true)
+            let volume = ReplayGain.volume(for: track, settings, sameAlbumAsNeighbour: (c["sameAlbum"] as? NSNumber)?.boolValue ?? false)
+            let expected = try #require(double(c["volume"]))
+            #expect(abs(Double(volume) - expected) <= 0.002, "\(string(c["name"]) ?? "?"): \(volume)")
+        }
     }
 }
