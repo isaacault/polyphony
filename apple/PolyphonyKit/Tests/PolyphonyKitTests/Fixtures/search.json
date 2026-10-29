@@ -1,0 +1,16 @@
+{"sources":{"library":"ok","catalog":"ok"},"ranked":true,"partial":false,"best":"mb:rg:poems",
+ "popularity":{"mb:rg:poems":0.8},
+ "results":[
+  {"kind":"artist","key":"mb:art:alaskan","name":"Alaskan Tapes","ids":{"musicBrainzArtistId":"alaskan"},
+   "artwork":{"url":"https://continuo.ault.me/v1/artwork?src=x"},"availability":{"state":"in_library"}},
+  {"kind":"album","key":"mb:rg:poems","title":"We All Speak in Poems","artist":"Alaskan Tapes","year":2016,"albumType":"album",
+   "ids":{"musicBrainzReleaseGroupId":"poems","navidromeAlbumId":"al-1"},"artwork":{"url":"https://coverartarchive.org/x.jpg"},
+   "availability":{"state":"in_library"}},
+  {"kind":"album","key":"mb:rg:other","title":"Views From the Shore","artist":"Alaskan Tapes",
+   "ids":{"musicBrainzReleaseGroupId":"other"},"availability":{"state":"downloading","requestId":7,"stillLooking":false}},
+  {"kind":"track","key":"mb:rec:speaker","title":"Speaker","artist":"Alaskan Tapes","durationMs":180038,
+   "album":{"title":"We All Speak in Poems","musicBrainzReleaseGroupId":"poems","navidromeAlbumId":"al-1"},
+   "availability":{"state":"in_library"}},
+  {"kind":"track","key":"mb:rec:loaded","title":"Loaded","artist":"Primal Scream","durationMs":422373,
+   "album":{"title":"Screamadelica","musicBrainzReleaseGroupId":"scream"},"availability":{"state":"requestable"}}
+ ]}
