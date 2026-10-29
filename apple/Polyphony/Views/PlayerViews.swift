@@ -752,12 +752,19 @@ struct SongInfo: View {
 
     var body: some View {
         Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
+            row("Album", track.albumName)
+            row("Year", track.details?.year.map(String.init))
+            row("Genre", track.details?.genre)
+            row("Position", track.trackNumber.map { n in track.discNumber.map { "Disc \($0), song \(n)" } ?? "Song \(n)" })
             row("Format", track.container?.uppercased())
+            row("Channels", track.details?.channels.map { $0 == 1 ? "Mono" : $0 == 2 ? "Stereo" : "\($0)" })
             row("Resolution", [track.bitDepth.map { "\($0)-bit" }, track.sampleRateHz.map { String(format: "%g kHz", Double($0) / 1000) }]
                 .compactMap { $0 }.joined(separator: " / ").nilIfEmpty)
             row("Bitrate", track.bitRateKbps.map { "\($0) kbps" })
             row("Size", track.sizeBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) })
             row("Length", formatDuration(track.duration))
+            row("Play count", track.details?.playCount.map(String.init))
+            row("Path", track.details?.path)
             if let rg = track.replayGain {
                 row("ReplayGain", [rg.trackGainDb.map { String(format: "track %+.1f dB", $0) }, rg.albumGainDb.map { String(format: "album %+.1f dB", $0) }]
                     .compactMap { $0 }.joined(separator: ", ").nilIfEmpty)

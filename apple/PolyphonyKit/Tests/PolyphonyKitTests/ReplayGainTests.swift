@@ -46,6 +46,10 @@ struct ReplayGainTests {
         let json = #"{"id":"1","title":"Song","albumId":"a","duration":200,"replayGain":{"trackGain":-7.5,"albumGain":-8.1,"trackPeak":0.98,"albumPeak":1.0}}"#
         let t = try JSONDecoder().decode(ChildDTO.self, from: Data(json.utf8)).model
         #expect(t.replayGain == ReplayGain.Tags(trackGainDb: -7.5, albumGainDb: -8.1, trackPeak: 0.98, albumPeak: 1.0))
+        #expect(t.details?.year == nil)
+        let rich = #"{"id":"3","title":"S","year":2002,"genre":"IDM","playCount":7,"path":"Boards of Canada/Geogaddi/01.flac","channelCount":2}"#
+        let d = try JSONDecoder().decode(ChildDTO.self, from: Data(rich.utf8)).model.details
+        #expect(d == Track.Details(year: 2002, genre: "IDM", playCount: 7, path: "Boards of Canada/Geogaddi/01.flac", channels: 2))
         let none = #"{"id":"2","title":"Song","duration":200,"replayGain":{}}"#
         #expect(try JSONDecoder().decode(ChildDTO.self, from: Data(none.utf8)).model.replayGain == nil)
     }
