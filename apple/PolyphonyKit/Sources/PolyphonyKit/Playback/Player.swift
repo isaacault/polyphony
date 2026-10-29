@@ -6,10 +6,32 @@ import Observation
 public struct AudioSource: Sendable, Hashable {
     public var url: URL
     public var headers: [String: String]
+    /// What a speaker shows while it plays (DLNA renderers display it); the Mac's own engine ignores it.
+    public var info: Info?
 
-    public init(url: URL, headers: [String: String] = [:]) {
+    public struct Info: Sendable, Hashable {
+        public var title: String
+        public var artist: String?
+        public var album: String?
+        public var artworkURL: URL?
+        public var mimeType: String
+        public var durationMs: Int?
+
+        public init(title: String, artist: String? = nil, album: String? = nil, artworkURL: URL? = nil,
+                    mimeType: String = "audio/flac", durationMs: Int? = nil) {
+            self.title = title
+            self.artist = artist
+            self.album = album
+            self.artworkURL = artworkURL
+            self.mimeType = mimeType
+            self.durationMs = durationMs
+        }
+    }
+
+    public init(url: URL, headers: [String: String] = [:], info: Info? = nil) {
         self.url = url
         self.headers = headers
+        self.info = info
     }
 }
 
@@ -74,7 +96,7 @@ public final class PlayerController {
         set { engine.volume = newValue }
     }
 
-    @ObservationIgnored private let engine: AudioEngine
+    @ObservationIgnored private var engine: AudioEngine
     @ObservationIgnored private weak var nowPlaying: NowPlayingPublisher?
     /// The source for an entry: a Subsonic stream URL, or continuo's Play now audio with its token.
     @ObservationIgnored public var resolve: @MainActor (QueueEntry) async -> AudioSource? = { _ in nil }
@@ -162,6 +184,23 @@ public final class PlayerController {
             let index = queue.items.firstIndex { $0.id == item.id } ?? 0
             history(context, track.id, index, Int(position * 1000))
         }
+    }
+
+    // MARK: Outputs
+
+    /// Moves playback to another engine (the Mac's own, or a speaker's): the old one goes quiet, the
+    /// song carries on on the new one from where it was, playing if it was.
+    public func switchOutput(to newEngine: AudioEngine) {
+        guard newEngine !== engine else { return }
+        let wasPlaying = isPlaying
+        let at = position
+        engine.onEvent = nil
+        engine.stop()
+        engine = newEngine
+        newEngine.onEvent = { [weak self] event in self?.handle(event) }
+        isPlaying = false
+        guard queue.current != nil else { return }
+        loadCurrent(autoplay: wasPlaying, startAt: at)
     }
 
     // MARK: Sleep timer
