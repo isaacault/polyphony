@@ -48,6 +48,7 @@ struct ChildDTO: Decodable, Sendable {
     let size: Int64?
     let coverArt: String?
     let starred: String?
+    let userRating: Int?
 }
 
 struct ArtistIndexDTO: Decodable, Sendable {
@@ -138,6 +139,6 @@ extension ChildDTO {
         Track(id: id, title: title ?? "", albumID: albumId, albumName: album, artistName: artist, artistID: artistId,
               trackNumber: track, discNumber: discNumber, duration: duration ?? 0, bitRateKbps: bitRate,
               bitDepth: bitDepth, sampleRateHz: samplingRate, container: suffix, sizeBytes: size,
-              coverArtID: coverArt, starred: starred != nil)
+              coverArtID: coverArt, starred: starred != nil, rating: userRating.flatMap { $0 > 0 ? $0 : nil })
     }
 }

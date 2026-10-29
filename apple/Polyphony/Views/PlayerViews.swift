@@ -292,6 +292,12 @@ struct SettingsView: View {
                 ScrobblingSection()
                 DevicesSection()
             }
+            Section("Favourites") {
+                Picker("Mark songs with", selection: Binding(get: { model.usesRatings }, set: { model.setUsesRatings($0) })) {
+                    Text("A heart (favourite or not)").tag(false)
+                    Text("Stars (1 to 5)").tag(true)
+                }
+            }
             Section("Playback") {
                 Picker("Streaming quality", selection: Binding(get: { model.streamingBitrate }, set: { model.setStreamingBitrate($0) })) {
                     Text("Original (as the file is)").tag(0)

@@ -68,11 +68,13 @@ public struct Track: Sendable, Hashable, Identifiable, Codable {
     public var sizeBytes: Int64?
     public var coverArtID: String?
     public var starred: Bool
+    /// The user's 1–5 stars; nil when unrated.
+    public var rating: Int?
 
     public init(id: String, title: String, albumID: String? = nil, albumName: String? = nil, artistName: String? = nil,
                 artistID: String? = nil, trackNumber: Int? = nil, discNumber: Int? = nil, duration: TimeInterval = 0,
                 bitRateKbps: Int? = nil, bitDepth: Int? = nil, sampleRateHz: Int? = nil, container: String? = nil,
-                sizeBytes: Int64? = nil, coverArtID: String? = nil, starred: Bool = false) {
+                sizeBytes: Int64? = nil, coverArtID: String? = nil, starred: Bool = false, rating: Int? = nil) {
         self.id = id
         self.title = title
         self.albumID = albumID
@@ -89,6 +91,7 @@ public struct Track: Sendable, Hashable, Identifiable, Codable {
         self.sizeBytes = sizeBytes
         self.coverArtID = coverArtID
         self.starred = starred
+        self.rating = rating
     }
 
     private static let losslessContainers: Set<String> = ["flac", "alac", "wav", "aiff", "aif", "ape", "wv", "dsf", "dff"]

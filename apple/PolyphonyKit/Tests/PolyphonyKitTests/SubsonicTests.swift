@@ -55,7 +55,7 @@ struct SubsonicTests {
         let speaker = album.tracks[0]
         #expect(speaker.title == "Speaker" && speaker.trackNumber == 1 && speaker.bitDepth == 24)
         #expect(speaker.isLossless && speaker.container == "flac" && speaker.sizeBytes == 24_117_435)
-        #expect(album.tracks[1].starred)
+        #expect(album.tracks[1].starred && album.tracks[1].rating == 4 && speaker.rating == nil)
     }
 
     @Test func aFailedAnswerIsASubsonicError() async {
