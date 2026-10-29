@@ -1,0 +1,248 @@
+import Foundation
+
+/// What can be in the queue: a library track, or a song continuo is fetching (Play now).
+public enum QueueEntry: Sendable, Hashable {
+    case track(Track)
+    case playNow(PlayNowStream, CatalogTrack)
+
+    public var title: String {
+        switch self {
+        case let .track(t): t.title
+        case let .playNow(_, c): c.title
+        }
+    }
+
+    public var artist: String? {
+        switch self {
+        case let .track(t): t.artistName
+        case let .playNow(_, c): c.artist
+        }
+    }
+
+    public var album: String? {
+        switch self {
+        case let .track(t): t.albumName
+        case let .playNow(_, c): c.albumTitle
+        }
+    }
+
+    public var duration: TimeInterval {
+        switch self {
+        case let .track(t): t.duration
+        case let .playNow(s, c): TimeInterval(s.durationMs ?? c.durationMs ?? 0) / 1000
+        }
+    }
+
+    public var libraryTrack: Track? {
+        if case let .track(t) = self { return t }
+        return nil
+    }
+}
+
+public enum RepeatMode: String, Sendable, CaseIterable {
+    case off, all, one
+}
+
+/// The play queue: entries in their own order, a play order over them (shuffled or not), and where
+/// playback is. A value type, so every rule is a pure function, tested on its own.
+public struct PlayQueue: Sendable, Equatable {
+    /// Each entry gets an id of its own, so the same song twice is two rows.
+    public struct Item: Sendable, Hashable, Identifiable {
+        public let id: UUID
+        public var entry: QueueEntry
+
+        public init(_ entry: QueueEntry, id: UUID = UUID()) {
+            self.id = id
+            self.entry = entry
+        }
+    }
+
+    public private(set) var items: [Item] = []
+    /// Indices into [items], in the order they play.
+    public private(set) var order: [Int] = []
+    /// Position in [order] of what's playing; nil for an empty queue.
+    public private(set) var position: Int?
+    public private(set) var shuffled = false
+    public var repeatMode: RepeatMode = .off
+    public var title: String?
+
+    public init() {}
+
+    public init(_ entries: [QueueEntry], startAt index: Int = 0, shuffle: Bool = false, title: String? = nil) {
+        items = entries.map { Item($0) }
+        order = Array(items.indices)
+        position = items.isEmpty ? nil : min(max(index, 0), items.count - 1)
+        self.title = title
+        if shuffle { setShuffle(true) }
+    }
+
+    public var isEmpty: Bool { items.isEmpty }
+
+    public var current: Item? {
+        guard let position, order.indices.contains(position) else { return nil }
+        return items[order[position]]
+    }
+
+    /// The queue as it plays: what's playing, then what's next.
+    public var upNext: [Item] {
+        guard let position else { return [] }
+        return order.dropFirst(position + 1).map { items[$0] }
+    }
+
+    /// What's already played, oldest first.
+    public var history: [Item] {
+        guard let position else { return [] }
+        return order.prefix(position).map { items[$0] }
+    }
+
+    /// What plays after the current entry ends by itself (repeat one replays it; repeat all wraps).
+    public var nextOnEnd: Item? {
+        guard let position else { return nil }
+        if repeatMode == .one { return current }
+        if position + 1 < order.count { return items[order[position + 1]] }
+        return repeatMode == .all ? order.first.map { items[$0] } : nil
+    }
+
+    // MARK: Moving through it
+
+    /// After the current entry ends by itself: false when the queue is done.
+    @discardableResult
+    public mutating func advanceOnEnd() -> Bool {
+        guard let p = position else { return false }
+        if repeatMode == .one { return true }
+        if p + 1 < order.count {
+            position = p + 1
+            return true
+        }
+        if repeatMode == .all, !order.isEmpty {
+            position = 0
+            return true
+        }
+        return false
+    }
+
+    /// The Next button: always moves (wrapping when repeating), even under repeat one.
+    @discardableResult
+    public mutating func next() -> Bool {
+        guard let p = position else { return false }
+        if p + 1 < order.count {
+            position = p + 1
+            return true
+        }
+        if repeatMode != .off, !order.isEmpty {
+            position = 0
+            return true
+        }
+        return false
+    }
+
+    /// The Previous button's move (the player decides first whether to restart the song instead).
+    @discardableResult
+    public mutating func previous() -> Bool {
+        guard let p = position else { return false }
+        if p > 0 {
+            position = p - 1
+            return true
+        }
+        if repeatMode == .all, !order.isEmpty {
+            position = order.count - 1
+            return true
+        }
+        return false
+    }
+
+    /// Jump to an item anywhere in the queue.
+    public mutating func jump(to id: UUID) {
+        guard let index = items.firstIndex(where: { $0.id == id }), let at = order.firstIndex(of: index) else { return }
+        position = at
+    }
+
+    // MARK: Changing it
+
+    /// Shuffle keeps what's playing and shuffles only the rest; unshuffling goes back to the
+    /// entries' own order, from the current one.
+    public mutating func setShuffle(_ on: Bool) {
+        guard on != shuffled else { return }
+        shuffled = on
+        guard let currentIndex = current.flatMap({ c in items.firstIndex(where: { $0.id == c.id }) }) else {
+            order = on ? Array(items.indices).shuffled() : Array(items.indices)
+            return
+        }
+        if on {
+            order = [currentIndex] + items.indices.filter { $0 != currentIndex }.shuffled()
+            position = 0
+        } else {
+            order = Array(items.indices)
+            position = currentIndex
+        }
+    }
+
+    /// Play these right after the current entry.
+    public mutating func playNext(_ entries: [QueueEntry]) {
+        insert(entries, afterPosition: position ?? -1)
+    }
+
+    /// Add these at the end.
+    public mutating func append(_ entries: [QueueEntry]) {
+        insert(entries, afterPosition: order.count - 1)
+    }
+
+    private mutating func insert(_ entries: [QueueEntry], afterPosition p: Int) {
+        guard !entries.isEmpty else { return }
+        let start = items.count
+        items += entries.map { Item($0) }
+        let added = Array(start..<items.count)
+        order.insert(contentsOf: added, at: p + 1)
+        if position == nil { position = 0 }
+    }
+
+    /// Remove an item; removing what's playing moves to what was next (or back, at the end).
+    public mutating func remove(_ id: UUID) {
+        guard let index = items.firstIndex(where: { $0.id == id }), let at = order.firstIndex(of: index) else { return }
+        order.remove(at: at)
+        items.remove(at: index)
+        order = order.map { $0 > index ? $0 - 1 : $0 }
+        guard let p = position else { return }
+        if order.isEmpty {
+            position = nil
+        } else if at < p {
+            position = p - 1
+        } else if at == p {
+            position = min(p, order.count - 1)
+        }
+    }
+
+    /// Move an upcoming item to another place in the upcoming list ([to] counts within [upNext]).
+    public mutating func moveUpNext(from: Int, to: Int) {
+        guard let p = position else { return }
+        let start = p + 1
+        guard order.indices.contains(start + from) else { return }
+        let moved = order.remove(at: start + from)
+        order.insert(moved, at: min(start + max(to, 0), order.count))
+    }
+
+    /// Everything after the current entry goes.
+    public mutating func clearUpNext() {
+        guard let p = position else { return }
+        let keep = Set(order.prefix(p + 1))
+        let kept = items.indices.filter { keep.contains($0) }
+        let remap = Dictionary(uniqueKeysWithValues: kept.enumerated().map { ($1, $0) })
+        items = kept.map { items[$0] }
+        order = order.prefix(p + 1).compactMap { remap[$0] }
+    }
+
+    /// Replace an entry in place (a Play now stream whose status moved on).
+    public mutating func update(_ id: UUID, to entry: QueueEntry) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        items[index].entry = entry
+    }
+}
+
+/// When a play counts, as Last.fm counts it: half the song or four minutes, whichever comes first,
+/// and never for songs under 30 seconds.
+public enum ScrobbleRule {
+    public static func counts(played: TimeInterval, duration: TimeInterval) -> Bool {
+        guard duration >= 30 else { return false }
+        return played >= min(duration / 2, 240)
+    }
+}
