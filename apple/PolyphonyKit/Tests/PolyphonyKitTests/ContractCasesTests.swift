@@ -113,3 +113,16 @@ struct ReceiverContractTests {
         }
     }
 }
+
+struct AlbumCreditContractTests {
+    @Test func albumPageCreditsAsTheContractHasThem() throws {
+        let cases = try #require(try contract("album-credit")["cases"] as? [[String: Any]])
+        #expect(cases.count >= 14)
+        for c in cases {
+            let track = Track(id: "t", title: try #require(string(c["title"])), artistName: string(c["artist"]))
+            let credit = c["credit"] as? [String: Any]
+            let expected: AlbumCredit? = credit.map { c in string(c["featuring"]).map(AlbumCredit.featuring) ?? .other(string(c["other"]) ?? "") }
+            #expect(AlbumCredit.of(track, albumArtist: string(c["albumArtist"])) == expected, "\(string(c["name"]) ?? "?")")
+        }
+    }
+}

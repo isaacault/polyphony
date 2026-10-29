@@ -87,7 +87,7 @@ struct AlbumDetailView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         AlbumHeader(album: album)
                         TrackList(tracks: album.tracks, numbered: true, albumBadge: AudioQuality.albumBadge(album.tracks),
-                                  context: .album(album))
+                                  albumArtist: album.artistName, context: .album(album))
                     }
                     .padding(24)
                 }
@@ -168,6 +168,8 @@ struct TrackList: View {
     var numbered = false
     var showArtwork = false
     var albumBadge: String?
+    /// On an album page, its artist: songs say only who else is on them ("ft. Future").
+    var albumArtist: String?
     /// The album or playlist these are, so playing from here is remembered for Continue Listening.
     var context: PlayContext?
     /// A playlist's songs can be taken out of it (by position: the same song can be there twice).
@@ -186,7 +188,7 @@ struct TrackList: View {
                         .padding(.top, index == 0 ? 0 : 18).padding(.bottom, 6).padding(.horizontal, 8)
                 }
                 TrackRow(track: track, index: index, numbered: numbered, showArtwork: showArtwork, albumBadge: albumBadge,
-                         isCurrent: model.player.current?.libraryTrack?.id == track.id)
+                         albumArtist: albumArtist, isCurrent: model.player.current?.libraryTrack?.id == track.id)
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) { model.player.play(tracks, startAt: index, context: context) }
                     .draggable(DraggedTracks(tracks: [track])) {
@@ -206,8 +208,22 @@ private struct TrackRow: View {
     let numbered: Bool
     let showArtwork: Bool
     let albumBadge: String?
+    let albumArtist: String?
     let isCurrent: Bool
     @State private var hovering = false
+
+    /// Under the title: on an album, only who else is on the song; elsewhere, artist and album.
+    private var subtitle: String? {
+        if numbered && !showArtwork {
+            switch AlbumCredit.of(track, albumArtist: albumArtist) {
+            case let .featuring(names): return "ft. \(names)"
+            case let .other(artist): return artist
+            case nil: return nil
+            }
+        }
+        let line = [track.artistName, track.albumName].compactMap { $0 }.joined(separator: " · ")
+        return line.isEmpty ? nil : line
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -231,9 +247,8 @@ private struct TrackRow: View {
                     Text(track.title).lineLimit(1).foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
                     if let chip = AudioQuality.trackChip(track, albumBadge: albumBadge) { QualityChip(label: chip) }
                 }
-                if !numbered || showArtwork {
-                    Text([track.artistName, track.albumName].compactMap { $0 }.joined(separator: " · "))
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                if let subtitle {
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             Spacer()
