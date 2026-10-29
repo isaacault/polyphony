@@ -19,9 +19,14 @@ final class AppModel {
     /// A Play now song being fetched before it can play.
     private(set) var pendingPlayNow: PlayNowStream?
 
+    /// Lists already fetched this session, shown at once when a page opens again (then refreshed).
+    @ObservationIgnored var albumLists: [SubsonicClient.AlbumListType: [Album]] = [:]
+    @ObservationIgnored var artistList: [Artist]?
+
     let player: PlayerController
     @ObservationIgnored private let nowPlaying = NowPlayingCenter()
     @ObservationIgnored private let store = KeychainServerStore()
+    @ObservationIgnored private let arrivals = ArrivalNotifier()
 
     init() {
         player = PlayerController(engine: AVPlayerEngine(), nowPlaying: nowPlaying)
@@ -32,6 +37,24 @@ final class AppModel {
             guard let subsonic = self?.subsonic else { return }
             Task { try? await subsonic.scrobble(trackID: track.id, submission: submission) }
         }
+        player.persist = { snapshot in
+            let defaults = UserDefaults.standard
+            if let snapshot, let data = try? JSONEncoder().encode(snapshot) {
+                defaults.set(data, forKey: Self.queueKey)
+            } else {
+                defaults.removeObject(forKey: Self.queueKey)
+            }
+        }
+    }
+
+    private static let queueKey = "queue.snapshot"
+
+    /// Streaming quality: 0 for the file as it is, else transcoded to MP3 at this bitrate (kbps).
+    private(set) var streamingBitrate = UserDefaults.standard.integer(forKey: "streaming.bitrate")
+
+    func setStreamingBitrate(_ kbps: Int) {
+        streamingBitrate = kbps
+        UserDefaults.standard.set(kbps, forKey: "streaming.bitrate")
     }
 
     var isContinuo: Bool { continuo != nil }
@@ -56,12 +79,16 @@ final class AppModel {
 
     func signOut() async {
         player.stop()
+        arrivals.stop()
         if let account = continuo?.account { await account.signOut() }
         await store.save(nil)
+        UserDefaults.standard.removeObject(forKey: Self.queueKey)
         server = nil
         subsonic = nil
         continuo = nil
         singleSongAlbumIDs = []
+        albumLists = [:]
+        artistList = nil
         state = .signedOut
     }
 
@@ -72,11 +99,18 @@ final class AppModel {
             let account = ContinuoAccount(client: ContinuoClient(baseURL: saved.address),
                                           store: ServerSessionStore(store))
             _ = await account.restore()
-            continuo = ContinuoService(account: account)
+            let service = ContinuoService(account: account)
+            continuo = service
+            arrivals.start(service)
         } else {
             continuo = nil
         }
         state = .signedIn
+        // Where last session left off, paused: Play carries on.
+        if player.current == nil, let data = UserDefaults.standard.data(forKey: Self.queueKey),
+           let snapshot = try? JSONDecoder().decode(PlayQueue.Snapshot.self, from: data) {
+            player.restore(snapshot)
+        }
         await refreshSingles()
     }
 
@@ -113,7 +147,11 @@ final class AppModel {
     private func source(for entry: QueueEntry) async -> AudioSource? {
         switch entry {
         case let .track(t):
-            return subsonic.map { AudioSource(url: $0.streamURL(trackID: t.id)) }
+            let bitrate = streamingBitrate
+            return subsonic.map {
+                AudioSource(url: bitrate > 0 ? $0.streamURL(trackID: t.id, maxBitRateKbps: bitrate, format: "mp3")
+                                             : $0.streamURL(trackID: t.id))
+            }
         case let .playNow(stream, _):
             guard let continuo, let token = try? await continuo.account.accessToken() else { return nil }
             return AudioSource(url: continuo.playNowAudioURL(id: stream.id), headers: ["Authorization": "Bearer \(token)"])
