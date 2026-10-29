@@ -120,7 +120,11 @@ struct DownloadsView: View {
                     }
                     .contextMenu {
                         Button("Play") { model.player.play(album.tracks, title: album.name) }
-                        Button("Remove from This Mac", role: .destructive) { downloads.remove(album.tracks.map(\.id)) }
+                        if album.tracks.contains(where: { downloads.index.entries[$0.id]?.pinned == false }) {
+                            Text("Kept by a download rule (stop it above)")
+                        } else {
+                            Button("Remove from This Mac", role: .destructive) { downloads.remove(album.tracks.map(\.id)) }
+                        }
                     }
                 }
             } header: {
