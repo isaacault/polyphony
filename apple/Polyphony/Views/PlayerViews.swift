@@ -123,6 +123,7 @@ struct PlayerBar: View {
                     .help(player.sleepAtEndOfSong ? "Sleep timer: end of song"
                                                   : "Sleep timer: \(player.sleepAt!.formatted(date: .omitted, time: .shortened))")
             }
+            SpeakerMenu()
             AirPlayButton().frame(width: 22, height: 22).help("AirPlay")
             Image(systemName: "speaker.fill").foregroundStyle(.secondary).font(.caption)
             Slider(value: Binding(get: { Double(player.volume) }, set: { player.volume = Float($0) }), in: 0...1)
@@ -287,6 +288,12 @@ struct SettingsView: View {
                 }
             } else {
                 Text("Not signed in.")
+            }
+            Section("Speakers") {
+                TextField("Receiver address", text: Binding(get: { model.receiverAddress }, set: { model.setReceiverAddress($0) }),
+                          prompt: Text("http://192.168.0.101"))
+                Text("What DLNA speakers are given instead of the server's address: they fetch the music themselves, and many can't do HTTPS. For continuo, its LAN address (http://192.168.0.101).")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             if model.isContinuo {
                 ScrobblingSection()
@@ -512,5 +519,39 @@ private struct DevicesSection: View {
 
     private func load() async {
         devices = (try? await model.continuo?.devices()) ?? []
+    }
+}
+
+/// Where the music plays: this Mac, or a DLNA speaker on the network (the Yamaha, …).
+struct SpeakerMenu: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Menu {
+            Button { model.play(on: nil) } label: {
+                Label("This Mac", systemImage: model.speaker == nil ? "checkmark" : "laptopcomputer")
+            }
+            if !model.speakers.renderers.isEmpty { Divider() }
+            ForEach(model.speakers.renderers) { renderer in
+                Button { model.play(on: renderer) } label: {
+                    Label([renderer.name, renderer.model].compactMap { $0 }.joined(separator: " · "),
+                          systemImage: model.speaker?.udn == renderer.udn ? "checkmark" : "hifispeaker")
+                }
+            }
+            Divider()
+            Button(model.speakers.searching ? "Looking for Speakers…" : "Look for Speakers") { model.speakers.search() }
+                .disabled(model.speakers.searching)
+            if model.receiverAddress.isEmpty {
+                Text("Set a receiver address in Settings if a speaker can't play")
+            }
+        } label: {
+            Image(systemName: model.speaker == nil ? "hifispeaker" : "hifispeaker.fill")
+                .foregroundStyle(model.speaker == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(model.speaker.map { "Playing on \($0.name)" } ?? "Play on a speaker")
+        .onAppear { if model.speakers.renderers.isEmpty { model.speakers.search() } }
     }
 }
