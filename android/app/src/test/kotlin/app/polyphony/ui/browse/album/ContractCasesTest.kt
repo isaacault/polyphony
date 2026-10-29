@@ -43,4 +43,18 @@ class ContractCasesTest {
             }
         }
     }
+
+    @Test fun `album page credits, as the contract has them`() {
+        val credits = Json.parseToJsonElement(File("../../contract/cases/album-credit.json").readText()).jsonObject
+        for (case in credits.getValue("cases").jsonArray.map { it.jsonObject }) {
+            val track = Track(id = "t", serverId = "s", title = case.getValue("title").jsonPrimitive.content,
+                              artistName = case.getValue("artist").jsonPrimitive.contentOrNull)
+            val expected = (case["credit"] as? JsonObject)?.let { c ->
+                c["featuring"]?.jsonPrimitive?.content?.let { AlbumTrackDetails.Credit.Featuring(it) }
+                    ?: AlbumTrackDetails.Credit.Other(c.getValue("other").jsonPrimitive.content)
+            }
+            assertEquals(case.getValue("name").jsonPrimitive.content, expected,
+                         AlbumTrackDetails.credit(track, case.getValue("albumArtist").jsonPrimitive.contentOrNull))
+        }
+    }
 }

@@ -1,0 +1,119 @@
+{
+  "about": "What an album page says under a song about who's on it, beyond the album's own artist (the Android app's AlbumTrackDetails.credit; PolyphonyKit's AlbumCredit.of). credit null: nothing; featuring: 'ft. X'; other: the song's own artist (a compilation, someone else's song).",
+  "cases": [
+    {
+      "name": "the album's artist: nothing to say",
+      "title": "Marvins Room",
+      "artist": "Drake",
+      "albumArtist": "Drake",
+      "credit": null
+    },
+    {
+      "name": "case doesn't matter",
+      "title": "Marvins Room",
+      "artist": "drake",
+      "albumArtist": "Drake",
+      "credit": null
+    },
+    {
+      "name": "no artist tag",
+      "title": "Intro",
+      "artist": null,
+      "albumArtist": "Drake",
+      "credit": null
+    },
+    {
+      "name": "feat.",
+      "title": "Way 2 Sexy",
+      "artist": "Drake feat. Future",
+      "albumArtist": "Drake",
+      "credit": {
+        "featuring": "Future"
+      }
+    },
+    {
+      "name": "a list of them",
+      "title": "Way 2 Sexy",
+      "artist": "Drake, Future & Young Thug",
+      "albumArtist": "Drake",
+      "credit": {
+        "featuring": "Future & Young Thug"
+      }
+    },
+    {
+      "name": "&",
+      "title": "Take Care",
+      "artist": "Drake & Rihanna",
+      "albumArtist": "Drake",
+      "credit": {
+        "featuring": "Rihanna"
+      }
+    },
+    {
+      "name": "a name starting with Ft isn't clipped",
+      "title": "Song",
+      "artist": "Drake ft. Ftoo",
+      "albumArtist": "Drake",
+      "credit": {
+        "featuring": "Ftoo"
+      }
+    },
+    {
+      "name": "already in the title",
+      "title": "Jimmy Cooks (feat. 21 Savage)",
+      "artist": "Drake, 21 Savage",
+      "albumArtist": "Drake",
+      "credit": null
+    },
+    {
+      "name": "a band with + in its name",
+      "title": "Dog Days Are Over",
+      "artist": "Florence + the Machine",
+      "albumArtist": "Florence + the Machine",
+      "credit": null
+    },
+    {
+      "name": "a band with a comma and & in its name",
+      "title": "September",
+      "artist": "Earth, Wind & Fire",
+      "albumArtist": "Earth, Wind & Fire",
+      "credit": null
+    },
+    {
+      "name": "a compilation: the track's own artist",
+      "title": "Waterloo",
+      "artist": "ABBA",
+      "albumArtist": "Various Artists",
+      "credit": {
+        "other": "ABBA"
+      }
+    },
+    {
+      "name": "someone else entirely",
+      "title": "One",
+      "artist": "U2",
+      "albumArtist": "Lil Yachty",
+      "credit": {
+        "other": "U2"
+      }
+    },
+    {
+      "name": "no album artist",
+      "title": "One",
+      "artist": "U2",
+      "albumArtist": null,
+      "credit": {
+        "other": "U2"
+      }
+    },
+    {
+      "name": "featured first, then the album's artist",
+      "title": "Song",
+      "artist": "Rihanna with Drake",
+      "albumArtist": "Drake",
+      "credit": {
+        "featuring": "Rihanna"
+      }
+    }
+  ]
+}
