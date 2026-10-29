@@ -12,6 +12,8 @@ public struct DownloadIndex: Sendable, Codable, Equatable {
         public var downloadedAt: Date
         /// The rule that keeps it (nil: downloaded by hand, kept until removed by hand).
         public var ruleID: String?
+        /// When it last played from here: under a storage limit, the least recently played go first.
+        public var playedAt: Date?
 
         public var pinned: Bool { ruleID == nil }
     }
@@ -28,6 +30,32 @@ public struct DownloadIndex: Sendable, Codable, Equatable {
 
     public mutating func add(_ track: Track, file: String, bytes: Int64, at date: Date = Date(), ruleID: String? = nil) {
         entries[track.id] = Entry(track: track, file: file, bytes: bytes, downloadedAt: date, ruleID: ruleID)
+    }
+
+    public mutating func touch(_ trackID: String, at date: Date = Date()) {
+        entries[trackID]?.playedAt = date
+    }
+
+    /// What to delete to get under [limitBytes]: songs rules keep, least recently played first (never
+    /// played: oldest download first). Downloads by hand are never chosen, even if the limit can't be met.
+    public func evictions(limitBytes: Int64) -> [String] {
+        guard limitBytes > 0, usedBytes > limitBytes else { return [] }
+        let candidates = entries.values.filter { !$0.pinned }.sorted {
+            ($0.playedAt ?? $0.downloadedAt, $0.downloadedAt) < ($1.playedAt ?? $1.downloadedAt, $1.downloadedAt)
+        }
+        var remaining = usedBytes
+        var out: [String] = []
+        for c in candidates where remaining > limitBytes {
+            out.append(c.id)
+            remaining -= c.bytes
+        }
+        return out
+    }
+
+    /// What a new download will likely take: the average one here, or [fallback] before any.
+    public func estimatedBytes(fallback: Int64 = 30 * 1024 * 1024) -> Int64 {
+        let sizes = entries.values.map(\.bytes).filter { $0 > 0 }
+        return sizes.isEmpty ? fallback : sizes.reduce(0, +) / Int64(sizes.count)
     }
 
     /// Hands a download to another rule, or (nil) to the user: downloading by hand something a rule

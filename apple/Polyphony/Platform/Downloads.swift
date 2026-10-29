@@ -16,6 +16,30 @@ final class Downloads {
     private(set) var rules: [DownloadRule] = []
     private(set) var checkingRules = false
     private(set) var rulesCheckedAt: Date?
+    /// Most the rules may keep on this Mac, in GB (0: no limit). Downloads by hand don't count
+    /// against what's removed, but do take up the room.
+    private(set) var limitGB: Int = UserDefaults.standard.integer(forKey: "downloads.limitGB")
+
+    private var limitBytes: Int64 { Int64(limitGB) * 1_000_000_000 }
+
+    func setLimit(gb: Int) {
+        limitGB = gb
+        UserDefaults.standard.set(gb, forKey: "downloads.limitGB")
+        enforceLimit()
+        Task { await checkRules() }
+    }
+
+    /// Played from here: the storage limit keeps what's played.
+    func played(_ trackID: String) {
+        guard index.contains(trackID) else { return }
+        index.touch(trackID)
+        save()
+    }
+
+    private func enforceLimit() {
+        let evict = index.evictions(limitBytes: limitBytes)
+        if !evict.isEmpty { remove(evict) }
+    }
 
     @ObservationIgnored private var folder: URL?
     @ObservationIgnored private var queue: [(track: Track, ruleID: String?)] = []
@@ -149,7 +173,11 @@ final class Downloads {
         }
         // Signed out (or into another server) meanwhile: these answers aren't this index's.
         guard generation == started else { return }
-        let plan = RulePlan.compute(perRule: perRule, index: index, active: Set(active.keys))
+        var plan = RulePlan.compute(perRule: perRule, index: index, active: Set(active.keys))
+        if limitBytes > 0 {
+            let estimate = index.estimatedBytes()
+            plan.fitting(budgetBytes: limitBytes - index.usedBytes - Int64(active.count) * estimate, estimateBytes: estimate)
+        }
         for (trackID, ruleID) in plan.retag { index.setRule(trackID, ruleID) }
         if !plan.retag.isEmpty { save() }
         if !plan.remove.isEmpty { remove(plan.remove) }
@@ -189,6 +217,7 @@ final class Downloads {
                 let size = try? FileManager.default.attributesOfItem(atPath: target.path)[.size] as? NSNumber
                 index.add(track, file: file, bytes: size?.int64Value ?? 0, ruleID: ruleID)
                 save()
+                if ruleID != nil { enforceLimit() }
             } catch {
                 failed.insert(track.id)
             }

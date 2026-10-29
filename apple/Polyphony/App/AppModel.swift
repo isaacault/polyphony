@@ -329,7 +329,10 @@ final class AppModel {
             let bitrate = streamingBitrate
             if speaker == nil {
                 // A downloaded copy plays from disk: no network, original quality.
-                if let local = downloads.localURL(t.id) { return AudioSource(url: local) }
+                if let local = downloads.localURL(t.id) {
+                    downloads.played(t.id)
+                    return AudioSource(url: local)
+                }
                 return subsonic.map {
                     AudioSource(url: bitrate > 0 ? $0.streamURL(trackID: t.id, maxBitRateKbps: bitrate, format: "mp3")
                                                  : $0.streamURL(trackID: t.id))

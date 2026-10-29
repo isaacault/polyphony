@@ -77,8 +77,18 @@ struct DownloadsView: View {
                     }
                 }
             } footer: {
-                Text("Rules keep themselves downloaded: new songs in them download, ones that leave go (unless you downloaded them by hand).")
-                    .font(.caption).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Rules keep themselves downloaded: new songs in them download, ones that leave go (unless you downloaded them by hand).")
+                    Picker("Storage limit", selection: Binding(get: { downloads.limitGB }, set: { downloads.setLimit(gb: $0) })) {
+                        Text("No limit").tag(0)
+                        ForEach([5, 10, 25, 50, 100, 250], id: \.self) { Text("\($0) GB").tag($0) }
+                    }
+                    .fixedSize()
+                    if downloads.limitGB > 0 {
+                        Text("Over the limit, the songs rules keep that were played least recently go first. Downloads by hand stay.")
+                    }
+                }
+                .font(.caption).foregroundStyle(.secondary)
             }
             if albums.isEmpty && downloads.active.isEmpty {
                 Section {

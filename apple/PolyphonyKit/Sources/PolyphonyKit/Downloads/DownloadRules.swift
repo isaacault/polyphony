@@ -78,6 +78,14 @@ public struct RulePlan: Sendable, Equatable {
 
     public var isEmpty: Bool { fetch.isEmpty && remove.isEmpty && retag.isEmpty }
 
+    /// Under a storage limit, rules fetch only what fits (first ones first): otherwise the limit
+    /// deletes songs that the next check downloads again, over and over.
+    public mutating func fitting(budgetBytes: Int64, estimateBytes: Int64) {
+        guard estimateBytes > 0 else { return }
+        let fits = max(0, min(Int64(fetch.count), budgetBytes / estimateBytes))
+        fetch = Array(fetch.prefix(Int(fits)))
+    }
+
     public static func == (a: RulePlan, b: RulePlan) -> Bool {
         a.fetch == b.fetch && a.remove == b.remove && a.retag.map { [$0.0, $0.1] } == b.retag.map { [$0.0, $0.1] }
     }
