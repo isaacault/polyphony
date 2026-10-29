@@ -9,11 +9,22 @@ struct HomeView: View {
     @State private var recentlyPlayed: [Album] = []
     @State private var mostPlayed: [Album] = []
     @State private var random: [Album] = []
+    @State private var favourites: [Album] = []
     @State private var discovery = Discovery()
+
+    /// "Good morning", as the Android app's Home greets.
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 5...11: "Good morning"
+        case 12...17: "Good afternoon"
+        default: "Good evening"
+        }
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
+                Text(greeting).font(.largeTitle.weight(.bold))
                 continueListening
                 shelf("Recently Played", recentlyPlayed)
                 shelf("Recently Added", recentlyAdded)
@@ -73,6 +84,26 @@ struct HomeView: View {
                 }
                 shelf("Random Picks", random)
                 shelf("Most Played", mostPlayed)
+                shelf(model.usesRatings ? "Top Rated" : "Favourites", favourites)
+                if !model.playlists.isEmpty {
+                    Section {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(alignment: .top, spacing: 18) {
+                                ForEach(model.playlists.prefix(15)) { playlist in
+                                    NavigationLink(value: Route.playlist(playlist.id)) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Artwork(url: model.coverURL(playlist.coverArtID, size: 400), symbol: "music.note.list")
+                                            Text(playlist.name).font(.callout.weight(.medium)).lineLimit(1)
+                                            Text("\(playlist.songCount) songs").font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        .frame(width: 160)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    } header: { SectionTitle("Playlists") }
+                }
                 if recentlyAdded.isEmpty && recentlyPlayed.isEmpty && mostPlayed.isEmpty {
                     ProgressView().frame(maxWidth: .infinity).padding(60)
                 }
@@ -152,10 +183,12 @@ struct HomeView: View {
         async let played = subsonic.albums(.recent, size: 30)
         async let most = subsonic.albums(.frequent, size: 30)
         async let picks = subsonic.albums(.random, size: 30)
+        async let liked = subsonic.albums(model.usesRatings ? .highest : .starred, size: 30)
         recentlyAdded = (try? await added) ?? []
         recentlyPlayed = (try? await played) ?? []
         mostPlayed = (try? await most) ?? []
         random = (try? await picks) ?? []
+        favourites = (try? await liked) ?? []
         if let continuo = model.continuo {
             discovery = (try? await continuo.discovery()) ?? Discovery()
         }
