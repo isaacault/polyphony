@@ -23,6 +23,8 @@ final class AppModel {
     var path = NavigationPath()
     /// The full-window Now Playing view (big artwork and lyrics).
     var nowPlayingExpanded = false
+    /// A song's Song Info sheet, opened from its menu.
+    var songInfo: Track?
 
     func go(to item: SidebarItem) {
         sidebar = item
