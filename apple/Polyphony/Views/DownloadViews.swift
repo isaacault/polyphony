@@ -14,8 +14,14 @@ struct DownloadButton: View {
             Label("Downloading \(have)/\(tracks.count)", systemImage: "arrow.down.circle.dotted")
                 .foregroundStyle(.secondary)
         } else if have == tracks.count, !tracks.isEmpty {
-            Button { downloads.remove(tracks.map(\.id)) } label: { Image(systemName: "arrow.down.circle.fill") }
-                .help("Downloaded: click to remove from this Mac")
+            if tracks.contains(where: { downloads.index.entries[$0.id]?.pinned == false }) {
+                // Removing would only have the rule download them again: the rule is where it stops.
+                Button { model.go(to: .downloads) } label: { Image(systemName: "arrow.down.circle.fill") }
+                    .help("Kept downloaded by a rule: open Downloads to stop it")
+            } else {
+                Button { downloads.remove(tracks.map(\.id)) } label: { Image(systemName: "arrow.down.circle.fill") }
+                    .help("Downloaded: click to remove from this Mac")
+            }
         } else {
             Button { downloads.download(tracks) } label: { Image(systemName: "arrow.down.circle") }
                 .help(have > 0 ? "Download the rest (\(have) of \(tracks.count) on this Mac)" : "Download to this Mac")
