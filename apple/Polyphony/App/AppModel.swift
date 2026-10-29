@@ -256,7 +256,7 @@ final class AppModel {
         server = saved
         let client = SubsonicClient(credentials: saved.subsonic)
         subsonic = client
-        downloads.attach(server: saved) { track in client.downloadURL(trackID: track.id) }
+        downloads.attach(server: saved, library: client) { track in client.downloadURL(trackID: track.id) }
         if saved.kind == .continuo {
             let account = ContinuoAccount(client: ContinuoClient(baseURL: saved.address),
                                           store: ServerSessionStore(store))

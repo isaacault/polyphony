@@ -10,6 +10,10 @@ public struct DownloadIndex: Sendable, Codable, Equatable {
         public var file: String
         public var bytes: Int64
         public var downloadedAt: Date
+        /// The rule that keeps it (nil: downloaded by hand, kept until removed by hand).
+        public var ruleID: String?
+
+        public var pinned: Bool { ruleID == nil }
     }
 
     public private(set) var entries: [String: Entry] = [:]
@@ -22,8 +26,14 @@ public struct DownloadIndex: Sendable, Codable, Equatable {
 
     public var usedBytes: Int64 { entries.values.reduce(0) { $0 + $1.bytes } }
 
-    public mutating func add(_ track: Track, file: String, bytes: Int64, at date: Date = Date()) {
-        entries[track.id] = Entry(track: track, file: file, bytes: bytes, downloadedAt: date)
+    public mutating func add(_ track: Track, file: String, bytes: Int64, at date: Date = Date(), ruleID: String? = nil) {
+        entries[track.id] = Entry(track: track, file: file, bytes: bytes, downloadedAt: date, ruleID: ruleID)
+    }
+
+    /// Hands a download to another rule, or (nil) to the user: downloading by hand something a rule
+    /// holds keeps it whatever the rule does later.
+    public mutating func setRule(_ trackID: String, _ ruleID: String?) {
+        entries[trackID]?.ruleID = ruleID
     }
 
     /// The removed entry's file, for the caller to delete.
