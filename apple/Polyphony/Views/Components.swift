@@ -168,6 +168,7 @@ private struct AlbumContextMenu: ViewModifier {
             Button("Shuffle") { Task { await load { model.player.play($0, shuffle: true, title: album.name) } } }
             Button("Play Next") { Task { await load { model.player.playNext($0.map(QueueEntry.track)) } } }
             Button("Add to Queue") { Task { await load { model.player.addToQueue($0.map(QueueEntry.track)) } } }
+            Button("Download") { Task { await load { model.downloads.download($0) } } }
             Divider()
             Button(album.starred ? "Remove from Favourites" : "Add to Favourites") {
                 Task { try? await model.subsonic?.setStarred(.album(album.id), !album.starred) }

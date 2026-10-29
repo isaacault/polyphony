@@ -143,6 +143,7 @@ private struct AlbumHeader: View {
                         }
                     } label: { Image(systemName: album.starred ? "heart.fill" : "heart") }
                         .help(album.starred ? "Remove from Favourites" : "Add to Favourites")
+                    DownloadButton(tracks: album.tracks)
                     Menu {
                         Button("Play Next") { model.player.playNext(album.tracks.map(QueueEntry.track)) }
                         Button("Add to Queue") { model.player.addToQueue(album.tracks.map(QueueEntry.track)) }
