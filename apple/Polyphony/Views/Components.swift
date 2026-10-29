@@ -1,5 +1,6 @@
 import PolyphonyKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Album and artist art, with a quiet placeholder while it loads or when there is none.
 struct Artwork: View {
@@ -301,4 +302,17 @@ struct KeepDownloadedButton: View {
             Button { model.downloads.keep(target) } label: { Label("Keep Downloaded", systemImage: "arrow.down.circle") }
         }
     }
+}
+
+/// Songs dragged from a list: dropped on the queue they're added to it, on a playlist into it.
+struct DraggedTracks: Codable, Transferable {
+    var tracks: [Track]
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .polyphonyTracks)
+    }
+}
+
+extension UTType {
+    static let polyphonyTracks = UTType(exportedAs: "app.polyphony.tracks")
 }

@@ -168,7 +168,14 @@ struct QueueView: View {
                 }
             }
         }
-        .overlay { if player.queue.isEmpty { Placeholder(title: "Nothing queued", symbol: "list.bullet") } }
+        .overlay {
+            if player.queue.isEmpty { Placeholder(title: "Nothing queued", symbol: "list.bullet", message: "Drag songs here to queue them.") }
+        }
+        .dropDestination(for: DraggedTracks.self) { drops, _ in
+            let tracks = drops.flatMap(\.tracks)
+            if player.queue.isEmpty { player.play(tracks) } else { player.addToQueue(tracks.map(QueueEntry.track)) }
+            return !tracks.isEmpty
+        }
     }
 
     /// The queue's library songs, in play order, as a new playlist.
