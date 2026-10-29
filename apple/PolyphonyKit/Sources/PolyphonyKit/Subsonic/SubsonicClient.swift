@@ -209,6 +209,11 @@ public struct SubsonicClient: Sendable {
         return urls.url("stream", params)
     }
 
+    /// The original file, untranscoded: what a download keeps.
+    public func downloadURL(trackID: String) -> URL {
+        urls.url("download", [("id", trackID)])
+    }
+
     public func coverArtURL(id: String, size: Int? = nil) -> URL {
         var params = [("id", id)]
         if let size { params.append(("size", "\(size)")) }
