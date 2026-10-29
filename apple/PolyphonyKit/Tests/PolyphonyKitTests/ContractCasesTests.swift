@@ -101,3 +101,15 @@ struct ReplayGainContractTests {
         }
     }
 }
+
+struct ReceiverContractTests {
+    @Test func receiverURLsAsTheContractHasThem() throws {
+        let cases = try #require(try contract("receiver")["cases"] as? [[String: Any]])
+        #expect(cases.count >= 11)
+        for c in cases {
+            let got = ReceiverURL.rewrite(try #require(string(c["url"])), baseURL: try #require(string(c["baseUrl"])),
+                                          receiver: string(c["override"]), lanIP: string(c["lanIp"]))
+            #expect(got == string(c["expected"]), "\(string(c["name"]) ?? "?")")
+        }
+    }
+}

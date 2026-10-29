@@ -147,17 +147,11 @@ final class AppModel {
         }
     }
 
-    /// A URL a speaker can fetch: the receiver address in place of the server's own.
+    /// A URL a speaker can fetch: the receiver address in place of the library's base URL (the
+    /// Android app's rule, shared through contract/cases/receiver.json).
     private func forSpeaker(_ url: URL) -> URL {
-        guard !receiverAddress.isEmpty, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              let base = URLComponents(string: receiverAddress.contains("://") ? receiverAddress : "http://" + receiverAddress)
-        else { return url }
-        parts.scheme = base.scheme
-        parts.host = base.host
-        parts.port = base.port
-        parts.path = base.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).isEmpty
-            ? parts.path : "/" + base.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + parts.path
-        return parts.url ?? url
+        guard let base = server?.subsonic.baseURL.absoluteString else { return url }
+        return URL(string: ReceiverURL.rewrite(url.absoluteString, baseURL: base, receiver: receiverAddress)) ?? url
     }
 
     private static func mime(for container: String?) -> String {
