@@ -43,7 +43,15 @@ object AlbumTrackDetails {
     fun albumQuality(tracks: List<Track>): String? =
         tracks.mapNotNull(::qualityBadgeLabel).groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
 
-    /** A track's own quality chip, only where it differs from the album's. */
-    fun trackQuality(track: Track, albumQuality: String?): String? =
-        qualityBadgeLabel(track)?.takeIf { it != albumQuality }
+    /**
+     * A track's own quality chip, only where it differs from the album's. On a HI-RES album a
+     * lossless track at CD resolution says "16-BIT": its container ("FLAC") read as if the rest
+     * weren't FLAC (We All Speak in Poems, one 16-bit track among 24-bit ones).
+     */
+    fun trackQuality(track: Track, albumQuality: String?): String? {
+        val label = qualityBadgeLabel(track)?.takeIf { it != albumQuality } ?: return null
+        return if (albumQuality == HI_RES && track.isLossless) "${track.bitDepth ?: 16}-BIT" else label
+    }
+
+    private const val HI_RES = "HI-RES"
 }

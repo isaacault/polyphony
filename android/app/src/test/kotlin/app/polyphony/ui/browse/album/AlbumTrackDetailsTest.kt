@@ -55,4 +55,14 @@ class AlbumTrackDetailsTest {
         assertEquals("HI-RES", AlbumTrackDetails.trackQuality(tracks[2], album))
         assertNull(AlbumTrackDetails.albumQuality(listOf(track("mp3", "X", container = "mp3"))))
     }
+
+    @Test
+    fun `on a hi-res album the CD-resolution track says 16-BIT, not FLAC`() {
+        val tracks = listOf(track("Speaker", "X"), track("b", "X", bitDepth = 24), track("c", "X", bitDepth = 24))
+        val album = AlbumTrackDetails.albumQuality(tracks)
+        assertEquals("HI-RES", album)
+        assertEquals("16-BIT", AlbumTrackDetails.trackQuality(tracks[0], album))
+        assertNull(AlbumTrackDetails.trackQuality(tracks[1], album))
+        assertNull(AlbumTrackDetails.trackQuality(track("lossy", "X", container = "mp3"), album))
+    }
 }
