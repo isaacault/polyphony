@@ -120,6 +120,11 @@ enum Route: Hashable {
     case catalogAlbum(CatalogAlbum)
     case catalogArtist(CatalogArtist)
     case discoveryPlaylist(DiscoveryPlaylist)
+
+    /// A catalogue artist: their library page when they're in the library, else the catalogue's.
+    static func to(_ artist: CatalogArtist) -> Route {
+        artist.libraryID.map(Route.artist) ?? .catalogArtist(artist)
+    }
 }
 
 func formatDuration(_ seconds: TimeInterval) -> String {

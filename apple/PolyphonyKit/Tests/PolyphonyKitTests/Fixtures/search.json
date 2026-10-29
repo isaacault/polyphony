@@ -1,7 +1,7 @@
 {"sources":{"library":"ok","catalog":"ok"},"ranked":true,"partial":false,"best":"mb:rg:poems",
  "popularity":{"mb:rg:poems":0.8},
  "results":[
-  {"kind":"artist","key":"mb:art:alaskan","name":"Alaskan Tapes","ids":{"musicBrainzArtistId":"alaskan"},
+  {"kind":"artist","key":"mb:art:alaskan","name":"Alaskan Tapes","ids":{"musicBrainzArtistId":"alaskan","navidromeArtistId":"ar-7"},
    "artwork":{"url":"https://continuo.ault.me/v1/artwork?src=x"},"availability":{"state":"in_library"}},
   {"kind":"album","key":"mb:rg:poems","title":"We All Speak in Poems","artist":"Alaskan Tapes","year":2016,"albumType":"album",
    "ids":{"musicBrainzReleaseGroupId":"poems","navidromeAlbumId":"al-1"},"artwork":{"url":"https://coverartarchive.org/x.jpg"},

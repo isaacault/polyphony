@@ -29,6 +29,8 @@ public struct CatalogArtist: Sendable, Hashable, Identifiable {
     public var id: String { key }
     public let key: String
     public var musicBrainzID: String?
+    /// The library's artist, when they're in it: their library page, with the catalogue's extras.
+    public var libraryID: String? = nil
     public var name: String
     public var artworkURL: URL?
     public var availability: Availability

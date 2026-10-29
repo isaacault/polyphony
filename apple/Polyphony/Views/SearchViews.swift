@@ -85,7 +85,7 @@ struct SearchView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 18) {
                         ForEach(results.artists) { artist in
-                            NavigationLink(value: Route.catalogArtist(artist)) {
+                            NavigationLink(value: Route.to(artist)) {
                                 VStack {
                                     Artwork(url: artist.artworkURL, cornerRadius: 60, symbol: "music.mic").frame(width: 120, height: 120)
                                     Text(artist.name).font(.callout).lineLimit(1).frame(width: 120)
@@ -176,7 +176,7 @@ private struct TopHitCard: View {
             }
             .buttonStyle(.plain)
         case let .artist(artist):
-            NavigationLink(value: Route.catalogArtist(artist)) {
+            NavigationLink(value: Route.to(artist)) {
                 card(art: artist.artworkURL, title: artist.name, subtitle: ["Artist"], round: true)
             }
             .buttonStyle(.plain)
@@ -387,7 +387,7 @@ struct CatalogArtistView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 16) {
                                 ForEach(similar) { a in
-                                    NavigationLink(value: Route.catalogArtist(a)) {
+                                    NavigationLink(value: Route.to(a)) {
                                         VStack {
                                             Artwork(url: a.artworkURL, cornerRadius: 50, symbol: "music.mic").frame(width: 100, height: 100)
                                             Text(a.name).font(.caption).lineLimit(1).frame(width: 100)
@@ -429,7 +429,7 @@ struct CatalogArtistShelf: View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(alignment: .top, spacing: 18) {
                 ForEach(artists) { artist in
-                    NavigationLink(value: Route.catalogArtist(artist)) {
+                    NavigationLink(value: Route.to(artist)) {
                         VStack {
                             Artwork(url: artist.artworkURL, cornerRadius: 60, symbol: "music.mic").frame(width: 120, height: 120)
                             Text(artist.name).font(.callout).lineLimit(1).frame(width: 120)

@@ -328,6 +328,7 @@ private struct IdsDTO: Decodable {
     let musicBrainzReleaseGroupId: String?
     let navidromeAlbumId: String?
     let musicBrainzArtistId: String?
+    let navidromeArtistId: String?
 }
 
 private struct AlbumRefDTO: Decodable {
@@ -395,8 +396,8 @@ private struct HitDTO: Decodable {
     let tracks: [TracklistDTO]?
 
     func artist(_ host: String?, defaultState: String = "requestable") -> CatalogArtist {
-        CatalogArtist(key: key, musicBrainzID: ids?.musicBrainzArtistId, name: name ?? title ?? "",
-                      artworkURL: ownArtwork(artwork?.url, host),
+        CatalogArtist(key: key, musicBrainzID: ids?.musicBrainzArtistId, libraryID: ids?.navidromeArtistId,
+                      name: name ?? title ?? "", artworkURL: ownArtwork(artwork?.url, host),
                       availability: (availability ?? AvailabilityDTO.unknown).model(fallbackAlbumID: nil, default: defaultState))
     }
 

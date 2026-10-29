@@ -32,6 +32,7 @@ struct ContinuoServiceTests {
         #expect(request.headers["Authorization"] == "Bearer acc-1")
         #expect(query(request.url)["quick"] == "true" && query(request.url)["types"] == "album,artist,track")
         #expect(r.ranked && r.artists.count == 1 && r.albums.count == 2 && r.tracks.count == 2)
+        #expect(r.artists.first?.libraryID == "ar-7", "a library artist opens their library page")
         guard case let .album(best)? = r.best else { Issue.record("best should be the album"); return }
         #expect(best.title == "We All Speak in Poems" && best.availability == .inLibrary(albumID: "al-1"))
     }
