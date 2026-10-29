@@ -68,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static weak var player: PlayerController?
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
-        MainActor.assumeIsolated {
+        MainActor.assumeIsolated { () -> NSMenu? in
             guard let player = Self.player, player.current != nil else { return nil }
             let menu = NSMenu()
             menu.addItem(item(player.isPlaying ? "Pause" : "Play", #selector(togglePlay)))
