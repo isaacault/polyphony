@@ -2,6 +2,7 @@ import AppKit
 import PolyphonyKit
 import SwiftUI
 import UniformTypeIdentifiers
+import UserNotifications
 
 @main
 struct PolyphonyApp: App {
@@ -15,6 +16,7 @@ struct PolyphonyApp: App {
                 .frame(minWidth: 900, minHeight: 560)
                 .task {
                     AppDelegate.player = model.player
+                    AppDelegate.model = model
                     await model.start()
                 }
         }
@@ -72,8 +74,30 @@ struct GoCommands: Commands {
 }
 
 /// The Dock icon's menu: Play/Pause, Next, Previous.
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     @MainActor static weak var player: PlayerController?
+    @MainActor static weak var model: AppModel?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    // "Ready to play" shows while the app is in front too (macOS hides notifications from the frontmost
+    // app unless asked), and clicking it opens the album.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound])
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        let albumID = response.notification.request.content.userInfo["albumID"] as? String
+        Task { @MainActor in
+            NSApp.activate(ignoringOtherApps: true)
+            if let albumID { Self.model?.open(.album(albumID)) }
+        }
+        completionHandler()
+    }
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         MainActor.assumeIsolated { () -> NSMenu? in

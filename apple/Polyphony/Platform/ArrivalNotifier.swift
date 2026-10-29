@@ -37,6 +37,7 @@ final class ArrivalNotifier {
             content.title = "Ready to play"
             content.body = [request.title, request.artist].compactMap { $0 }.joined(separator: " · ")
             content.sound = .default
+            if let albumID = request.albumID { content.userInfo = ["albumID": albumID] }
             UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "request-\(request.id)", content: content,
                                                                          trigger: nil))
         }
