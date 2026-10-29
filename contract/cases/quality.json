@@ -1,0 +1,29 @@
+{
+  "about": "Quality badges: a track's own, an album's (the most common), and a track's chip on its album page (only where it differs; on a HI-RES album a CD-resolution track says its bit depth). Read by android/app's ContractCasesTest and apple/PolyphonyKit's ContractCasesTests.",
+  "badges": [
+    {"container": "flac", "bitDepth": 16, "sampleRate": 44100, "badge": "FLAC"},
+    {"container": "flac", "bitDepth": 24, "sampleRate": 44100, "badge": "HI-RES"},
+    {"container": "flac", "bitDepth": 16, "sampleRate": 96000, "badge": "HI-RES"},
+    {"container": "mp3", "bitDepth": null, "sampleRate": 44100, "badge": null}
+  ],
+  "albums": [
+    {
+      "about": "We All Speak in Poems before its first track was replaced",
+      "tracks": [
+        {"container": "flac", "bitDepth": 16, "sampleRate": 44100, "chip": "16-BIT"},
+        {"container": "flac", "bitDepth": 24, "sampleRate": 44100, "chip": null},
+        {"container": "flac", "bitDepth": 24, "sampleRate": 44100, "chip": null}
+      ],
+      "badge": "HI-RES"
+    },
+    {
+      "about": "a CD album with one hi-res track",
+      "tracks": [
+        {"container": "flac", "bitDepth": 16, "sampleRate": 44100, "chip": null},
+        {"container": "flac", "bitDepth": 16, "sampleRate": 44100, "chip": null},
+        {"container": "flac", "bitDepth": 24, "sampleRate": 44100, "chip": "HI-RES"}
+      ],
+      "badge": "FLAC"
+    }
+  ]
+}
