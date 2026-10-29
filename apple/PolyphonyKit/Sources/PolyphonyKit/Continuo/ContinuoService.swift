@@ -198,6 +198,30 @@ public struct ContinuoService: Sendable {
         return try decode(ScrobbleLinksDTO.self, response).model
     }
 
+    // MARK: Inbox
+
+    /// The newest notifications first.
+    public func notifications(limit: Int = 100, unreadOnly: Bool = false) async throws -> InboxPage {
+        let dto: NotificationListDTO = try await get("v1/notifications", [
+            URLQueryItem(name: "since", value: "0"), URLQueryItem(name: "unread", value: unreadOnly ? "true" : "false"),
+            URLQueryItem(name: "limit", value: "\(min(max(limit, 1), 500))"), URLQueryItem(name: "order", value: "desc"),
+        ])
+        return InboxPage(items: dto.items.map(\.model), unreadCount: dto.unreadCount ?? 0)
+    }
+
+    /// Marks these read (all of them when [ids] is nil); the unread count after.
+    @discardableResult
+    public func markRead(_ ids: [Int]?) async throws -> Int {
+        let response: HTTPResponse
+        if let ids {
+            response = try await authorised("POST", "v1/notifications/read", body: MarkReadIDs(ids: Array(Set(ids)).sorted()))
+        } else {
+            response = try await authorised("POST", "v1/notifications/read", body: MarkReadAll(all: true))
+        }
+        guard (200..<300).contains(response.status) else { throw ContinuoClient.error(from: response) }
+        return (try? JSONDecoder().decode(MarkReadDTO.self, from: response.body).unreadCount) ?? 0
+    }
+
     // MARK: Devices
 
     public func devices() async throws -> [SignedInDevice] {
@@ -539,6 +563,31 @@ private struct LyricsDTO: Decodable {
                       source: source == "lrclib" ? "LRCLIB" : source)
     }
 }
+
+private struct NotificationListDTO: Decodable {
+    struct Item: Decodable {
+        struct Action: Decodable { let navidromeAlbumId: String?; let requestId: Int? }
+        let id: Int
+        let type: String?
+        let title: String?
+        let body: String?
+        let createdAt: String?
+        let readAt: String?
+        let action: Action?
+        let requestId: Int?
+
+        var model: InboxNotification {
+            InboxNotification(id: id, type: type ?? "", title: title ?? "", body: body, createdAt: createdAt,
+                              read: readAt != nil, albumID: action?.navidromeAlbumId, requestID: action?.requestId ?? requestId)
+        }
+    }
+    let items: [Item]
+    let unreadCount: Int?
+}
+
+private struct MarkReadIDs: Encodable { let ids: [Int] }
+private struct MarkReadAll: Encodable { let all: Bool }
+private struct MarkReadDTO: Decodable { let unreadCount: Int? }
 
 private struct DeviceDTO: Decodable {
     let id: String

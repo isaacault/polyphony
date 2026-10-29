@@ -168,6 +168,64 @@ struct DiscoveryPlaylistView: View {
     }
 }
 
+/// continuo's notifications: arrivals, requests that need a look. Opening one goes to it.
+struct InboxView: View {
+    @Environment(AppModel.self) private var model
+    @State private var items: [InboxNotification] = []
+    @State private var loaded = false
+
+    var body: some View {
+        List(items) { item in
+            Button { open(item) } label: {
+                HStack(alignment: .top, spacing: 10) {
+                    Circle().fill(item.read ? Color.clear : Color.accentColor).frame(width: 8, height: 8).padding(.top, 6)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.title).font(.headline)
+                        if let body = item.body, !body.isEmpty { Text(body).foregroundStyle(.secondary) }
+                        if let at = item.createdAt { Text(String(at.prefix(16)).replacingOccurrences(of: "T", with: " ")).font(.caption).foregroundStyle(.tertiary) }
+                    }
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .overlay { if loaded && items.isEmpty { Placeholder(title: "No notifications", symbol: "tray") } }
+        .navigationTitle("Inbox")
+        .toolbar {
+            Button("Mark All Read") {
+                Task {
+                    await model.markRead(nil)
+                    await load()
+                }
+            }
+            .disabled(model.unreadCount == 0)
+        }
+        .task { await load() }
+    }
+
+    private func open(_ item: InboxNotification) {
+        Task {
+            if !item.read { await model.markRead([item.id]) }
+            if let album = item.albumID {
+                model.path.append(Route.album(album))
+            } else if item.requestID != nil {
+                model.go(to: .requests)
+            }
+            await load()
+        }
+    }
+
+    private func load() async {
+        do {
+            items = try await model.continuo?.notifications().items ?? []
+            loaded = true
+        } catch {
+            model.handle(error)
+        }
+    }
+}
+
 /// Albums taken out of the library, restorable for a while.
 struct RemovedAlbumsView: View {
     @Environment(AppModel.self) private var model
