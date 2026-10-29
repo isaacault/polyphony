@@ -20,7 +20,16 @@ import kotlinx.serialization.json.JsonPrimitive
 internal data class RefreshBody(val refreshToken: String)
 
 @Serializable
-internal data class SessionDto(val accessToken: String, val expiresIn: Long = 3600, val refreshToken: String)
+internal data class SessionDto(
+    val accessToken: String,
+    val expiresIn: Long = 3600,
+    val refreshToken: String,
+    val library: SessionLibraryDto? = null,
+)
+
+/** The part of a session's library credential a refresh needs: where speakers should fetch from. */
+@Serializable
+internal data class SessionLibraryDto(val receiverBaseUrl: String? = null)
 
 @Serializable
 internal data class ErrorEnvelope(val error: ErrorDto? = null)

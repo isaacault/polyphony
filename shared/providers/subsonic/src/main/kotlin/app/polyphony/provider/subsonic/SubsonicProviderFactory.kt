@@ -92,13 +92,21 @@ class SubsonicProviderFactory @Inject constructor(
                     ServerOptions.CONTINUO to "true",
                     ServerOptions.CONTINUO_DEVICE_ID to result.session.device.id,
                     ServerOptions.CONTINUO_REFRESH_TOKEN to result.session.refreshToken,
-                ),
+                ) + receiverAddress(options, result.session.library.receiverBaseUrl),
             )
             // Not the account password. It may be an app password pasted by hand, so the Subsonic
             // check that follows decides.
             ContinuoSignIn.Result.WrongPassword -> request.copy(options = options + (ServerOptions.CONTINUO to "true"))
         }
     }
+
+    /**
+     * continuo's address for speakers (they fetch the audio themselves; many can't do HTTPS), unless
+     * the user set a receiver address of their own.
+     */
+    private fun receiverAddress(options: Map<String, String>, advertised: String?): Map<String, String> =
+        if (advertised.isNullOrBlank() || !options[ServerOptions.REMOTE_BASE_URL].isNullOrBlank()) emptyMap()
+        else mapOf(ServerOptions.REMOTE_BASE_URL to advertised)
 
     private fun deviceName(): String {
         val manufacturer = Build.MANUFACTURER.orEmpty()
