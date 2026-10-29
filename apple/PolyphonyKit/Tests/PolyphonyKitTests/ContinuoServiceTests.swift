@@ -153,3 +153,23 @@ struct ContinuoDeviceTests {
         #expect(fake.calls.dropFirst().map { "\($0.method) \($0.url.path)" } == ["DELETE /v1/devices/dev-2", "POST /v1/devices/revoke-others"])
     }
 }
+
+struct ContinuoInboxTests {
+    @Test func theInboxNewestFirstAndMarkingRead() async throws {
+        let fake = FakeTransport { request in
+            request.url.path == "/v1/notifications"
+                ? json(200, #"{"items":[{"id":9,"type":"request.available","title":"Ready to play","body":"Parachutes","createdAt":"2026-10-29T10:00:00+00:00","action":{"type":"open_album","navidromeAlbumId":"al-5"}},{"id":8,"type":"request.needs_attention","title":"Needs a look","readAt":"2026-10-28T10:00:00+00:00","requestId":3}],"unreadCount":1}"#)
+                : json(200, #"{"ok":true,"marked":1,"unreadCount":0}"#)
+        }
+        let s = try await service(fake)
+        let page = try await s.notifications()
+        #expect(query(fake.calls[0].url)["order"] == "desc" && page.unreadCount == 1)
+        #expect(page.items[0].albumID == "al-5" && !page.items[0].read && page.items[1].read && page.items[1].requestID == 3)
+        #expect(try await s.markRead([9, 9]) == 0)
+        let body = try JSONSerialization.jsonObject(with: try #require(fake.calls[1].body)) as? [String: [Int]]
+        #expect(body?["ids"] == [9])
+        _ = try await s.markRead(nil)
+        let all = try JSONSerialization.jsonObject(with: try #require(fake.calls[2].body)) as? [String: Bool]
+        #expect(all?["all"] == true)
+    }
+}
