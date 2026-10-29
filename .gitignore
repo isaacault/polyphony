@@ -20,3 +20,9 @@ keystore.properties
 # Local build logs
 build-*.log
 .claude/
+
+# Swift packages (apple/)
+.build/
+.swiftpm/
+xcuserdata/
+DerivedData/
