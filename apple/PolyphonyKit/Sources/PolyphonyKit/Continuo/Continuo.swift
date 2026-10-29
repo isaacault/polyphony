@@ -34,6 +34,8 @@ public struct ContinuoSession: Sendable, Codable, Equatable {
         public let baseUrl: String
         public let username: String
         public let password: String
+        /// Where speakers should fetch from instead (continuo's plain-HTTP LAN door), when configured.
+        public let receiverBaseUrl: String?
     }
 
     public let accessToken: String
