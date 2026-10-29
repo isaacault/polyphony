@@ -114,6 +114,18 @@ public struct ContinuoService: Sendable {
         guard (200..<300).contains(response.status) else { throw ContinuoClient.error(from: response) }
     }
 
+    /// Reports a Play now song to the account's ListenBrainz and Last.fm (Navidrome can't: it isn't a
+    /// library song): nil [listenedAt] for "now playing", the time it started for a counted play.
+    /// Best-effort: a continuo from before this (404, 405) is no error.
+    public func scrobblePlayNow(id: String, listenedAt: Date?) async throws {
+        struct Body: Encodable { let listenedAt: Int? }
+        let response = try await authorised("POST", "v1/play-now/\(id)/scrobble",
+                                            body: Body(listenedAt: listenedAt.map { Int($0.timeIntervalSince1970) }))
+        guard (200..<300).contains(response.status) || [404, 405].contains(response.status) else {
+            throw ContinuoClient.error(from: response)
+        }
+    }
+
     /// The stream's audio; the player must send `Authorization: Bearer <token>` with it.
     public func playNowAudioURL(id: String) -> URL {
         client.baseURL.appendingPathComponent("v1/play-now/\(id)/audio")

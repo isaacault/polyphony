@@ -112,6 +112,10 @@ public final class PlayerController {
     @ObservationIgnored public var artwork: @MainActor (QueueEntry) -> URL? = { _ in nil }
     /// Library tracks only: "now playing" when a track starts, a counted play once [ScrobbleRule] says so.
     @ObservationIgnored public var scrobble: @MainActor (Track, _ submission: Bool) -> Void = { _, _ in }
+    /// Play now songs, which aren't library songs: their stream id, and nil for "now playing" or the
+    /// time the song started for a counted play (continuo sends them on to ListenBrainz and Last.fm).
+    @ObservationIgnored public var playNowScrobble: @MainActor (_ streamID: String, _ listenedAt: Date?) -> Void = { _, _ in }
+    @ObservationIgnored private var startedAt = Date()
 
     /// Called when there's something worth keeping for next launch (a new song, a pause, every half
     /// minute of play): the app writes it to disk.
@@ -354,6 +358,7 @@ public final class PlayerController {
             stop()
             return
         }
+        startedAt = now()
         applyGain()
         loadGeneration += 1
         let generation = loadGeneration
@@ -374,6 +379,7 @@ public final class PlayerController {
             guard generation == loadGeneration else { return }
             engine.load(source, startAt: startAt, autoplay: autoplay)
             if let track = item.entry.libraryTrack { scrobble(track, false) }
+            if case let .playNow(stream, _) = item.entry { playNowScrobble(stream.id, nil) }
             preloadNext()
         }
     }
@@ -410,9 +416,10 @@ public final class PlayerController {
             if abs(time - lastPersisted) >= 30 { save() }
             sleepIfDue()
             if let total, total > 0 { duration = total }
-            if !scrobbled, let track = current?.libraryTrack, ScrobbleRule.counts(played: playedOfCurrent, duration: duration) {
+            if !scrobbled, let entry = current, ScrobbleRule.counts(played: playedOfCurrent, duration: duration) {
                 scrobbled = true
-                scrobble(track, true)
+                if let track = entry.libraryTrack { scrobble(track, true) }
+                if case let .playNow(stream, _) = entry { playNowScrobble(stream.id, startedAt) }
             }
         case .ended:
             if sleepAtEndOfSong {
