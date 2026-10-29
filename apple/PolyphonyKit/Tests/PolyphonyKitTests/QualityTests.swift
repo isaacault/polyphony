@@ -29,3 +29,10 @@ struct QualityTests {
         #expect(AudioQuality.trackChip(tracks[2], albumBadge: "FLAC") == "HI-RES")
     }
 }
+
+struct AppleFormatsTests {
+    @Test func whatAVFoundationPlaysAndWhatGetsTranscoded() {
+        for c in ["mp3", "FLAC", "m4a", "alac", "wav", "aiff", nil, ""] { #expect(AppleFormats.plays(c), "\(c ?? "nil")") }
+        for c in ["ogg", "opus", "oga", "wma", "ape", "wv", "dsf", "dff", "mka"] { #expect(!AppleFormats.plays(c), "\(c)") }
+    }
+}

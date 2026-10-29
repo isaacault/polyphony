@@ -44,7 +44,8 @@ final class Downloads {
     @ObservationIgnored private var folder: URL?
     @ObservationIgnored private var queue: [(track: Track, ruleID: String?)] = []
     @ObservationIgnored private var running = false
-    @ObservationIgnored private var source: ((Track) -> URL)?
+    /// Where to fetch a song from, and the format it comes in (its own, or a transcode).
+    @ObservationIgnored private var source: ((Track) -> (URL, String?))?
     @ObservationIgnored private var library: SubsonicClient?
     @ObservationIgnored private var hourly: Task<Void, Never>?
     @ObservationIgnored private var soon: Task<Void, Never>?
@@ -52,7 +53,7 @@ final class Downloads {
     @ObservationIgnored private var generation = 0
 
     /// Called on sign-in: this server's downloads and rules, and where to fetch new ones from.
-    func attach(server: SavedServer, library: SubsonicClient, fetchURL: @escaping (Track) -> URL) {
+    func attach(server: SavedServer, library: SubsonicClient, fetchURL: @escaping (Track) -> (URL, String?)) {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Polyphony/Downloads", isDirectory: true)
         let name = (server.address.host ?? "server") + "-" + server.subsonicUsername
@@ -204,13 +205,14 @@ final class Downloads {
         defer { running = false }
         while !queue.isEmpty {
             let (track, ruleID) = queue.removeFirst()
-            guard let folder, let url = source?(track) else { break }
+            guard let folder, let fetch = source?(track) else { break }
+            let (url, format) = fetch
             do {
                 let (tmp, response) = try await URLSession.shared.download(from: url)
                 guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                     throw URLError(.badServerResponse)
                 }
-                let file = DownloadIndex.fileName(for: track, format: track.container)
+                let file = DownloadIndex.fileName(for: track, format: format)
                 let target = folder.appendingPathComponent(file)
                 try? FileManager.default.removeItem(at: target)
                 try FileManager.default.moveItem(at: tmp, to: target)
