@@ -8,6 +8,9 @@ continuo lives in its own repo, so what the clients may rely on is written down 
   the Subsonic façade under `/rest` follows the Subsonic API and isn't in it). Regenerate it with
   `scripts/update_contract.sh` when continuo's API changes, and commit it with the client change that
   needs the new API, so a client never codes against an API that doesn't exist yet.
-- `cases/` (to come, with the move of the rules into `shared/`): JSON test cases for rules every client
-  must apply the same way (quality badges, server addresses, …), read by each platform's tests, so the
-  Kotlin and Swift sides can't drift.
+- `cases/`: JSON test cases for rules every client must apply the same way, read by each platform's
+  tests, so the Kotlin and Swift sides can't drift. Change a rule by changing its cases here first:
+  - `artist-credits.json`: which artists a track's artist tag credits ("Appears on"). Tested by
+    `shared/domain` (ContractCasesTest) and `apple/PolyphonyKit` (ContractCasesTests).
+  - `quality.json`: quality badges, album badges and track chips (HI-RES, FLAC, 16-BIT). Tested by
+    `android/app` (ContractCasesTest) and `apple/PolyphonyKit` (ContractCasesTests).

@@ -6,9 +6,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 IMAGE=swift:6.2-noble
 LOCK=/ssd/Personal/repositories/.locks/docker-ci.lock
+# The whole repo is mounted: the tests read contract/cases, which both apps' tests share.
+ROOT=$(git rev-parse --show-toplevel)
+PKG=${PWD#"$ROOT"/}
 run() {
   docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/tmp \
-    -v "$PWD:/src" -w /src "$IMAGE" sh -c 'swift build --build-path /src/.build/linux -q && swift test --build-path /src/.build/linux -q'
+    -v "$ROOT:/src" -w "/src/$PKG" "$IMAGE" \
+    sh -c "swift build --build-path /src/$PKG/.build/linux -q && swift test --build-path /src/$PKG/.build/linux -q"
 }
 if [ -w "$(dirname "$LOCK")" ]; then exec 9>"$LOCK"; flock 9; fi
 if run; then echo "ci: green"; else echo "ci: FAILED"; exit 1; fi
