@@ -41,7 +41,11 @@ struct PlayerBar: View {
 
     private func nowPlaying(_ entry: QueueEntry) -> some View {
         HStack(spacing: 10) {
-            Artwork(url: model.artworkURL(for: entry, size: 200), cornerRadius: 4).frame(width: 48, height: 48)
+            Button { model.nowPlayingExpanded.toggle() } label: {
+                Artwork(url: model.artworkURL(for: entry, size: 200), cornerRadius: 4).frame(width: 48, height: 48)
+            }
+            .buttonStyle(.plain)
+            .help("Now Playing")
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.title).font(.callout.weight(.medium)).lineLimit(1)
                 Text([entry.artist, entry.album].compactMap { $0 }.joined(separator: " — "))
@@ -286,6 +290,7 @@ struct SettingsView: View {
             }
             if model.isContinuo {
                 ScrobblingSection()
+                DevicesSection()
             }
             Section("Playback") {
                 Picker("Streaming quality", selection: Binding(get: { model.streamingBitrate }, set: { model.setStreamingBitrate($0) })) {
@@ -406,5 +411,100 @@ private struct ScrobblingSection: View {
                 model.handle(error)
             }
         }
+    }
+}
+
+/// Now Playing over the whole window: big artwork beside the lyrics, as Music has it. Esc or the
+/// artwork in the bar closes it.
+struct NowPlayingView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if let entry = model.player.current {
+            ZStack {
+                // The cover, blurred, behind everything.
+                Artwork(url: model.artworkURL(for: entry, size: 600), cornerRadius: 0)
+                    .scaledToFill()
+                    .blur(radius: 60)
+                    .opacity(0.45)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                Rectangle().fill(.ultraThinMaterial)
+                HStack(spacing: 48) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Artwork(url: model.artworkURL(for: entry, size: 1200), cornerRadius: 12)
+                            .frame(maxWidth: 460, maxHeight: 460)
+                            .shadow(radius: 24, y: 10)
+                        Text(entry.title).font(.title.weight(.bold)).lineLimit(2)
+                        Text([entry.artist, entry.album].compactMap { $0 }.joined(separator: " — "))
+                            .font(.title3).foregroundStyle(.secondary).lineLimit(2)
+                    }
+                    .frame(maxWidth: 460)
+                    LyricsView()
+                        .frame(maxWidth: 520, maxHeight: .infinity)
+                }
+                .padding(48)
+                .padding(.bottom, 72)
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button { model.nowPlayingExpanded = false } label: {
+                            Image(systemName: "chevron.down").font(.title2)
+                        }
+                        .buttonStyle(.plain)
+                        .keyboardShortcut(.cancelAction)
+                        .help("Close")
+                        .padding(20)
+                    }
+                    Spacer()
+                }
+            }
+            .onExitCommand { model.nowPlayingExpanded = false }
+        }
+    }
+}
+
+/// The devices signed in to this continuo account, and signing them out.
+private struct DevicesSection: View {
+    @Environment(AppModel.self) private var model
+    @State private var devices: [SignedInDevice] = []
+
+    var body: some View {
+        Section("Devices") {
+            ForEach(devices) { device in
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(device.name + (device.current ? " (this Mac)" : ""))
+                        Text([device.platform, device.lastSeenAt.map { "last seen \(String($0.prefix(10)))" }]
+                            .compactMap { $0 }.joined(separator: " · "))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if !device.current {
+                        Button("Sign Out") { run { try await $0.signOut(device: device.id) } }
+                    }
+                }
+            }
+            if devices.count > 1 {
+                Button("Sign Out All Other Devices", role: .destructive) { run { try await $0.signOutOtherDevices() } }
+            }
+        }
+        .task { await load() }
+    }
+
+    private func run(_ action: @escaping (ContinuoService) async throws -> Void) {
+        Task {
+            guard let continuo = model.continuo else { return }
+            do {
+                try await action(continuo)
+                await load()
+            } catch {
+                model.handle(error)
+            }
+        }
+    }
+
+    private func load() async {
+        devices = (try? await model.continuo?.devices()) ?? []
     }
 }

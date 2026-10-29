@@ -137,3 +137,19 @@ struct ContinuoLibraryTests {
         #expect(body?["token"] == "abc" && fake.calls.last?.method == "PUT")
     }
 }
+
+struct ContinuoDeviceTests {
+    @Test func devicesAndSigningThemOut() async throws {
+        let fake = FakeTransport { request in
+            request.url.path == "/v1/devices"
+                ? json(200, #"[{"id":"dev-1","name":"Mac","platform":"macos","current":true},{"id":"dev-2","name":"Pixel 8","platform":"android","lastSeenAt":"2026-10-29T10:00:00Z","current":false}]"#)
+                : json(200, #"{"ok":true}"#)
+        }
+        let s = try await service(fake)
+        let devices = try await s.devices()
+        #expect(devices.map(\.name) == ["Mac", "Pixel 8"] && devices[0].current && !devices[1].current)
+        try await s.signOut(device: "dev-2")
+        try await s.signOutOtherDevices()
+        #expect(fake.calls.dropFirst().map { "\($0.method) \($0.url.path)" } == ["DELETE /v1/devices/dev-2", "POST /v1/devices/revoke-others"])
+    }
+}

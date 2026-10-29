@@ -191,6 +191,16 @@ public struct RemovedAlbum: Sendable, Hashable, Identifiable {
     public var restorableUntil: String?
 }
 
+/// A device signed in to this continuo account.
+public struct SignedInDevice: Sendable, Hashable, Identifiable {
+    public let id: String
+    public var name: String
+    public var platform: String?
+    public var lastSeenAt: String?
+    /// This Mac.
+    public var current: Bool
+}
+
 /// Where Play now songs are scrobbled (library songs scrobble through Navidrome's own links).
 public struct ScrobbleLinks: Sendable, Hashable {
     public struct Link: Sendable, Hashable {

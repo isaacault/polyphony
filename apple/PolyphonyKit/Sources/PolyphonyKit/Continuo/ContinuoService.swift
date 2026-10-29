@@ -198,6 +198,25 @@ public struct ContinuoService: Sendable {
         return try decode(ScrobbleLinksDTO.self, response).model
     }
 
+    // MARK: Devices
+
+    public func devices() async throws -> [SignedInDevice] {
+        let dtos: [DeviceDTO] = try await get("v1/devices")
+        return dtos.map { SignedInDevice(id: $0.id, name: $0.name ?? "Device", platform: $0.platform,
+                                         lastSeenAt: $0.lastSeenAt, current: $0.current ?? false) }
+    }
+
+    /// Signs a device out (its tokens and its library login stop working).
+    public func signOut(device id: String) async throws {
+        let response = try await authorised("DELETE", "v1/devices/\(id)")
+        guard (200..<300).contains(response.status) else { throw ContinuoClient.error(from: response) }
+    }
+
+    public func signOutOtherDevices() async throws {
+        let response = try await authorised("POST", "v1/devices/revoke-others", body: Empty())
+        guard (200..<300).contains(response.status) else { throw ContinuoClient.error(from: response) }
+    }
+
     // MARK: Plumbing
 
     private struct Empty: Encodable {}
@@ -519,6 +538,14 @@ private struct LyricsDTO: Decodable {
                       synced: synced, instrumental: instrumental ?? false,
                       source: source == "lrclib" ? "LRCLIB" : source)
     }
+}
+
+private struct DeviceDTO: Decodable {
+    let id: String
+    let name: String?
+    let platform: String?
+    let lastSeenAt: String?
+    let current: Bool?
 }
 
 private struct RemovedDTO: Decodable {

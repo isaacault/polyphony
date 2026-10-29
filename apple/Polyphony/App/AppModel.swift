@@ -21,6 +21,8 @@ final class AppModel {
     /// view so menu commands (⌘F, ⌘L) can move it.
     var sidebar: SidebarItem? = .home
     var path = NavigationPath()
+    /// The full-window Now Playing view (big artwork and lyrics).
+    var nowPlayingExpanded = false
 
     func go(to item: SidebarItem) {
         sidebar = item
