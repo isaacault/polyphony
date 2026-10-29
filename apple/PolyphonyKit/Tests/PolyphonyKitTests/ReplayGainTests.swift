@@ -62,6 +62,8 @@ private final class GainSpy: AudioEngine {
     func seek(to time: TimeInterval) {}
     func stop() {}
     func setGain(_ gain: Float) { gains.append(gain) }
+    var rates: [Float] = []
+    func setRate(_ rate: Float) { rates.append(rate) }
 }
 
 @MainActor
@@ -77,5 +79,18 @@ struct PlayerGainTests {
         #expect(abs((spy.gains.last ?? 0) - 0.501) < 0.002, "a mix: track gain")
         p.replayGain = ReplayGain.Settings(mode: .off)
         #expect(spy.gains.last == 1, "turning it off levels nothing, at once")
+    }
+}
+
+@MainActor
+struct SpeedTests {
+    @Test func theSpeedGoesToTheEngineAndCarriesOverToANewOne() {
+        let mac = GainSpy()
+        let p = PlayerController(engine: mac)
+        p.speed = 1.5
+        #expect(mac.rates == [1.5])
+        let speaker = GainSpy()
+        p.switchOutput(to: speaker)
+        #expect(speaker.rates == [1.5])
     }
 }

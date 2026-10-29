@@ -37,6 +37,7 @@ final class AVPlayerEngine: AudioEngine {
     var volume: Float = 1
     init() {}
     func setGain(_ gain: Float) {}
+    func setRate(_ rate: Float) {}
     func load(_ source: AudioSource, startAt: TimeInterval, autoplay: Bool) {}
     func preload(_ next: AudioSource?) {}
     func play() {}
