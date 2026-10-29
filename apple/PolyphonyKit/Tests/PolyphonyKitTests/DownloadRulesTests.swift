@@ -74,3 +74,44 @@ struct DownloadRulesTests {
         #expect(DownloadRule.Target.playlist(id: "x", name: "Road").label == "Playlist · Road")
     }
 }
+
+struct StorageLimitTests {
+    private func entry(_ index: inout DownloadIndex, _ id: String, bytes: Int64, rule: String?, downloaded: Double, played: Double? = nil) {
+        index.add(Track(id: id, title: id, duration: 1), file: id, bytes: bytes, at: Date(timeIntervalSince1970: downloaded), ruleID: rule)
+        if let played { index.touch(id, at: Date(timeIntervalSince1970: played)) }
+    }
+
+    @Test func nothingGoesUnderTheLimitOrWithoutOne() {
+        var i = DownloadIndex()
+        entry(&i, "a", bytes: 50, rule: "r", downloaded: 1)
+        #expect(i.evictions(limitBytes: 100).isEmpty && i.evictions(limitBytes: 0).isEmpty)
+    }
+
+    @Test func leastRecentlyPlayedGoesFirstUntilUnder() {
+        var i = DownloadIndex()
+        entry(&i, "old-but-played", bytes: 40, rule: "r", downloaded: 1, played: 50)
+        entry(&i, "never-played", bytes: 40, rule: "r", downloaded: 10)
+        entry(&i, "played-long-ago", bytes: 40, rule: "r", downloaded: 20, played: 5)
+        #expect(i.evictions(limitBytes: 80) == ["played-long-ago"])
+        #expect(i.evictions(limitBytes: 40) == ["played-long-ago", "never-played"])
+    }
+
+    @Test func handDownloadsAreNeverEvicted() {
+        var i = DownloadIndex()
+        entry(&i, "mine", bytes: 500, rule: nil, downloaded: 1)
+        entry(&i, "kept", bytes: 10, rule: "r", downloaded: 2)
+        #expect(i.evictions(limitBytes: 100) == ["kept"])
+    }
+
+    @Test func rulesFetchOnlyWhatFits() {
+        var plan = RulePlan(fetch: ["a", "b", "c"].map { RulePlan.Fetch(track: Track(id: $0, title: $0, duration: 1), ruleID: "r") })
+        plan.fitting(budgetBytes: 25, estimateBytes: 10)
+        #expect(plan.fetch.map(\.track.id) == ["a", "b"])
+        plan.fitting(budgetBytes: -5, estimateBytes: 10)
+        #expect(plan.fetch.isEmpty)
+        var i = DownloadIndex()
+        #expect(i.estimatedBytes(fallback: 7) == 7)
+        entry(&i, "a", bytes: 10, rule: nil, downloaded: 1); entry(&i, "b", bytes: 30, rule: nil, downloaded: 1)
+        #expect(i.estimatedBytes() == 20)
+    }
+}
