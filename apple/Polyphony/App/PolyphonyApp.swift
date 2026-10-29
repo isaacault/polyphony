@@ -20,6 +20,7 @@ struct PolyphonyApp: App {
         .windowToolbarStyle(.unified)
         .commands {
             PlaybackCommands(player: model.player)
+            GoCommands(model: model)
             SidebarCommands()
         }
 
@@ -35,6 +36,30 @@ struct PolyphonyApp: App {
                 .onAppear { AppDelegate.player = model.player }
         }
         .menuBarExtraStyle(.window)
+    }
+}
+
+/// The Go menu: ⌘F for Search, ⌘L for the album that's playing, ⌘1… for the library.
+struct GoCommands: Commands {
+    let model: AppModel
+
+    var body: some Commands {
+        CommandMenu("Go") {
+            Button("Search") { model.go(to: .search) }
+                .keyboardShortcut("f", modifiers: .command)
+            Button("Show Playing Album") { model.showCurrentAlbum() }
+                .keyboardShortcut("l", modifiers: .command)
+                .disabled(model.player.current?.libraryTrack?.albumID == nil)
+            Divider()
+            Button("Home") { model.go(to: .home) }.keyboardShortcut("1", modifiers: .command)
+            Button("Artists") { model.go(to: .artists) }.keyboardShortcut("2", modifiers: .command)
+            Button("Albums") { model.go(to: .albums) }.keyboardShortcut("3", modifiers: .command)
+            Button("Songs") { model.go(to: .songs) }.keyboardShortcut("4", modifiers: .command)
+            Button("Playlists") { model.go(to: .playlists) }.keyboardShortcut("5", modifiers: .command)
+            if model.isContinuo {
+                Button("Requests") { model.go(to: .requests) }.keyboardShortcut("6", modifiers: .command)
+            }
+        }
     }
 }
 
