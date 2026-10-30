@@ -398,7 +398,13 @@ final class AppModel {
         if let singles = try? await continuo.singleSongAlbums() {
             singleSongAlbumIDs = Set(singles.keys)
         }
+        if let partial = try? await continuo.partialAlbums() {
+            partialAlbumIDs = Set(partial.keys)
+        }
     }
+
+    /// Library albums the library only partly has (continuo): Albums leaves them out unless asked.
+    private(set) var partialAlbumIDs: Set<String> = []
 
     /// A call that failed because the session ended sends the app back to sign-in; one that couldn't
     /// reach the server at all puts the app offline (downloads still play) until it can again.

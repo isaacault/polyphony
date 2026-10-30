@@ -156,6 +156,17 @@ public struct ContinuoService: Sendable {
     }
 
     /// Library albums that hold single songs (one song of an album): left out of album lists.
+    /// Library albums with fewer songs than the album has (continuo counts them in the background):
+    /// [] from a continuo from before (404).
+    public func partialAlbums() async throws -> [String: (have: Int, expected: Int)] {
+        let response = try await authorised("GET", "v1/library/partial")
+        if response.status == 404 { return [:] }
+        guard (200..<300).contains(response.status) else { throw ContinuoClient.error(from: response) }
+        let dto = try decode(SinglesDTO.self, response)
+        return Dictionary(dto.albums.map { ($0.navidromeAlbumId, (have: $0.have ?? 0, expected: $0.expected ?? 0)) },
+                          uniquingKeysWith: { a, _ in a })
+    }
+
     public func singleSongAlbums() async throws -> [String: (have: Int, expected: Int)] {
         let dto: SinglesDTO = try await get("v1/library/singles")
         return Dictionary(dto.albums.map { ($0.navidromeAlbumId, (have: $0.have ?? 1, expected: $0.expected ?? 1)) },

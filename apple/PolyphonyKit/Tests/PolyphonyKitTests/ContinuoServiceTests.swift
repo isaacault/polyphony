@@ -186,4 +186,14 @@ struct ArtistNamesTests {
         let fake = FakeTransport { _ in json(404, #"{"error":{"code":"not_found","message":"x"}}"#) }
         #expect(try await service(fake).originalArtistNames().isEmpty)
     }
+
+    @Test func partialAlbumsAndAContinuoFromBefore() async throws {
+        let body = Data(#"{"albums":[{"navidromeAlbumId":"nd-half","have":4,"expected":12}]}"#.utf8)
+        let fake = FakeTransport { _ in HTTPResponse(status: 200, body: body) }
+        let partial = try await service(fake).partialAlbums()
+        #expect(partial["nd-half"]?.have == 4 && partial["nd-half"]?.expected == 12)
+        #expect(fake.calls.first?.url.path.hasSuffix("/v1/library/partial") == true)
+        let old = FakeTransport { _ in HTTPResponse(status: 404, body: Data(#"{"detail":"Not Found"}"#.utf8)) }
+        #expect(try await service(old).partialAlbums().isEmpty)
+    }
 }
