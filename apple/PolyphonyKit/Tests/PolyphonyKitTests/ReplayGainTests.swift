@@ -145,3 +145,21 @@ struct CatalogEntryTests {
         #expect(p.current == library)
     }
 }
+
+@MainActor
+struct CatalogSkipTests {
+    @Test func aCatalogSongThatCantBeFetchedIsSkipped() async {
+        let song = CatalogTrack(key: "k", title: "Gone", artist: nil, durationMs: 1000, albumTitle: nil,
+                                albumReleaseGroupID: nil, availability: .requestable, recordingID: "r", artworkURL: nil)
+        let p = PlayerController(engine: GainSpy())
+        p.resolve = { entry in entry.libraryTrack.map { AudioSource(url: URL(string: "https://x/\($0.id)")!) } }
+        p.play(entries: [.catalog(song), .track(Track(id: "b", title: "b"))])
+        for _ in 0..<50 { await Task.yield() }
+        #expect(p.current?.libraryTrack?.id == "b" && p.error == nil)
+        p.play([Track(id: "lib", title: "lib")])
+        p.resolve = { _ in nil }
+        p.play([Track(id: "lib2", title: "lib2")])
+        for _ in 0..<50 { await Task.yield() }
+        #expect(p.error != nil, "a library song that can't play still says so")
+    }
+}
