@@ -1,0 +1,124 @@
+{
+  "about": "A library album shown as the whole album it's of (the Android app's AlbumTracklist.entries; PolyphonyKit's AlbumTracklist.rows): the catalogue tracklist in its order, each song the library has in its place (matched by title, case, punctuation and '(feat. …)' ignored), the rest missing (play now, request); library songs the tracklist doesn't name at the end. No tracklist, one no longer than the library's songs, or one matching none of them: the library's songs alone. All on disc 1 here.",
+  "cases": [
+    {
+      "name": "a single shows in its place among the rest of its album",
+      "library": [
+        "Visit Croatia"
+      ],
+      "tracklist": [
+        "Song of Gratitude",
+        "Visit Croatia",
+        "Be My Lover"
+      ],
+      "rows": [
+        "missing:Song of Gratitude",
+        "have:Visit Croatia",
+        "missing:Be My Lover"
+      ]
+    },
+    {
+      "name": "titles match without featured artists or case",
+      "library": [
+        "visit croatia (feat. Someone)"
+      ],
+      "tracklist": [
+        "Visit Croatia",
+        "B"
+      ],
+      "rows": [
+        "have:visit croatia (feat. Someone)",
+        "missing:B"
+      ]
+    },
+    {
+      "name": "a whole album in the library is just the library's songs",
+      "library": [
+        "A",
+        "B"
+      ],
+      "tracklist": [
+        "A",
+        "B"
+      ],
+      "rows": [
+        "have:A",
+        "have:B"
+      ]
+    },
+    {
+      "name": "no tracklist: the library's songs",
+      "library": [
+        "A",
+        "B"
+      ],
+      "tracklist": null,
+      "rows": [
+        "have:A",
+        "have:B"
+      ]
+    },
+    {
+      "name": "a tracklist that matches nothing is the wrong one and isn't shown",
+      "library": [
+        "Something Else"
+      ],
+      "tracklist": [
+        "A",
+        "B"
+      ],
+      "rows": [
+        "have:Something Else"
+      ]
+    },
+    {
+      "name": "a library song the tracklist doesn't name stays at the end",
+      "library": [
+        "A",
+        "Bonus"
+      ],
+      "tracklist": [
+        "A",
+        "B",
+        "C"
+      ],
+      "rows": [
+        "have:A",
+        "missing:B",
+        "missing:C",
+        "have:Bonus"
+      ]
+    },
+    {
+      "name": "punctuation doesn't matter",
+      "library": [
+        "Don't Stop"
+      ],
+      "tracklist": [
+        "Don’t Stop",
+        "Next"
+      ],
+      "rows": [
+        "have:Don't Stop",
+        "missing:Next"
+      ]
+    },
+    {
+      "name": "the same title twice matches once each",
+      "library": [
+        "Interlude",
+        "Interlude"
+      ],
+      "tracklist": [
+        "Interlude",
+        "Song",
+        "Interlude"
+      ],
+      "rows": [
+        "have:Interlude",
+        "missing:Song",
+        "have:Interlude"
+      ]
+    }
+  ]
+}

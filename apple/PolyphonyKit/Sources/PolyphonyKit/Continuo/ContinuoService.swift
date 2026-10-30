@@ -40,6 +40,17 @@ public struct ContinuoService: Sendable {
         return CatalogAlbumPage(album: hit.album(artworkHost), tracks: (hit.tracks ?? []).map(\.model))
     }
 
+    /// The whole album a library album is of (for one the library only partly has), nil when
+    /// continuo knows no catalogue album for it.
+    public func libraryAlbumTracklist(libraryAlbumID: String) async throws -> LibraryAlbumTracklist? {
+        let response = try await authorised("GET", "v1/library/albums/\(libraryAlbumID)/tracklist")
+        if response.status == 404 { return nil }
+        guard (200..<300).contains(response.status) else { throw ContinuoClient.error(from: response) }
+        struct DTO: Decodable { let musicBrainzReleaseGroupId: String; let tracks: [TracklistDTO]? }
+        let dto = try decode(DTO.self, response)
+        return LibraryAlbumTracklist(releaseGroupID: dto.musicBrainzReleaseGroupId, tracks: (dto.tracks ?? []).map(\.model))
+    }
+
     public func discovery() async throws -> Discovery {
         let dto: DiscoverDTO = try await get("v1/discover")
         return dto.model(artworkHost)

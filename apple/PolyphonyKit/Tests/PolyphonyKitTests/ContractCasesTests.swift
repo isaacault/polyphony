@@ -126,3 +126,35 @@ struct AlbumCreditContractTests {
         }
     }
 }
+
+struct AlbumTracklistContractTests {
+    @Test func albumPagesAsTheContractHasThem() throws {
+        let cases = try #require(try contract("album-tracklist")["cases"] as? [[String: Any]])
+        #expect(cases.count >= 8)
+        for c in cases {
+            let library = try #require(c["library"] as? [String]).enumerated().map { Track(id: "t\($0.offset)", title: $0.element, discNumber: 1) }
+            let whole = (c["tracklist"] as? [String]).map { titles in
+                LibraryAlbumTracklist(releaseGroupID: "rg", tracks: titles.enumerated().map {
+                    CatalogTracklistEntry(position: $0.offset + 1, disc: 1, title: $0.element, durationMs: 1000, recordingID: "rec-\($0.offset)")
+                })
+            }
+            let rows = AlbumTracklist.rows(library: library, whole: whole, artist: nil, albumTitle: nil).map { row -> String in
+                switch row {
+                case let .have(t, _): "have:" + t.title
+                case let .missing(t, _): "missing:" + t.title
+                }
+            }
+            #expect(rows == (c["rows"] as? [String]), "\(string(c["name"]) ?? "?")")
+        }
+    }
+
+    @Test func aMissingSongCarriesWhatPlayNowNeeds() {
+        let rows = AlbumTracklist.rows(library: [Track(id: "t", title: "Visit Croatia")],
+                                       whole: LibraryAlbumTracklist(releaseGroupID: "rg", tracks: [
+                                           CatalogTracklistEntry(position: 1, disc: 1, title: "Song of Gratitude", durationMs: 1000, recordingID: "rec-0"),
+                                           CatalogTracklistEntry(position: 2, disc: 1, title: "Visit Croatia", durationMs: 1000, recordingID: "rec-1"),
+                                       ]), artist: "Alabaster dePlume", albumTitle: "To Cy & Lee")
+        guard case let .missing(song, _) = rows.first else { Issue.record("first should be missing"); return }
+        #expect(song.recordingID == "rec-0" && song.albumReleaseGroupID == "rg" && song.artist == "Alabaster dePlume" && song.key == "mb:rec:rec-0")
+    }
+}
