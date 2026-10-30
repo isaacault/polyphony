@@ -111,3 +111,10 @@ struct TransportErrorTests {
         #expect(TransportError.from(CancellationError()) is CancellationError)
     }
 }
+
+struct ErrorTextTests {
+    @Test func ownErrorsSayTheirDescriptionOthersTheirLocalizedOne() {
+        #expect(ErrorText.of(TransportError(underlying: "timed out")) == "Network error: timed out")
+        #expect(ErrorText.of(URLError(.badURL)) == URLError(.badURL).localizedDescription)
+    }
+}
