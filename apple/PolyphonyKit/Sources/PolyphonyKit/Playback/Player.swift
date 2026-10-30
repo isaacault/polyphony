@@ -384,7 +384,15 @@ public final class PlayerController {
         save()
         Task { @MainActor in
             guard let source = await resolve(item.entry) else {
-                if generation == loadGeneration { error = "Can't play \(item.entry.title)." }
+                guard generation == loadGeneration else { return }
+                // A catalogue song that couldn't be fetched is skipped, as the Android app's queue
+                // does: the playlist carries on with the next one.
+                if case .catalog = item.entry, queue.advanceOnEnd() {
+                    DiagnosticLog.shared.log("playback", "skipped \(item.entry.title): couldn't be fetched")
+                    loadCurrent(autoplay: autoplay)
+                    return
+                }
+                error = "Can't play \(item.entry.title)."
                 return
             }
             // A newer choice (next pressed again) wins over a slow resolve.
