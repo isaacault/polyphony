@@ -47,9 +47,13 @@ final class AVPlayerEngine: AudioEngine {
                                                       queue: .main) { [weak self] time in
             MainActor.assumeIsolated { self?.reportPosition(time) }
         }
-        observations.append(player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
-            let status = player.timeControlStatus
-            Task { @MainActor in self?.report(status) }
+        observations.append(player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
+            // The status as it is when this runs, not as it was: a hand-off's brief pause, reported
+            // late, would otherwise say paused while the next song plays.
+            Task { @MainActor in
+                guard let self else { return }
+                self.report(self.player.timeControlStatus)
+            }
         })
         endObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification,
                                                              object: nil, queue: .main) { [weak self] note in
@@ -62,9 +66,14 @@ final class AVPlayerEngine: AudioEngine {
         // The queue player already moved on to the preloaded song: keep it playing.
         if advancedByItself, source == currentSource, player.currentItem != nil, startAt == 0 {
             advancedByItself = false
-            if autoplay { player.play() }
+            if autoplay {
+                player.play()
+                // Say so even when the player never stopped (no status change to report).
+                report(player.timeControlStatus)
+            }
             return
         }
+        if advancedByItself { DiagnosticLog.shared.log("engine", "the next song wasn't the one queued: loading it") }
         advancedByItself = false
         let item: AVPlayerItem
         if let preloaded, preloaded.source == source {
@@ -134,14 +143,18 @@ final class AVPlayerEngine: AudioEngine {
         // With a preloaded next item the queue player moves on by itself; the controller is told
         // the song ended and asks for the next one, which `load` then sees is already playing.
         itemWatches[ObjectIdentifier(item)] = nil
-        if let preloaded, player.currentItem === preloaded.item {
+        // The queue player moves on to the preloaded song by itself, but the end may be announced a
+        // moment before it has: queued counts as moved on.
+        if let preloaded, player.currentItem === preloaded.item || player.items().contains(preloaded.item) {
             currentSource = preloaded.source
             playingItem = preloaded.item
             self.preloaded = nil
             advancedByItself = true
+            DiagnosticLog.shared.log("engine", "song ended: the next one carries on (gapless)")
         } else {
             currentSource = nil
             playingItem = nil
+            DiagnosticLog.shared.log("engine", "song ended: nothing queued behind it")
         }
         onEvent?(.ended)
     }
