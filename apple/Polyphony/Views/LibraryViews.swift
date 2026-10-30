@@ -7,7 +7,11 @@ struct AlbumsView: View {
     @Environment(AppModel.self) private var model
     @State private var albums: [Album] = []
     @State private var sort: SubsonicClient.AlbumListType = .alphabeticalByName
-    @State private var showSingles = false
+    /// Complete albums by default (the user's ask); partial ones, single songs, or everything on asking.
+    @AppStorage("albums.show") private var show: Shelf = .complete
+
+    enum Shelf: String { case complete, partial, singles, all }
+
     @State private var loading = true
     @State private var filter = ""
     /// Grid of covers or a list (the Android app's "Show as list"), remembered.
@@ -16,7 +20,15 @@ struct AlbumsView: View {
     /// Full albums by default; albums where you have just one song are under "Single songs".
     private var shown: [Album] {
         let singles = model.singleSongAlbumIDs
-        let picked = albums.filter { showSingles == singles.contains($0.id) }
+        let partial = model.partialAlbumIDs
+        let picked = albums.filter { a in
+            switch show {
+            case .complete: !singles.contains(a.id) && !partial.contains(a.id)
+            case .partial: partial.contains(a.id)
+            case .singles: singles.contains(a.id)
+            case .all: true
+            }
+        }
         guard !filter.isEmpty else { return picked }
         return picked.filter { $0.name.localizedCaseInsensitiveContains(filter) || ($0.artistName ?? "").localizedCaseInsensitiveContains(filter) }
     }
@@ -26,22 +38,26 @@ struct AlbumsView: View {
             if loading && albums.isEmpty {
                 ProgressView().padding(60)
             } else if shown.isEmpty {
-                Placeholder(title: showSingles ? "No single songs" : "No albums", symbol: "square.stack")
+                Placeholder(title: show == .singles ? "No single songs" : show == .partial ? "No partial albums" : "No albums",
+                            symbol: "square.stack",
+                            message: show == .partial ? "Albums you only have some songs of show here (continuo counts each album's songs in the background)." : nil)
             } else if asList {
                 AlbumList(albums: shown).padding(.horizontal, 20).padding(.vertical, 12)
             } else {
                 AlbumGrid(albums: shown).padding(20)
             }
         }
-        .navigationTitle(showSingles ? "Single Songs" : "Albums")
+        .navigationTitle(show == .singles ? "Single Songs" : show == .partial ? "Partial Albums" : "Albums")
         .searchable(text: $filter, placement: .toolbar, prompt: "Filter albums")
         .toolbar {
-            if !model.singleSongAlbumIDs.isEmpty {
-                Picker("Show", selection: $showSingles) {
-                    Text("Albums").tag(false)
-                    Text("Single Songs").tag(true)
+            if model.isContinuo {
+                Picker("Show", selection: $show) {
+                    Text("Complete").tag(Shelf.complete)
+                    Text("Partial").tag(Shelf.partial)
+                    Text("Single Songs").tag(Shelf.singles)
+                    Text("All").tag(Shelf.all)
                 }
-                .pickerStyle(.segmented)
+                .help("Complete albums, ones you only have some songs of, single songs, or everything")
             }
             Picker("View", selection: $asList) {
                 Label("Grid", systemImage: "square.grid.2x2").tag(false)
@@ -59,6 +75,8 @@ struct AlbumsView: View {
             }
         }
         .task(id: sort) { await load() }
+        // continuo counts albums' songs in the background: which are partial grows for a while.
+        .task { await model.refreshSingles() }
     }
 
     private func load() async {
