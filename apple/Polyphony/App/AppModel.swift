@@ -499,7 +499,7 @@ final class AppModel {
     func artworkURL(for entry: QueueEntry, size: Int) -> URL? {
         switch entry {
         case let .track(t): coverURL(t.coverArtID ?? t.albumID, size: size)
-        case let .playNow(_, c): c.artworkURL
+        case let .playNow(_, c), let .catalog(c): c.artworkURL
         }
     }
 
@@ -536,6 +536,37 @@ final class AppModel {
         case let .playNow(stream, _):
             guard let continuo, let token = try? await continuo.account.accessToken() else { return nil }
             return AudioSource(url: continuo.playNowAudioURL(id: stream.id), headers: ["Authorization": "Bearer \(token)"])
+        case let .catalog(song):
+            // Reached in the queue (or next up): the library's copy, else a Play now, one at a time.
+            guard !offline, let found = await fetch(song) else { return nil }
+            player.replace(entry, with: found)
+            return await source(for: found)
+        }
+    }
+
+    /// A catalogue song as something the player can play: the library's copy when it's there, else a
+    /// Play now continuo fetches (nil when it can't, said in a notice).
+    private func fetch(_ song: CatalogTrack) async -> QueueEntry? {
+        if case let .inLibrary(albumID?) = song.availability, let subsonic,
+           let album = try? await subsonic.album(id: albumID),
+           let track = album.tracks.first(where: { $0.title.caseInsensitiveCompare(song.title) == .orderedSame }) {
+            return .track(track)
+        }
+        guard let continuo else { return nil }
+        do {
+            var stream = try await continuo.startPlayNow(song, queued: true)
+            for _ in 0..<180 where !stream.playable && !stream.failed {
+                try await Task.sleep(for: .seconds(1))
+                stream = try await continuo.playNow(id: stream.id)
+            }
+            guard stream.playable, !stream.failed else {
+                notice = stream.error ?? "Couldn't get \(song.title) right now."
+                return nil
+            }
+            return .playNow(stream, song)
+        } catch {
+            handle(error)
+            return nil
         }
     }
 

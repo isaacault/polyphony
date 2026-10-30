@@ -123,3 +123,25 @@ struct PlayNowScrobbleTests {
         #expect(reports.count == 2 && library == 0, "once, and not as a library song")
     }
 }
+
+@MainActor
+struct CatalogEntryTests {
+    private let song = CatalogTrack(key: "k", title: "Song", artist: "A", durationMs: 120_000, albumTitle: "Al",
+                                    albumReleaseGroupID: nil, availability: .requestable, recordingID: "r", artworkURL: nil)
+
+    @Test func aCatalogEntryShowsItsSongAndIsntKeptAcrossLaunches() {
+        let e = QueueEntry.catalog(song)
+        #expect(e.title == "Song" && e.artist == "A" && e.album == "Al" && e.duration == 120 && e.libraryTrack == nil)
+        #expect(e.catalogTrack == song)
+        let q = PlayQueue([.track(Track(id: "a", title: "a")), e], startAt: 0)
+        #expect(q.snapshot(position: 3)?.tracks.map(\.id) == ["a"])
+    }
+
+    @Test func onceFetchedItsRowBecomesTheRealOne() async {
+        let p = PlayerController(engine: GainSpy())
+        p.play(entries: [.catalog(song), .track(Track(id: "b", title: "b"))])
+        let library = QueueEntry.track(Track(id: "lib", title: "Song"))
+        p.replace(.catalog(song), with: library)
+        #expect(p.current == library)
+    }
+}

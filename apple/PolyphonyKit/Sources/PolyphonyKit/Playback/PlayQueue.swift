@@ -1,28 +1,39 @@
 import Foundation
 
-/// What can be in the queue: a library track, or a song continuo is fetching (Play now).
+/// What can be in the queue: a library track, a song continuo is fetching (Play now), or a catalogue
+/// song not looked up yet: when the queue reaches it, it becomes the library's copy or a Play now
+/// (one at a time, as the Android app's queue of a discovery playlist).
 public enum QueueEntry: Sendable, Hashable {
     case track(Track)
     case playNow(PlayNowStream, CatalogTrack)
+    case catalog(CatalogTrack)
+
+    /// The catalogue song behind a Play now or not-yet-fetched entry.
+    public var catalogTrack: CatalogTrack? {
+        switch self {
+        case .track: nil
+        case let .playNow(_, c), let .catalog(c): c
+        }
+    }
 
     public var title: String {
         switch self {
         case let .track(t): t.title
-        case let .playNow(_, c): c.title
+        case let .playNow(_, c), let .catalog(c): c.title
         }
     }
 
     public var artist: String? {
         switch self {
         case let .track(t): t.artistName
-        case let .playNow(_, c): c.artist
+        case let .playNow(_, c), let .catalog(c): c.artist
         }
     }
 
     public var album: String? {
         switch self {
         case let .track(t): t.albumName
-        case let .playNow(_, c): c.albumTitle
+        case let .playNow(_, c), let .catalog(c): c.albumTitle
         }
     }
 
@@ -30,6 +41,7 @@ public enum QueueEntry: Sendable, Hashable {
         switch self {
         case let .track(t): t.duration
         case let .playNow(s, c): TimeInterval(s.durationMs ?? c.durationMs ?? 0) / 1000
+        case let .catalog(c): TimeInterval(c.durationMs ?? 0) / 1000
         }
     }
 
