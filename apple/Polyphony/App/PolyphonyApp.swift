@@ -74,9 +74,11 @@ struct GoCommands: Commands {
 }
 
 /// The Dock icon's menu: Play/Pause, Next, Previous.
+/// On the main actor, as AppKit calls it; the notification callbacks come on any thread.
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
-    @MainActor static weak var player: PlayerController?
-    @MainActor static weak var model: AppModel?
+    static weak var player: PlayerController?
+    static weak var model: AppModel?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = self
@@ -84,12 +86,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     // "Ready to play" shows while the app is in front too (macOS hides notifications from the frontmost
     // app unless asked), and clicking it opens the album.
-    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner, .sound])
     }
 
-    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         let albumID = response.notification.request.content.userInfo["albumID"] as? String
         Task { @MainActor in
@@ -100,14 +102,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
-        MainActor.assumeIsolated { () -> NSMenu? in
-            guard let player = Self.player, player.current != nil else { return nil }
-            let menu = NSMenu()
-            menu.addItem(item(player.isPlaying ? "Pause" : "Play", #selector(togglePlay)))
-            menu.addItem(item("Next", #selector(next)))
-            menu.addItem(item("Previous", #selector(previous)))
-            return menu
-        }
+        guard let player = Self.player, player.current != nil else { return nil }
+        let menu = NSMenu()
+        menu.addItem(item(player.isPlaying ? "Pause" : "Play", #selector(togglePlay)))
+        menu.addItem(item("Next", #selector(next)))
+        menu.addItem(item("Previous", #selector(previous)))
+        return menu
     }
 
     // Keep playing with the window closed: music apps don't quit when their window does.
@@ -119,9 +119,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         return item
     }
 
-    @objc private func togglePlay() { MainActor.assumeIsolated { Self.player?.togglePlay() } }
-    @objc private func next() { MainActor.assumeIsolated { Self.player?.next() } }
-    @objc private func previous() { MainActor.assumeIsolated { Self.player?.previous() } }
+    @objc private func togglePlay() { Self.player?.togglePlay() }
+    @objc private func next() { Self.player?.next() }
+    @objc private func previous() { Self.player?.previous() }
 }
 
 /// The Controls menu, as Music has it: ⌥⌘P (or Space in the window) to play/pause, ⌘→/⌘← for next/previous.
