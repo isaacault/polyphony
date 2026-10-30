@@ -102,7 +102,7 @@ struct AlbumDetailView: View {
             do {
                 album = try await model.subsonic?.album(id: albumID)
             } catch {
-                self.error = (error as? CustomStringConvertible)?.description ?? error.localizedDescription
+                self.error = ErrorText.of(error)
             }
         }
     }
