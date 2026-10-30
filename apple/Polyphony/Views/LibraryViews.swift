@@ -647,7 +647,7 @@ struct PlaylistsView: View {
                 let name = newName
                 newName = ""
                 Task {
-                    try? await model.subsonic?.createPlaylist(name: name)
+                    _ = try? await model.subsonic?.createPlaylist(name: name)
                     await load()
                 }
             }

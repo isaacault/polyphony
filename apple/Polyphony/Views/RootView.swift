@@ -174,15 +174,14 @@ struct MainWindow: View {
         guard keyMonitor == nil else { return }
         let player = model.player
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            // Local monitors run on the main thread.
-            MainActor.assumeIsolated { () -> NSEvent? in
-                let typing = NSApp.keyWindow?.firstResponder is NSText
-                guard event.keyCode == 49, event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty, !typing else {
-                    return event
-                }
+            guard event.keyCode == 49, event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty else { return event }
+            // Local monitors run on the main thread; only a Bool crosses back (NSEvent isn't Sendable).
+            let played = MainActor.assumeIsolated { () -> Bool in
+                guard !(NSApp.keyWindow?.firstResponder is NSText) else { return false }
                 player.togglePlay()
-                return nil
+                return true
             }
+            return played ? nil : event
         }
     }
 }
