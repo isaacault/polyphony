@@ -1,8 +1,8 @@
 import PolyphonyKit
 import SwiftUI
 
-/// Home: what's new and what you've been playing in the library, then (with continuo) new releases
-/// from your artists and discovery.
+/// Home: what's new and what you've been playing in the library (discovery is under Explore, as on
+/// the Android app).
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @State private var recentlyAdded: [Album] = []
@@ -10,7 +10,6 @@ struct HomeView: View {
     @State private var mostPlayed: [Album] = []
     @State private var random: [Album] = []
     @State private var favourites: [Album] = []
-    @State private var discovery = Discovery()
 
     /// "Good morning", as the Android app's Home greets.
     private var greeting: String {
@@ -28,60 +27,6 @@ struct HomeView: View {
                 continueListening
                 shelf("Recently Played", recentlyPlayed)
                 shelf("Recently Added", recentlyAdded)
-                if !discovery.forYou.isEmpty {
-                    Section {
-                        CatalogTrackList(tracks: Array(discovery.forYou.prefix(8)))
-                    } header: { SectionTitle("For You", subtitle: "Songs you might like, from what you play") }
-                }
-                if !discovery.newReleases.isEmpty {
-                    Section {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(alignment: .top, spacing: 18) {
-                                ForEach(discovery.newReleases) { album in
-                                    NavigationLink(value: catalogRoute(album)) { CatalogAlbumTile(album: album).frame(width: 160) }
-                                        .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                    } header: { SectionTitle("New Releases", subtitle: "From artists in your library") }
-                }
-                if !discovery.artists.isEmpty {
-                    Section { CatalogArtistShelf(artists: discovery.artists) } header: {
-                        SectionTitle("Artists for You", subtitle: "Like the ones you play")
-                    }
-                }
-                if !discovery.albums.isEmpty {
-                    Section {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(alignment: .top, spacing: 18) {
-                                ForEach(discovery.albums) { album in
-                                    NavigationLink(value: catalogRoute(album)) { CatalogAlbumTile(album: album).frame(width: 160) }
-                                        .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                    } header: { SectionTitle("Albums for You") }
-                }
-                if !discovery.playlists.isEmpty {
-                    Section {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 14) {
-                                ForEach(discovery.playlists) { playlist in
-                                    NavigationLink(value: Route.discoveryPlaylist(playlist)) {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(playlist.title).font(.headline).lineLimit(2)
-                                            if let d = playlist.description { Text(d).font(.caption).foregroundStyle(.secondary).lineLimit(3) }
-                                        }
-                                        .padding(14)
-                                        .frame(width: 200, height: 110, alignment: .topLeading)
-                                        .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 10))
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                    } header: { SectionTitle("Playlists for You") }
-                }
                 shelf("Random Picks", random)
                 shelf("Most Played", mostPlayed)
                 shelf(model.usesRatings ? "Top Rated" : "Favourites", favourites)
@@ -172,11 +117,6 @@ struct HomeView: View {
         }
     }
 
-    private func catalogRoute(_ album: CatalogAlbum) -> Route {
-        if case let .inLibrary(id?) = album.availability { return .album(id) }
-        return .catalogAlbum(album)
-    }
-
     private func load() async {
         guard let subsonic = model.subsonic else { return }
         async let added = subsonic.albums(.newest, size: 30)
@@ -189,9 +129,6 @@ struct HomeView: View {
         mostPlayed = (try? await most) ?? []
         random = (try? await picks) ?? []
         favourites = (try? await liked) ?? []
-        if let continuo = model.continuo {
-            discovery = (try? await continuo.discovery()) ?? Discovery()
-        }
     }
 }
 
@@ -434,5 +371,95 @@ private struct RequestRow: View {
                 model.handle(error)
             }
         }
+    }
+}
+
+/// Explore (continuo): new releases from your artists, songs, artists, albums and playlists for you,
+/// as the Android app's Explore tab.
+struct ExploreView: View {
+    @Environment(AppModel.self) private var model
+    @State private var discovery = Discovery()
+    @State private var loaded = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                if !discovery.forYou.isEmpty {
+                    Section {
+                        CatalogTrackList(tracks: Array(discovery.forYou.prefix(8)))
+                    } header: { SectionTitle("For You", subtitle: "Songs you might like, from what you play") }
+                }
+                if !discovery.newReleases.isEmpty {
+                    Section {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(alignment: .top, spacing: 18) {
+                                ForEach(discovery.newReleases) { album in
+                                    NavigationLink(value: catalogRoute(album)) { CatalogAlbumTile(album: album).frame(width: 160) }
+                                        .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    } header: { SectionTitle("New Releases", subtitle: "From artists in your library") }
+                }
+                if !discovery.artists.isEmpty {
+                    Section { CatalogArtistShelf(artists: discovery.artists) } header: {
+                        SectionTitle("Artists for You", subtitle: "Like the ones you play")
+                    }
+                }
+                if !discovery.albums.isEmpty {
+                    Section {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(alignment: .top, spacing: 18) {
+                                ForEach(discovery.albums) { album in
+                                    NavigationLink(value: catalogRoute(album)) { CatalogAlbumTile(album: album).frame(width: 160) }
+                                        .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    } header: { SectionTitle("Albums for You") }
+                }
+                if !discovery.playlists.isEmpty {
+                    Section {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 14) {
+                                ForEach(discovery.playlists) { playlist in
+                                    NavigationLink(value: Route.discoveryPlaylist(playlist)) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(playlist.title).font(.headline).lineLimit(2)
+                                            if let d = playlist.description { Text(d).font(.caption).foregroundStyle(.secondary).lineLimit(3) }
+                                        }
+                                        .padding(14)
+                                        .frame(width: 200, height: 110, alignment: .topLeading)
+                                        .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 10))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    } header: { SectionTitle("Playlists for You") }
+                }
+                if loaded && discovery == Discovery() {
+                    Placeholder(title: "Nothing to explore yet", symbol: "safari",
+                                message: "Playlists and suggestions come once continuo knows what you play (link ListenBrainz in Settings > Servers).")
+                } else if !loaded {
+                    ProgressView().frame(maxWidth: .infinity).padding(60)
+                }
+            }
+            .padding(24)
+        }
+        .navigationTitle("Explore")
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    private func catalogRoute(_ album: CatalogAlbum) -> Route {
+        if case let .inLibrary(id?) = album.availability { return .album(id) }
+        return .catalogAlbum(album)
+    }
+
+    private func load() async {
+        guard let continuo = model.continuo else { return }
+        discovery = (try? await continuo.discovery()) ?? Discovery()
+        loaded = true
     }
 }
