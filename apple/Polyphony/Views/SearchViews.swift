@@ -288,7 +288,19 @@ struct CatalogAlbumView: View {
                         Text(album.artist ?? "").font(.title2)
                         Text([album.albumType?.capitalized, album.year.map(String.init)].compactMap { $0 }.joined(separator: " · "))
                             .foregroundStyle(.secondary)
-                        requestButton.padding(.top, 6)
+                        HStack {
+                            requestButton
+                            if let page, !page.tracks.isEmpty, model.isContinuo {
+                                // Every song, fetched one at a time as the queue reaches it (Play now).
+                                Button {
+                                    model.player.play(entries: page.tracks.map { .catalog(CatalogTrackBuilder.make($0, album: album)) },
+                                                      title: album.title)
+                                } label: { Label("Play Now", systemImage: "play.fill") }
+                                    .controlSize(.large)
+                                    .help("Play the album now: each song is fetched as the queue reaches it")
+                            }
+                        }
+                        .padding(.top, 6)
                     }
                 }
                 if let page {
