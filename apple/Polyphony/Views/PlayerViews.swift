@@ -271,13 +271,17 @@ struct LyricsView: View {
         guard let entry = player.current else { return }
         loading = true
         defer { loading = false }
+        var found: Lyrics?
         if let track = entry.libraryTrack, let own = try? await model.subsonic?.lyrics(trackID: track.id) {
+            found = own
             lyrics = own
-            return
         }
-        if let continuo = model.continuo, let artist = entry.artist {
-            lyrics = try? await continuo.lyrics(artist: artist, title: entry.title, album: entry.album,
-                                                durationMs: Int(entry.duration * 1000))
+        // Plain lyrics from the file: continuo (LRCLIB) may have them synced, which follow the song.
+        if found?.synced != true, let continuo = model.continuo, let artist = entry.artist,
+           let other = try? await continuo.lyrics(artist: artist, title: entry.title, album: entry.album,
+                                                  durationMs: Int(entry.duration * 1000)),
+           found == nil || other.synced {
+            lyrics = other
         }
     }
 }
