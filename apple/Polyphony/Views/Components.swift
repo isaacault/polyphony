@@ -111,6 +111,37 @@ struct AlbumGrid: View {
     }
 }
 
+/// Albums as rows: cover, title, artist, year and songs (Albums' list view).
+struct AlbumList: View {
+    @Environment(AppModel.self) private var model
+    let albums: [Album]
+
+    var body: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(albums) { album in
+                NavigationLink(value: Route.album(album.id)) {
+                    HStack(spacing: 12) {
+                        Artwork(url: model.coverURL(album.coverArtID ?? album.id, size: 100), cornerRadius: 4).frame(width: 44, height: 44)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(album.name).lineLimit(1)
+                            Text(album.artistName ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer()
+                        Text([album.year.map(String.init), album.songCount > 0 ? "\(album.songCount) songs" : nil]
+                            .compactMap { $0 }.joined(separator: " · "))
+                            .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                    }
+                    .padding(.vertical, 5).padding(.horizontal, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .albumContextMenu(album)
+                Divider().opacity(0.4)
+            }
+        }
+    }
+}
+
 /// Where a click goes inside the library's navigation stack.
 enum Route: Hashable {
     case album(String)

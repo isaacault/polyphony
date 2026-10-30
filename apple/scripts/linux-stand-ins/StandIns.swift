@@ -16,7 +16,7 @@ struct NavigationPath {
 
 // Views/RootView.swift, Views/Components.swift
 enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
-    case home, search, artists, albums, songs, playlists, genres, favourites, downloads, inbox, requests, removed
+    case home, search, explore, artists, albums, songs, playlists, genres, favourites, downloads, inbox, requests, removed
     var id: String { rawValue }
 }
 
