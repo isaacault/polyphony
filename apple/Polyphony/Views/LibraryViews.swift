@@ -90,15 +90,24 @@ struct AlbumDetailView: View {
     let albumID: String
     @State private var album: Album?
     @State private var error: String?
+    /// The whole album it's of (continuo): an album you only partly have shows the songs you don't.
+    @State private var whole: LibraryAlbumTracklist?
 
     var body: some View {
         Group {
             if let album {
+                let rows = AlbumTracklist.rows(library: album.tracks, whole: whole, artist: album.artistName,
+                                               albumTitle: album.name, artworkURL: model.coverURL(album.coverArtID ?? album.id, size: 600))
+                let missing = rows.contains { if case .missing = $0 { return true }; return false }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        AlbumHeader(album: album)
-                        TrackList(tracks: album.tracks, numbered: true, albumBadge: AudioQuality.albumBadge(album.tracks),
-                                  albumArtist: album.artistName, context: .album(album))
+                        AlbumHeader(album: album, entries: missing ? rows.map(\.queueEntry) : nil)
+                        if missing {
+                            AlbumRowsList(rows: rows, album: album)
+                        } else {
+                            TrackList(tracks: album.tracks, numbered: true, albumBadge: AudioQuality.albumBadge(album.tracks),
+                                      albumArtist: album.artistName, context: .album(album))
+                        }
                     }
                     .padding(24)
                 }
@@ -110,10 +119,15 @@ struct AlbumDetailView: View {
         }
         .navigationTitle(album?.name ?? "")
         .task(id: albumID) {
+            whole = nil
             do {
                 album = try await model.subsonic?.album(id: albumID)
             } catch {
                 self.error = ErrorText.of(error)
+                return
+            }
+            if let continuo = model.continuo, !model.offline {
+                whole = try? await continuo.libraryAlbumTracklist(libraryAlbumID: albumID)
             }
         }
     }
@@ -122,6 +136,9 @@ struct AlbumDetailView: View {
 private struct AlbumHeader: View {
     @Environment(AppModel.self) private var model
     @State var album: Album
+    /// The whole album when the library only partly has it: Play plays it all, the missing songs
+    /// fetched as the queue reaches them.
+    var entries: [QueueEntry]? = nil
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 22) {
@@ -145,9 +162,17 @@ private struct AlbumHeader: View {
                 }
                 .font(.callout).foregroundStyle(.secondary)
                 HStack(spacing: 10) {
-                    Button { model.player.play(album.tracks, context: .album(album)) } label: { Label("Play", systemImage: "play.fill") }
+                    Button {
+                        if let entries { model.player.play(entries: entries, title: album.name) } else { model.player.play(album.tracks, context: .album(album)) }
+                    } label: { Label("Play", systemImage: "play.fill") }
                         .buttonStyle(.borderedProminent)
-                    Button { model.player.play(album.tracks, shuffle: true, context: .album(album)) } label: { Label("Shuffle", systemImage: "shuffle") }
+                    Button {
+                        if let entries {
+                            model.player.play(entries: entries, shuffle: true, title: album.name)
+                        } else {
+                            model.player.play(album.tracks, shuffle: true, context: .album(album))
+                        }
+                    } label: { Label("Shuffle", systemImage: "shuffle") }
                     if model.usesRatings {
                         Menu {
                             ForEach(1...5, id: \.self) { stars in
@@ -293,6 +318,73 @@ private struct TrackRow: View {
         .padding(.horizontal, 8)
         .background(hovering ? Color.primary.opacity(0.05) : .clear, in: RoundedRectangle(cornerRadius: 5))
         .onHover { hovering = $0 }
+    }
+}
+
+/// An album the library only partly has, as the whole album: the songs you have (as anywhere), and
+/// in their places the ones you don't, dimmed; a click on any plays the album from there, the
+/// missing songs fetched (Play now) as the queue reaches them, as on the Android app.
+private struct AlbumRowsList: View {
+    @Environment(AppModel.self) private var model
+    let rows: [AlbumRow]
+    let album: Album
+
+    var body: some View {
+        let badge = AudioQuality.albumBadge(album.tracks)
+        let have = rows.filter { if case .have = $0 { return true }; return false }.count
+        VStack(alignment: .leading, spacing: 0) {
+            Text("You have \(have) of the album's \(rows.count) songs: the others play through Play now, or can be requested.")
+                .font(.callout).foregroundStyle(.secondary).padding(.bottom, 8)
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                Group {
+                    switch row {
+                    case let .have(track, _):
+                        TrackRow(track: track, index: index, numbered: true, showArtwork: false, albumBadge: badge,
+                                 albumArtist: album.artistName, isCurrent: model.player.current?.libraryTrack?.id == track.id)
+                            .contextMenu { Button("Play from Here") { play(from: index) } }
+                    case let .missing(song, _):
+                        HStack(spacing: 12) {
+                            Text("\(index + 1)").foregroundStyle(.tertiary).frame(width: 26, alignment: .trailing).monospacedDigit()
+                            Text(song.title).foregroundStyle(.secondary).lineLimit(1)
+                            Spacer()
+                            if let status = model.fetchStatus[song.key] {
+                                ProgressView().controlSize(.small)
+                                Text(status).font(.caption).foregroundStyle(.secondary)
+                            } else {
+                                Text("Not in library").font(.caption).foregroundStyle(.tertiary)
+                            }
+                            Text(formatDuration(TimeInterval(song.durationMs ?? 0) / 1000)).foregroundStyle(.tertiary).monospacedDigit()
+                        }
+                        .padding(.vertical, 6).padding(.horizontal, 8)
+                        .contextMenu {
+                            Button("Play Now") { play(from: index) }
+                            Button("Play Next") { model.queueCatalog(song, next: true) }
+                            Button("Add to Queue") { model.queueCatalog(song, next: false) }
+                            if song.recordingID != nil {
+                                Divider()
+                                Button("Request Song") { Task { await model.request(song) } }
+                            }
+                        }
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) { play(from: index) }
+                Divider().opacity(0.4)
+            }
+        }
+    }
+
+    private func play(from index: Int) {
+        model.player.play(entries: rows.map(\.queueEntry), startAt: index, title: album.name)
+    }
+}
+
+extension AlbumRow {
+    var queueEntry: QueueEntry {
+        switch self {
+        case let .have(track, _): .track(track)
+        case let .missing(song, _): .catalog(song)
+        }
     }
 }
 
