@@ -206,6 +206,19 @@ struct DiscoveryPlaylistView: View {
                 Text(playlist.title).font(.largeTitle.weight(.bold))
                 if let d = playlist.description { Text(d).foregroundStyle(.secondary) }
                 if let page {
+                    // The whole playlist: library songs play at once, the rest are fetched (Play now)
+                    // one at a time as the queue reaches them, as on the Android app.
+                    HStack {
+                        Button { model.player.play(entries: page.tracks.map(QueueEntry.catalog), title: playlist.title) } label: {
+                            Label("Play", systemImage: "play.fill")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        Button { model.player.play(entries: page.tracks.map(QueueEntry.catalog), shuffle: true, title: playlist.title) } label: {
+                            Label("Shuffle", systemImage: "shuffle")
+                        }
+                    }
+                    .controlSize(.large)
+                    .disabled(page.tracks.isEmpty || !model.isContinuo)
                     CatalogTrackList(tracks: page.tracks)
                 } else {
                     ProgressView()

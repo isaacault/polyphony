@@ -335,6 +335,13 @@ public final class PlayerController {
         queue.update(id, to: entry)
     }
 
+    /// A catalogue entry became the library's copy or a Play now: every queue row holding it changes.
+    public func replace(_ old: QueueEntry, with new: QueueEntry) {
+        for item in [queue.current].compactMap({ $0 }) + queue.upNext + queue.history where item.entry == old {
+            queue.update(item.id, to: new)
+        }
+    }
+
     // MARK: The engine
 
     /// Playback speed, kept from song to song (as the Android app's Speed).
