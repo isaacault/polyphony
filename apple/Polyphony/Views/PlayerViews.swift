@@ -49,8 +49,12 @@ struct PlayerBar: View {
             .help("Now Playing")
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.title).font(.callout.weight(.medium)).lineLimit(1)
-                Text([entry.artist, entry.album].compactMap { $0 }.joined(separator: " — "))
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                if case let .catalog(song) = entry {
+                    Text(model.fetchStatus[song.key] ?? "Getting it…").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                } else {
+                    Text([entry.artist, entry.album].compactMap { $0 }.joined(separator: " — "))
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
             if case let .playNow(stream, _) = entry {
                 Image(systemName: "bolt.fill").font(.caption).foregroundStyle(.secondary).help("Play now: streamed while it downloads")
@@ -156,7 +160,13 @@ struct QueueView: View {
                     }
                 } header: {
                     HStack {
-                        Text(player.queue.title.map { "Up Next · \($0)" } ?? "Up Next")
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(player.queue.title.map { "Up Next · \($0)" } ?? "Up Next")
+                            // As the Android app's queue: how much is left.
+                            let left = player.queue.upNext
+                            Text("\(left.count) songs · \(formatLong(left.reduce(0) { $0 + $1.entry.duration }))")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
                         Spacer()
                         Button("Save as Playlist") { saveAsPlaylist() }.buttonStyle(.link).font(.caption)
                         Button("Clear") { player.clearUpNext() }.buttonStyle(.link).font(.caption)
@@ -205,14 +215,28 @@ private struct QueueRow: View {
             Artwork(url: model.artworkURL(for: item.entry, size: 80), cornerRadius: 3).frame(width: 32, height: 32)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.entry.title).lineLimit(1)
-                Text(item.entry.artist ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
+            if let track = item.entry.libraryTrack, model.downloads.isDownloaded(track.id) {
+                Image(systemName: "arrow.down.circle.fill").font(.caption).foregroundStyle(.secondary)
+                    .help("On this Mac: plays without a connection")
+            } else if case .playNow = item.entry {
+                Image(systemName: "bolt.fill").font(.caption).foregroundStyle(.secondary).help("Play now: streamed while it downloads")
+            }
             Text(formatDuration(item.entry.duration)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
         }
         .opacity(dimmed ? 0.55 : 1)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { model.player.jump(to: item.id) }
+    }
+
+    /// The artist, or for a catalogue song still to fetch where it is ("Finding a copy…").
+    private var subtitle: String {
+        if case let .catalog(song) = item.entry {
+            return model.fetchStatus[song.key] ?? [song.artist, "fetched when it's reached"].compactMap { $0 }.joined(separator: " · ")
+        }
+        return item.entry.artist ?? ""
     }
 }
 

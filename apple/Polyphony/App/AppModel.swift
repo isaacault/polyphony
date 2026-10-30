@@ -44,8 +44,6 @@ final class AppModel {
     }
 
 
-    /// A Play now song being fetched before it can play.
-    private(set) var pendingPlayNow: PlayNowStream?
 
     /// Lists already fetched this session, shown at once when a page opens again (then refreshed).
     @ObservationIgnored var albumLists: [SubsonicClient.AlbumListType: [Album]] = [:]
@@ -544,6 +542,30 @@ final class AppModel {
         }
     }
 
+    /// Where each catalogue song being fetched is ("Finding a copy…", "Downloading 40%"), by its key,
+    /// for the queue and the player bar (the Android app's Play now statuses).
+    private(set) var fetchStatus: [String: String] = [:]
+
+    private static func fetchText(_ stream: PlayNowStream) -> String {
+        switch stream.status {
+        case "queued": "Waiting its turn"
+        case "searching": "Finding a copy…"
+        default: stream.percent > 0 ? "Downloading \(Int(stream.percent))%" : "Getting it…"
+        }
+    }
+
+    /// Catalogue songs played from [index] on: each fetched as the queue reaches it.
+    func playCatalog(_ songs: [CatalogTrack], from index: Int, title: String?) {
+        player.play(entries: songs.map(QueueEntry.catalog), startAt: index, title: title)
+    }
+
+    /// Play Next / Add to Queue for a catalogue song, as the Android app says it.
+    func queueCatalog(_ song: CatalogTrack, next: Bool) {
+        if next { player.playNext([.catalog(song)]) } else { player.addToQueue([.catalog(song)]) }
+        let fetched = song.availability.isInLibrary ? "" : "; fetching it from Soulseek"
+        notice = next ? "\(song.title) plays next\(fetched)" : "Added \(song.title) to the queue\(fetched)"
+    }
+
     /// A catalogue song as something the player can play: the library's copy when it's there, else a
     /// Play now continuo fetches (nil when it can't, said in a notice).
     private func fetch(_ song: CatalogTrack) async -> QueueEntry? {
@@ -553,9 +575,12 @@ final class AppModel {
             return .track(track)
         }
         guard let continuo else { return nil }
+        defer { fetchStatus[song.key] = nil }
         do {
+            fetchStatus[song.key] = "Finding a copy…"
             var stream = try await continuo.startPlayNow(song, queued: true)
             for _ in 0..<180 where !stream.playable && !stream.failed {
+                fetchStatus[song.key] = Self.fetchText(stream)
                 try await Task.sleep(for: .seconds(1))
                 stream = try await continuo.playNow(id: stream.id)
             }
@@ -581,30 +606,8 @@ final class AppModel {
             player.play(album.tracks, startAt: index, title: album.name)
             return
         }
-        await playNow(track)
-    }
-
-    func playNow(_ track: CatalogTrack) async {
-        guard let continuo else { return }
-        do {
-            var stream = try await continuo.startPlayNow(track)
-            pendingPlayNow = stream
-            // Poll until there's enough to play: usually seconds, up to a couple of minutes.
-            for _ in 0..<180 where !stream.playable && !stream.failed {
-                try await Task.sleep(for: .seconds(1))
-                stream = try await continuo.playNow(id: stream.id)
-                pendingPlayNow = stream
-            }
-            pendingPlayNow = nil
-            if stream.failed || !stream.playable {
-                notice = stream.error ?? "Couldn't get \(track.title) right now."
-                return
-            }
-            player.play(entries: [.playNow(stream, track)], title: track.title)
-        } catch {
-            pendingPlayNow = nil
-            handle(error)
-        }
+        // Into the queue at once (the player bar says where it's at), fetched as it's reached.
+        playCatalog([track], from: 0, title: track.title)
     }
 
     /// Whether continuo took it (or already had it): the page's button says Requested only then.
