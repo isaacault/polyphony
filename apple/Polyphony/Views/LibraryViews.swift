@@ -10,6 +10,8 @@ struct AlbumsView: View {
     @State private var showSingles = false
     @State private var loading = true
     @State private var filter = ""
+    /// Grid of covers or a list (the Android app's "Show as list"), remembered.
+    @AppStorage("albums.asList") private var asList = false
 
     /// Full albums by default; albums where you have just one song are under "Single songs".
     private var shown: [Album] {
@@ -25,6 +27,8 @@ struct AlbumsView: View {
                 ProgressView().padding(60)
             } else if shown.isEmpty {
                 Placeholder(title: showSingles ? "No single songs" : "No albums", symbol: "square.stack")
+            } else if asList {
+                AlbumList(albums: shown).padding(.horizontal, 20).padding(.vertical, 12)
             } else {
                 AlbumGrid(albums: shown).padding(20)
             }
@@ -39,6 +43,13 @@ struct AlbumsView: View {
                 }
                 .pickerStyle(.segmented)
             }
+            Picker("View", selection: $asList) {
+                Label("Grid", systemImage: "square.grid.2x2").tag(false)
+                Label("List", systemImage: "list.bullet").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelStyle(.iconOnly)
+            .help("Show as grid or list")
             Picker("Sort", selection: $sort) {
                 Text("Name").tag(SubsonicClient.AlbumListType.alphabeticalByName)
                 Text("Artist").tag(SubsonicClient.AlbumListType.alphabeticalByArtist)
