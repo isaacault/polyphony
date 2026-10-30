@@ -388,7 +388,7 @@ struct ArtistDetailView: View {
                 }
                 if let top = catalog?.topTracks, !top.isEmpty {
                     Section {
-                        CatalogTrackList(tracks: Array(top.prefix(10)))
+                        CatalogTrackList(tracks: Array(top.prefix(10)), playsAsList: true, title: artist?.name)
                     } header: { SectionTitle("Top Songs") }
                 }
                 if !albums.isEmpty {

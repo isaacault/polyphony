@@ -213,10 +213,14 @@ private struct TopHitCard: View {
 struct CatalogTrackList: View {
     @Environment(AppModel.self) private var model
     let tracks: [CatalogTrack]
+    /// A collection (a discovery playlist, top songs): a click plays it from that song on. Otherwise
+    /// (search results) the song alone.
+    var playsAsList = false
+    var title: String?
 
     var body: some View {
         LazyVStack(spacing: 0) {
-            ForEach(tracks) { track in
+            ForEach(Array(tracks.enumerated()), id: \.element.key) { index, track in
                 HStack(spacing: 12) {
                     Artwork(url: track.artworkURL, cornerRadius: 3).frame(width: 34, height: 34)
                     VStack(alignment: .leading, spacing: 2) {
@@ -225,9 +229,9 @@ struct CatalogTrackList: View {
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer()
-                    if model.pendingPlayNow?.title == track.title {
+                    if let status = model.fetchStatus[track.key] {
                         ProgressView().controlSize(.small)
-                        Text(playNowStatus).font(.caption).foregroundStyle(.secondary)
+                        Text(status).font(.caption).foregroundStyle(.secondary)
                     } else if !track.availability.isInLibrary {
                         Text("Not in library").font(.caption).foregroundStyle(.secondary)
                     }
@@ -235,10 +239,14 @@ struct CatalogTrackList: View {
                 }
                 .padding(.vertical, 6).padding(.horizontal, 8)
                 .contentShape(Rectangle())
-                .onTapGesture(count: 2) { Task { await model.play(track) } }
+                // A click plays (as a tap does on the phone): it's in the queue at once, fetched as it's reached.
+                .onTapGesture { play(index) }
                 .contextMenu {
-                    Button(track.availability.isInLibrary ? "Play" : "Play Now") { Task { await model.play(track) } }
+                    Button(track.availability.isInLibrary ? "Play" : "Play Now") { play(index) }
+                    Button("Play Next") { model.queueCatalog(track, next: true) }
+                    Button("Add to Queue") { model.queueCatalog(track, next: false) }
                     if !track.availability.isInLibrary, track.recordingID != nil {
+                        Divider()
                         Button("Request Song") { Task { await model.request(track) } }
                     }
                 }
@@ -247,9 +255,15 @@ struct CatalogTrackList: View {
         }
     }
 
-    private var playNowStatus: String {
-        guard let s = model.pendingPlayNow else { return "" }
-        return s.status == "searching" ? "Finding it…" : "Getting it… \(Int(s.percent))%"
+    private func play(_ index: Int) {
+        if playsAsList {
+            model.playCatalog(tracks, from: index, title: title)
+        } else if tracks[index].availability.isInLibrary {
+            // The library's copy, in its album.
+            Task { await model.play(tracks[index]) }
+        } else {
+            model.playCatalog([tracks[index]], from: 0, title: tracks[index].title)
+        }
     }
 }
 
@@ -293,8 +307,7 @@ struct CatalogAlbumView: View {
                             if let page, !page.tracks.isEmpty, model.isContinuo {
                                 // Every song, fetched one at a time as the queue reaches it (Play now).
                                 Button {
-                                    model.player.play(entries: page.tracks.map { .catalog(CatalogTrackBuilder.make($0, album: album)) },
-                                                      title: album.title)
+                                    model.playCatalog(page.tracks.map { CatalogTrackBuilder.make($0, album: album) }, from: 0, title: album.title)
                                 } label: { Label("Play Now", systemImage: "play.fill") }
                                     .controlSize(.large)
                                     .help("Play the album now: each song is fetched as the queue reaches it")
@@ -314,9 +327,12 @@ struct CatalogAlbumView: View {
                             }
                             .padding(.vertical, 6).padding(.horizontal, 8)
                             .contentShape(Rectangle())
-                            .onTapGesture(count: 2) { Task { await playNow(entry) } }
+                            // A click plays the album from this song, the rest queued and fetched in turn.
+                            .onTapGesture { playFrom(entry, in: page) }
                             .contextMenu {
-                                Button("Play Now") { Task { await playNow(entry) } }
+                                Button("Play Now") { playFrom(entry, in: page) }
+                                Button("Play Next") { model.queueCatalog(CatalogTrackBuilder.make(entry, album: album), next: true) }
+                                Button("Add to Queue") { model.queueCatalog(CatalogTrackBuilder.make(entry, album: album), next: false) }
                             }
                             Divider().opacity(0.4)
                         }
@@ -360,9 +376,9 @@ struct CatalogAlbumView: View {
             .disabled(requested)
     }
 
-    private func playNow(_ entry: CatalogTracklistEntry) async {
-        let track = CatalogTrackBuilder.make(entry, album: album)
-        await model.play(track)
+    private func playFrom(_ entry: CatalogTracklistEntry, in page: CatalogAlbumPage) {
+        let songs = page.tracks.map { CatalogTrackBuilder.make($0, album: album) }
+        model.playCatalog(songs, from: page.tracks.firstIndex(of: entry) ?? 0, title: album.title)
     }
 }
 
@@ -384,7 +400,7 @@ struct CatalogArtistView: View {
                     }
                 }
                 if let top = page?.topTracks, !top.isEmpty {
-                    Section { CatalogTrackList(tracks: Array(top.prefix(10))) } header: { SectionTitle("Top Songs") }
+                    Section { CatalogTrackList(tracks: Array(top.prefix(10)), playsAsList: true, title: artist.name) } header: { SectionTitle("Top Songs") }
                 }
                 if !albums.isEmpty {
                     Section { CatalogAlbumGrid(albums: albums) } header: { SectionTitle("Discography") }

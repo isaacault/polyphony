@@ -156,7 +156,7 @@ struct DiscoveryPlaylistView: View {
                     }
                     .controlSize(.large)
                     .disabled(page.tracks.isEmpty || !model.isContinuo)
-                    CatalogTrackList(tracks: page.tracks)
+                    CatalogTrackList(tracks: page.tracks, playsAsList: true, title: playlist.title)
                 } else {
                     ProgressView()
                 }
