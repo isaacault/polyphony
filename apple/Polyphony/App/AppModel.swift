@@ -416,7 +416,7 @@ final class AppModel {
             goOffline()
             return
         }
-        notice = (error as? CustomStringConvertible)?.description ?? error.localizedDescription
+        notice = ErrorText.of(error)
     }
 
     // MARK: Offline

@@ -216,7 +216,7 @@ public final class DLNAEngine: AudioEngine {
     }
 
     private static func explain(_ error: Error, url: String?) -> String {
-        var message = (error as? CustomStringConvertible)?.description ?? "The speaker didn't answer."
+        var message = ErrorText.of(error)
         if url?.lowercased().hasPrefix("https://") == true {
             message += " Speakers often can't play HTTPS links: set a plain-HTTP receiver address in Settings."
         }
