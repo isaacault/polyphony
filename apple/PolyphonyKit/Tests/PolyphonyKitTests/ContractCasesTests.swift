@@ -1,0 +1,205 @@
+import Foundation
+import Testing
+@testable import PolyphonyKit
+
+/// contract/cases: the rules the Kotlin side (shared/domain, android/app) tests with the same files,
+/// so the apps can't drift apart.
+private func contract(_ name: String) throws -> [String: Any] {
+    // Tests/PolyphonyKitTests/ → the repo root, four levels up.
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let data = try Data(contentsOf: root.appendingPathComponent("contract/cases/\(name).json"))
+    return try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+}
+
+private func string(_ value: Any?) -> String? { value as? String }
+private func int(_ value: Any?) -> Int? { (value as? NSNumber)?.intValue }
+private func double(_ value: Any?) -> Double? { (value as? NSNumber)?.doubleValue }
+
+struct ContractCasesTests {
+    @Test func artistNames() throws {
+        let cases = try #require(try contract("artist-credits")["names"] as? [[String: Any]])
+        #expect(!cases.isEmpty)
+        for c in cases {
+            #expect(ArtistCredits.names(string(c["tag"])) == (c["names"] as? [String]), "\(c)")
+        }
+    }
+
+    @Test func artistCredits() throws {
+        let cases = try #require(try contract("artist-credits")["credits"] as? [[String: Any]])
+        for c in cases {
+            #expect(ArtistCredits.credits(string(c["tag"]), string(c["artist"]) ?? "") == (c["credits"] as? Bool), "\(c)")
+        }
+    }
+
+    private func track(_ c: [String: Any], _ i: Int) -> Track {
+        Track(id: "t\(i)", title: "t\(i)", bitDepth: int(c["bitDepth"]), sampleRateHz: int(c["sampleRate"]),
+              container: string(c["container"]))
+    }
+
+    @Test func qualityBadges() throws {
+        let cases = try #require(try contract("quality")["badges"] as? [[String: Any]])
+        for (i, c) in cases.enumerated() {
+            #expect(AudioQuality.badge(for: track(c, i)) == string(c["badge"]), "\(c)")
+        }
+    }
+
+    @Test func albumBadgesAndTrackChips() throws {
+        let albums = try #require(try contract("quality")["albums"] as? [[String: Any]])
+        for album in albums {
+            let specs = try #require(album["tracks"] as? [[String: Any]])
+            let tracks = specs.enumerated().map { track($1, $0) }
+            let badge = AudioQuality.albumBadge(tracks)
+            #expect(badge == string(album["badge"]), "\(album["about"] ?? "")")
+            for (i, spec) in specs.enumerated() {
+                #expect(AudioQuality.trackChip(tracks[i], albumBadge: badge) == string(spec["chip"]), "track \(i): \(album["about"] ?? "")")
+            }
+        }
+    }
+
+    @Test func resumePoints() throws {
+        let cases = try #require(try contract("resume")["cases"] as? [[String: Any]])
+        #expect(!cases.isEmpty)
+        for c in cases {
+            let tracks = (c["tracks"] as? [String] ?? []).map { Track(id: $0, title: $0, duration: 200) }
+            let entry = RecentContext(context: PlayContext(kind: .album, id: "al", title: "Album"), trackID: string(c["trackId"]),
+                                      trackIndex: int(c["trackIndex"]) ?? 0, positionMs: int(c["positionMs"]) ?? 0,
+                                      updatedAt: Date())
+            let expected = ResumePoint(index: int(c["index"]) ?? -1, positionMs: int(c["resumeMs"]) ?? -1)
+            #expect(ResumePoint.of(tracks, entry) == expected, "\(c["about"] ?? "")")
+        }
+    }
+
+    @Test func historyKeepsTheNewestOncePerCollection() {
+        var h = ListeningHistory()
+        h.limit = 2
+        let a = PlayContext(kind: .album, id: "a", title: "A"), b = PlayContext(kind: .album, id: "b", title: "B")
+        let c = PlayContext(kind: .playlist, id: "c", title: "C")
+        h.record(a, trackID: "1", index: 0, positionMs: 0)
+        h.record(b, trackID: "2", index: 0, positionMs: 0)
+        h.record(a, trackID: "3", index: 2, positionMs: 5000)
+        #expect(h.entries.map(\.context.id) == ["a", "b"] && h.entry(for: a)?.trackID == "3")
+        h.record(c, trackID: "4", index: 0, positionMs: 0)
+        #expect(h.entries.map(\.context.id) == ["c", "a"], "at most the limit")
+    }
+}
+
+struct ReplayGainContractTests {
+    @Test func volumesAsTheContractHasThem() throws {
+        let cases = try #require(try contract("replaygain")["cases"] as? [[String: Any]])
+        #expect(cases.count >= 15)
+        for c in cases {
+            let tags = ReplayGain.Tags(trackGainDb: double(c["trackGain"]), albumGainDb: double(c["albumGain"]),
+                                       trackPeak: double(c["trackPeak"]), albumPeak: double(c["albumPeak"]))
+            let track = Track(id: "t", title: "t", albumID: "a", replayGain: tags)
+            let settings = ReplayGain.Settings(mode: try #require(ReplayGain.Mode(rawValue: string(c["mode"]) ?? "")),
+                                               preampDb: double(c["preampDb"]) ?? 0,
+                                               preventClipping: (c["preventClipping"] as? NSNumber)?.boolValue ?? true)
+            let volume = ReplayGain.volume(for: track, settings, sameAlbumAsNeighbour: (c["sameAlbum"] as? NSNumber)?.boolValue ?? false)
+            let expected = try #require(double(c["volume"]))
+            #expect(abs(Double(volume) - expected) <= 0.002, "\(string(c["name"]) ?? "?"): \(volume)")
+        }
+    }
+}
+
+struct ReceiverContractTests {
+    @Test func receiverURLsAsTheContractHasThem() throws {
+        let cases = try #require(try contract("receiver")["cases"] as? [[String: Any]])
+        #expect(cases.count >= 11)
+        for c in cases {
+            let got = ReceiverURL.rewrite(try #require(string(c["url"])), baseURL: try #require(string(c["baseUrl"])),
+                                          receiver: string(c["override"]), lanIP: string(c["lanIp"]))
+            #expect(got == string(c["expected"]), "\(string(c["name"]) ?? "?")")
+        }
+    }
+}
+
+struct AlbumCreditContractTests {
+    @Test func albumPageCreditsAsTheContractHasThem() throws {
+        let cases = try #require(try contract("album-credit")["cases"] as? [[String: Any]])
+        #expect(cases.count >= 14)
+        for c in cases {
+            let track = Track(id: "t", title: try #require(string(c["title"])), artistName: string(c["artist"]))
+            let credit = c["credit"] as? [String: Any]
+            let expected: AlbumCredit? = credit.map { c in string(c["featuring"]).map(AlbumCredit.featuring) ?? .other(string(c["other"]) ?? "") }
+            #expect(AlbumCredit.of(track, albumArtist: string(c["albumArtist"])) == expected, "\(string(c["name"]) ?? "?")")
+        }
+    }
+}
+
+struct AlbumTracklistContractTests {
+    @Test func albumPagesAsTheContractHasThem() throws {
+        let cases = try #require(try contract("album-tracklist")["cases"] as? [[String: Any]])
+        #expect(cases.count >= 8)
+        for c in cases {
+            let library = try #require(c["library"] as? [String]).enumerated().map { Track(id: "t\($0.offset)", title: $0.element, discNumber: 1) }
+            let whole = (c["tracklist"] as? [String]).map { titles in
+                LibraryAlbumTracklist(releaseGroupID: "rg", tracks: titles.enumerated().map {
+                    CatalogTracklistEntry(position: $0.offset + 1, disc: 1, title: $0.element, durationMs: 1000, recordingID: "rec-\($0.offset)")
+                })
+            }
+            let rows = AlbumTracklist.rows(library: library, whole: whole, artist: nil, albumTitle: nil).map { row -> String in
+                switch row {
+                case let .have(t, _): "have:" + t.title
+                case let .missing(t, _): "missing:" + t.title
+                }
+            }
+            #expect(rows == (c["rows"] as? [String]), "\(string(c["name"]) ?? "?")")
+        }
+    }
+
+    @Test func aMissingSongCarriesWhatPlayNowNeeds() {
+        let rows = AlbumTracklist.rows(library: [Track(id: "t", title: "Visit Croatia")],
+                                       whole: LibraryAlbumTracklist(releaseGroupID: "rg", tracks: [
+                                           CatalogTracklistEntry(position: 1, disc: 1, title: "Song of Gratitude", durationMs: 1000, recordingID: "rec-0"),
+                                           CatalogTracklistEntry(position: 2, disc: 1, title: "Visit Croatia", durationMs: 1000, recordingID: "rec-1"),
+                                       ]), artist: "Alabaster dePlume", albumTitle: "To Cy & Lee")
+        guard case let .missing(song, _) = rows.first else { Issue.record("first should be missing"); return }
+        #expect(song.recordingID == "rec-0" && song.albumReleaseGroupID == "rg" && song.artist == "Alabaster dePlume" && song.key == "mb:rec:rec-0")
+    }
+}
+
+struct QueueContractTests {
+    @Test func theQueueAsTheContractHasIt() throws {
+        let cases = try #require(try contract("queue")["cases"] as? [[String: Any]])
+        #expect(cases.count >= 7)
+        func entry(_ id: String) -> QueueEntry { .track(Track(id: id, title: id)) }
+        for c in cases {
+            let name = string(c["name"]) ?? "?"
+            let start = try #require(c["start"] as? [String])
+            var q = PlayQueue(start.map(entry))
+            for op in try #require(c["ops"] as? [[String: Any]]) {
+                if let id = string(op["add"]) { q.append([entry(id)]) }
+                if let id = string(op["next"]) { q.playNext([entry(id)]) }
+                if let n = int(op["advance"]) { for _ in 0..<n { q.advanceOnEnd() } }
+                if let list = op["play"] as? [String] {
+                    let waiting = q.waitingQueued
+                    q = PlayQueue(list.map(entry), startAt: int(op["at"]) ?? 0)
+                    q.carryQueued(waiting)
+                }
+            }
+            if let current = string(c["current"]) { #expect(q.current?.entry.libraryTrack?.id == current, "\(name)") }
+            let pairs: [[Any]] = try #require(c["upNext"] as? [[Any]])
+            var expected: [String] = []
+            for pair in pairs {
+                let id = pair[0] as? String ?? "?"
+                let flag = (pair[1] as? NSNumber)?.boolValue ?? false
+                expected.append("\(id):\(flag)")
+            }
+            var got: [String] = []
+            for item in q.upNext {
+                let id = item.entry.libraryTrack?.id ?? "?"
+                got.append("\(id):\(item.queued)")
+            }
+            #expect(got == expected, Comment(rawValue: name))
+        }
+    }
+
+    @Test func shuffleMixesTheListNeverYourQueue() {
+        var q = PlayQueue((0..<20).map { .track(Track(id: "s\($0)", title: "s\($0)")) })
+        q.append([.track(Track(id: "mine-1", title: "m1")), .track(Track(id: "mine-2", title: "m2"))])
+        q.setShuffle(true)
+        #expect(q.upNext.prefix(2).map { $0.entry.libraryTrack?.id } == ["mine-1", "mine-2"])
+        #expect(q.queuedNext == 2)
+    }
+}

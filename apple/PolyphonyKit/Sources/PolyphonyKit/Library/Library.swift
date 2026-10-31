@@ -31,11 +31,13 @@ public struct Album: Sendable, Hashable, Identifiable {
     public var coverArtID: String?
     public var starred: Bool
     /// Filled in by `SubsonicClient.album(id:)`; empty in lists.
+    /// The user's 1–5 stars for the album (ratings mode); nil when unrated.
+    public var rating: Int?
     public var tracks: [Track]
 
     public init(id: String, name: String, artistName: String? = nil, artistID: String? = nil, year: Int? = nil,
                 genre: String? = nil, songCount: Int = 0, duration: TimeInterval = 0, coverArtID: String? = nil,
-                starred: Bool = false, tracks: [Track] = []) {
+                starred: Bool = false, rating: Int? = nil, tracks: [Track] = []) {
         self.id = id
         self.name = name
         self.artistName = artistName
@@ -46,11 +48,12 @@ public struct Album: Sendable, Hashable, Identifiable {
         self.duration = duration
         self.coverArtID = coverArtID
         self.starred = starred
+        self.rating = rating
         self.tracks = tracks
     }
 }
 
-public struct Track: Sendable, Hashable, Identifiable {
+public struct Track: Sendable, Hashable, Identifiable, Codable {
     public let id: String
     public var title: String
     public var albumID: String?
@@ -68,11 +71,35 @@ public struct Track: Sendable, Hashable, Identifiable {
     public var sizeBytes: Int64?
     public var coverArtID: String?
     public var starred: Bool
+    /// The user's 1–5 stars; nil when unrated.
+    public var rating: Int?
+    /// Loudness tags (OpenSubsonic replayGain), for levelling volume between songs.
+    public var replayGain: ReplayGain.Tags?
+    /// What Song Info shows besides the file's format.
+    public var details: Details?
+
+    public struct Details: Sendable, Codable, Hashable {
+        public var year: Int?
+        public var genre: String?
+        public var playCount: Int?
+        /// The file's path on the server, as Navidrome reports it.
+        public var path: String?
+        public var channels: Int?
+
+        public init(year: Int? = nil, genre: String? = nil, playCount: Int? = nil, path: String? = nil, channels: Int? = nil) {
+            self.year = year
+            self.genre = genre
+            self.playCount = playCount
+            self.path = path
+            self.channels = channels
+        }
+    }
 
     public init(id: String, title: String, albumID: String? = nil, albumName: String? = nil, artistName: String? = nil,
                 artistID: String? = nil, trackNumber: Int? = nil, discNumber: Int? = nil, duration: TimeInterval = 0,
                 bitRateKbps: Int? = nil, bitDepth: Int? = nil, sampleRateHz: Int? = nil, container: String? = nil,
-                sizeBytes: Int64? = nil, coverArtID: String? = nil, starred: Bool = false) {
+                sizeBytes: Int64? = nil, coverArtID: String? = nil, starred: Bool = false, rating: Int? = nil,
+                replayGain: ReplayGain.Tags? = nil, details: Details? = nil) {
         self.id = id
         self.title = title
         self.albumID = albumID
@@ -89,6 +116,9 @@ public struct Track: Sendable, Hashable, Identifiable {
         self.sizeBytes = sizeBytes
         self.coverArtID = coverArtID
         self.starred = starred
+        self.rating = rating
+        self.replayGain = replayGain
+        self.details = details
     }
 
     private static let losslessContainers: Set<String> = ["flac", "alac", "wav", "aiff", "aif", "ape", "wv", "dsf", "dff"]
@@ -96,6 +126,57 @@ public struct Track: Sendable, Hashable, Identifiable {
     public var isLossless: Bool {
         guard let container else { return false }
         return Self.losslessContainers.contains(container.lowercased())
+    }
+}
+
+public struct Playlist: Sendable, Hashable, Identifiable {
+    public let id: String
+    public var name: String
+    public var comment: String?
+    public var owner: String?
+    public var isPublic: Bool
+    public var songCount: Int
+    public var duration: TimeInterval
+    public var coverArtID: String?
+    /// Filled in by `SubsonicClient.playlist(id:)`; empty in lists.
+    public var tracks: [Track]
+
+    public init(id: String, name: String, comment: String? = nil, owner: String? = nil, isPublic: Bool = false,
+                songCount: Int = 0, duration: TimeInterval = 0, coverArtID: String? = nil, tracks: [Track] = []) {
+        self.id = id
+        self.name = name
+        self.comment = comment
+        self.owner = owner
+        self.isPublic = isPublic
+        self.songCount = songCount
+        self.duration = duration
+        self.coverArtID = coverArtID
+        self.tracks = tracks
+    }
+}
+
+public struct Genre: Sendable, Hashable, Identifiable {
+    public var id: String { name }
+    public var name: String
+    public var songCount: Int
+    public var albumCount: Int
+}
+
+public struct ArtistInfo: Sendable, Hashable {
+    public var biography: String?
+    public var imageURL: URL?
+    public var similarArtists: [Artist]
+}
+
+public struct Starred: Sendable, Hashable {
+    public var artists: [Artist] = []
+    public var albums: [Album] = []
+    public var tracks: [Track] = []
+
+    public init(artists: [Artist] = [], albums: [Album] = [], tracks: [Track] = []) {
+        self.artists = artists
+        self.albums = albums
+        self.tracks = tracks
     }
 }
 

@@ -1,0 +1,194 @@
+import AVFoundation
+import Foundation
+import PolyphonyKit
+
+/// PolyphonyKit's AudioEngine on AVFoundation. An AVQueuePlayer holds the current item and the
+/// preloaded next one, so one song runs into the next without a gap; when the controller then asks
+/// for the song the queue player has already moved on to, it's left playing rather than reloaded.
+@MainActor
+final class AVPlayerEngine: AudioEngine {
+    var onEvent: ((AudioEvent) -> Void)?
+
+    /// The user's volume; the player plays at it times the song's ReplayGain level.
+    var volume: Float = 1 {
+        didSet { player.volume = volume * gain }
+    }
+    private var gain: Float = 1
+
+    /// The speed play() starts at (and the current one, while playing).
+    func setRate(_ rate: Float) {
+        player.defaultRate = rate
+        if player.rate != 0 { player.rate = rate }
+    }
+
+    func setGain(_ gain: Float) {
+        self.gain = gain
+        player.volume = volume * gain
+    }
+
+    private let player = AVQueuePlayer()
+    private var timeObserver: Any?
+    private var observations: [NSKeyValueObservation] = []
+    /// Each queued item's failure watch, dropped with the item (a long session queues thousands).
+    private var itemWatches: [ObjectIdentifier: NSKeyValueObservation] = [:]
+    /// The queue player moved on to the preloaded song by itself: the controller's next load of that
+    /// song keeps it playing. Any other load of the same song (played again) starts it over.
+    private var advancedByItself = false
+    private var endObserver: NSObjectProtocol?
+    private var preloaded: (source: AudioSource, item: AVPlayerItem)?
+    private var currentSource: AudioSource?
+    /// The item whose end means "the song ended" (the queue player may have moved on by itself).
+    private var playingItem: AVPlayerItem?
+
+    init() {
+        player.automaticallyWaitsToMinimizeStalling = true
+        player.actionAtItemEnd = .advance
+        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
+                                                      queue: .main) { [weak self] time in
+            MainActor.assumeIsolated { self?.reportPosition(time) }
+        }
+        observations.append(player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
+            // The status as it is when this runs, not as it was: a hand-off's brief pause, reported
+            // late, would otherwise say paused while the next song plays.
+            Task { @MainActor in
+                guard let self else { return }
+                self.report(self.player.timeControlStatus)
+            }
+        })
+        endObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification,
+                                                             object: nil, queue: .main) { [weak self] note in
+            let item = note.object as? AVPlayerItem
+            MainActor.assumeIsolated { self?.itemEnded(item) }
+        }
+    }
+
+    func load(_ source: AudioSource, startAt: TimeInterval, autoplay: Bool) {
+        // The queue player already moved on to the preloaded song: keep it playing.
+        if advancedByItself, source == currentSource, player.currentItem != nil, startAt == 0 {
+            advancedByItself = false
+            if autoplay {
+                player.play()
+                // Say so even when the player never stopped (no status change to report).
+                report(player.timeControlStatus)
+            }
+            return
+        }
+        if advancedByItself { DiagnosticLog.shared.log("engine", "the next song wasn't the one queued: loading it") }
+        advancedByItself = false
+        let item: AVPlayerItem
+        if let preloaded, preloaded.source == source {
+            item = preloaded.item
+        } else {
+            item = Self.item(for: source)
+        }
+        preloaded = nil
+        player.removeAllItems()
+        itemWatches = itemWatches.filter { $0.key == ObjectIdentifier(item) }
+        player.insert(item, after: nil)
+        currentSource = source
+        playingItem = item
+        watchFailures(of: item)
+        if startAt > 0 { player.seek(to: CMTime(seconds: startAt, preferredTimescale: 600)) }
+        if autoplay { player.play() } else { player.pause() }
+    }
+
+    func preload(_ next: AudioSource?) {
+        // Drop any earlier preload that's still queued behind the current item.
+        for item in player.items().dropFirst() {
+            player.remove(item)
+            itemWatches[ObjectIdentifier(item)] = nil
+        }
+        guard let next else {
+            preloaded = nil
+            return
+        }
+        let item = Self.item(for: next)
+        preloaded = (next, item)
+        watchFailures(of: item)
+        if player.canInsert(item, after: player.currentItem) {
+            player.insert(item, after: player.currentItem)
+        }
+    }
+
+    func play() { player.play() }
+
+    func pause() { player.pause() }
+
+    func seek(to time: TimeInterval) {
+        player.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    func stop() {
+        player.pause()
+        player.removeAllItems()
+        itemWatches = [:]
+        advancedByItself = false
+        currentSource = nil
+        playingItem = nil
+        preloaded = nil
+    }
+
+    // MARK: Events
+
+    private static func item(for source: AudioSource) -> AVPlayerItem {
+        // Play now audio needs continuo's bearer token on every request (seeks are range requests).
+        let options: [String: Any] = source.headers.isEmpty ? [:] : ["AVURLAssetHTTPHeaderFieldsKey": source.headers]
+        let item = AVPlayerItem(asset: AVURLAsset(url: source.url, options: options))
+        item.preferredForwardBufferDuration = 30
+        return item
+    }
+
+    private func itemEnded(_ item: AVPlayerItem?) {
+        guard let item, item === playingItem else { return }
+        // With a preloaded next item the queue player moves on by itself; the controller is told
+        // the song ended and asks for the next one, which `load` then sees is already playing.
+        itemWatches[ObjectIdentifier(item)] = nil
+        // The queue player moves on to the preloaded song by itself, but the end may be announced a
+        // moment before it has: queued counts as moved on.
+        if let preloaded, player.currentItem === preloaded.item || player.items().contains(preloaded.item) {
+            currentSource = preloaded.source
+            playingItem = preloaded.item
+            self.preloaded = nil
+            advancedByItself = true
+            DiagnosticLog.shared.log("engine", "song ended: the next one carries on (gapless)")
+        } else {
+            currentSource = nil
+            playingItem = nil
+            DiagnosticLog.shared.log("engine", "song ended: nothing queued behind it")
+        }
+        onEvent?(.ended)
+    }
+
+    private func watchFailures(of item: AVPlayerItem) {
+        guard itemWatches[ObjectIdentifier(item)] == nil else { return }
+        itemWatches[ObjectIdentifier(item)] = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+            guard item.status == .failed else { return }
+            let message = item.error?.localizedDescription ?? "Couldn't play this song."
+            Task { @MainActor in
+                // A preloaded song failing isn't the current song failing.
+                guard let self, item === self.playingItem else { return }
+                self.onEvent?(.failed(message))
+            }
+        }
+    }
+
+    private func report(_ status: AVPlayer.TimeControlStatus) {
+        switch status {
+        case .playing:
+            onEvent?(.buffering(false))
+            onEvent?(.started)
+        case .paused:
+            onEvent?(.paused)
+        case .waitingToPlayAtSpecifiedRate:
+            onEvent?(.buffering(true))
+        @unknown default:
+            break
+        }
+    }
+
+    private func reportPosition(_ time: CMTime) {
+        guard let item = player.currentItem else { return }
+        let duration = item.duration.isNumeric ? item.duration.seconds : nil
+        onEvent?(.position(time.seconds, duration: duration))
+    }
+}

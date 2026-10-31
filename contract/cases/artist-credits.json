@@ -1,0 +1,18 @@
+{
+  "about": "Which artists a track's artist tag credits (\"Appears on\"). Read by shared/domain's ContractCasesTest and apple/PolyphonyKit's ContractCasesTests: both must pass every case.",
+  "names": [
+    {"tag": "Drake feat. Rihanna & Future", "names": ["Drake", "Rihanna", "Future"]},
+    {"tag": "Calvin Harris, Dua Lipa", "names": ["Calvin Harris", "Dua Lipa"]},
+    {"tag": "Skrillex x Fred again..", "names": ["Skrillex", "Fred again.."]}
+  ],
+  "credits": [
+    {"tag": "Drake feat. Rihanna", "artist": "Rihanna", "credits": true},
+    {"tag": "Calvin Harris ft. Rihanna", "artist": "rihanna", "credits": true},
+    {"tag": "Rihanna Tribute Band", "artist": "Rihanna", "credits": false},
+    {"tag": "Yeah Yeah Yeahs", "artist": "Ye", "credits": false},
+    {"tag": null, "artist": "Drake", "credits": false},
+    {"tag": "Simon & Garfunkel", "artist": "Simon & Garfunkel", "credits": true},
+    {"tag": "Paul Simon, Simon & Garfunkel", "artist": "Simon & Garfunkel", "credits": true},
+    {"tag": "Simon & Garfunkel Revival", "artist": "Simon & Garfunkel", "credits": false}
+  ]
+}

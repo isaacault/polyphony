@@ -1,0 +1,954 @@
+import PolyphonyKit
+import SwiftUI
+
+// MARK: Albums
+
+struct AlbumsView: View {
+    @Environment(AppModel.self) private var model
+    @State private var albums: [Album] = []
+    @State private var sort: SubsonicClient.AlbumListType = .alphabeticalByName
+    /// Complete albums by default (the user's ask); partial ones, single songs, or everything on asking.
+    @AppStorage("albums.show") private var show: Shelf = .complete
+
+    enum Shelf: String { case complete, partial, singles, all }
+
+    @State private var loading = true
+    @State private var filter = ""
+    /// Grid of covers or a list (the Android app's "Show as list"), remembered.
+    @AppStorage("albums.asList") private var asList = false
+
+    /// Full albums by default; albums where you have just one song are under "Single songs".
+    private var shown: [Album] {
+        let singles = model.singleSongAlbumIDs
+        let partial = model.partialAlbumIDs
+        let picked = albums.filter { a in
+            switch show {
+            case .complete: !singles.contains(a.id) && !partial.contains(a.id)
+            case .partial: partial.contains(a.id)
+            case .singles: singles.contains(a.id)
+            case .all: true
+            }
+        }
+        guard !filter.isEmpty else { return picked }
+        return picked.filter { $0.name.localizedCaseInsensitiveContains(filter) || ($0.artistName ?? "").localizedCaseInsensitiveContains(filter) }
+    }
+
+    var body: some View {
+        ScrollView {
+            if loading && albums.isEmpty {
+                ProgressView().padding(60)
+            } else if shown.isEmpty {
+                Placeholder(title: show == .singles ? "No single songs" : show == .partial ? "No partial albums" : "No albums",
+                            symbol: "square.stack",
+                            message: show == .partial ? "Albums you only have some songs of show here (continuo counts each album's songs in the background)." : nil)
+            } else if asList {
+                AlbumList(albums: shown).padding(.horizontal, 20).padding(.vertical, 12)
+            } else {
+                AlbumGrid(albums: shown).padding(20)
+            }
+        }
+        .navigationTitle(show == .singles ? "Single Songs" : show == .partial ? "Partial Albums" : "Albums")
+        .searchable(text: $filter, placement: .toolbar, prompt: "Filter albums")
+        .toolbar {
+            if model.isContinuo {
+                Picker("Show", selection: $show) {
+                    Text("Complete").tag(Shelf.complete)
+                    Text("Partial").tag(Shelf.partial)
+                    Text("Single Songs").tag(Shelf.singles)
+                    Text("All").tag(Shelf.all)
+                }
+                .help("Complete albums, ones you only have some songs of, single songs, or everything")
+            }
+            Picker("View", selection: $asList) {
+                Label("Grid", systemImage: "square.grid.2x2").tag(false)
+                Label("List", systemImage: "list.bullet").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelStyle(.iconOnly)
+            .help("Show as grid or list")
+            Picker("Sort", selection: $sort) {
+                Text("Name").tag(SubsonicClient.AlbumListType.alphabeticalByName)
+                Text("Artist").tag(SubsonicClient.AlbumListType.alphabeticalByArtist)
+                Text("Recently Added").tag(SubsonicClient.AlbumListType.newest)
+                Text("Recently Played").tag(SubsonicClient.AlbumListType.recent)
+                Text("Most Played").tag(SubsonicClient.AlbumListType.frequent)
+            }
+        }
+        .task(id: sort) { await load() }
+        // continuo counts albums' songs in the background: which are partial grows for a while.
+        .task { await model.refreshSingles() }
+    }
+
+    private func load() async {
+        guard let subsonic = model.subsonic else { return }
+        if let cached = model.albumLists[sort] {
+            albums = cached
+        }
+        loading = albums.isEmpty
+        defer { loading = false }
+        var all: [Album] = []
+        do {
+            // Pages of 500 until the library runs out (most libraries are a few pages).
+            for offset in stride(from: 0, to: 20_000, by: 500) {
+                let page = try await subsonic.albums(sort, size: 500, offset: offset)
+                all += page
+                if offset == 0 && albums.isEmpty { albums = all }
+                if page.count < 500 { break }
+            }
+            albums = all
+            model.albumLists[sort] = all
+        } catch {
+            model.handle(error)
+        }
+    }
+}
+
+struct AlbumDetailView: View {
+    @Environment(AppModel.self) private var model
+    let albumID: String
+    @State private var album: Album?
+    @State private var error: String?
+    /// The whole album it's of (continuo): an album you only partly have shows the songs you don't.
+    @State private var whole: LibraryAlbumTracklist?
+
+    var body: some View {
+        Group {
+            if let album {
+                let rows = AlbumTracklist.rows(library: album.tracks, whole: whole, artist: album.artistName,
+                                               albumTitle: album.name, artworkURL: model.coverURL(album.coverArtID ?? album.id, size: 600))
+                let missing = rows.contains { if case .missing = $0 { return true }; return false }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        AlbumHeader(album: album, entries: missing ? rows.map(\.queueEntry) : nil)
+                        if missing {
+                            AlbumRowsList(rows: rows, album: album)
+                        } else {
+                            TrackList(tracks: album.tracks, numbered: true, albumBadge: AudioQuality.albumBadge(album.tracks),
+                                      albumArtist: album.artistName, context: .album(album))
+                        }
+                    }
+                    .padding(24)
+                }
+            } else if let error {
+                Placeholder(title: "Couldn't open the album", symbol: "exclamationmark.triangle", message: error)
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .navigationTitle(album?.name ?? "")
+        .task(id: albumID) {
+            whole = nil
+            do {
+                album = try await model.subsonic?.album(id: albumID)
+            } catch {
+                self.error = ErrorText.of(error)
+                return
+            }
+            if let continuo = model.continuo, !model.offline {
+                whole = try? await continuo.libraryAlbumTracklist(libraryAlbumID: albumID)
+            }
+        }
+    }
+}
+
+private struct AlbumHeader: View {
+    @Environment(AppModel.self) private var model
+    @State var album: Album
+    /// The whole album when the library only partly has it: Play plays it all, the missing songs
+    /// fetched as the queue reaches them.
+    var entries: [QueueEntry]? = nil
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 22) {
+            Artwork(url: model.coverURL(album.coverArtID ?? album.id, size: 800), cornerRadius: 10)
+                .frame(width: 220, height: 220)
+                .shadow(radius: 8, y: 4)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(album.name).font(.largeTitle.weight(.bold)).lineLimit(3)
+                if let artistID = album.artistID {
+                    NavigationLink(value: Route.artist(artistID)) {
+                        Text(album.artistName ?? "").font(.title2).foregroundStyle(.tint)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text(album.artistName ?? "").font(.title2)
+                }
+                HStack(spacing: 6) {
+                    Text([album.genre, album.year.map(String.init), "\(album.songCount) songs", formatLong(album.duration)]
+                        .compactMap { $0 }.joined(separator: " · "))
+                    if let badge = AudioQuality.albumBadge(album.tracks) { QualityChip(label: badge) }
+                }
+                .font(.callout).foregroundStyle(.secondary)
+                HStack(spacing: 10) {
+                    Button {
+                        if let entries { model.player.play(entries: entries, title: album.name) } else { model.player.play(album.tracks, context: .album(album)) }
+                    } label: { Label("Play", systemImage: "play.fill") }
+                        .buttonStyle(.borderedProminent)
+                    Button {
+                        if let entries {
+                            model.player.play(entries: entries, shuffle: true, title: album.name)
+                        } else {
+                            model.player.play(album.tracks, shuffle: true, context: .album(album))
+                        }
+                    } label: { Label("Shuffle", systemImage: "shuffle") }
+                    if model.usesRatings {
+                        Menu {
+                            ForEach(1...5, id: \.self) { stars in
+                                Button(String(repeating: "★", count: stars)) { rate(stars) }
+                            }
+                            Button("No Rating") { rate(0) }
+                        } label: {
+                            let stars = album.rating ?? 0
+                            Text(String(repeating: "★", count: stars) + String(repeating: "☆", count: 5 - stars))
+                        }
+                        .fixedSize()
+                        .help("Rate the album")
+                    } else {
+                        Button {
+                            Task {
+                                try? await model.subsonic?.setStarred(.album(album.id), !album.starred)
+                                album.starred.toggle()
+                            }
+                        } label: { Image(systemName: album.starred ? "heart.fill" : "heart") }
+                            .help(album.starred ? "Remove from Favourites" : "Add to Favourites")
+                    }
+                    DownloadButton(tracks: album.tracks)
+                    Menu {
+                        Button("Play Next") { model.player.playNext(album.tracks.map(QueueEntry.track)) }
+                        Button("Add to Queue") { model.player.addToQueue(album.tracks.map(QueueEntry.track)) }
+                        AddToPlaylistMenu(trackIDs: album.tracks.map(\.id))
+                    } label: { Image(systemName: "ellipsis") }
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                }
+                .controlSize(.large)
+                .padding(.top, 6)
+            }
+        }
+    }
+
+    private func rate(_ stars: Int) {
+        album.rating = stars == 0 ? nil : stars
+        Task { try? await model.subsonic?.setRating(id: album.id, stars) }
+    }
+}
+
+/// Songs as a list: number (or artwork), title with its quality chip, artist, time. Double-click plays
+/// from there; the whole list is the queue.
+struct TrackList: View {
+    @Environment(AppModel.self) private var model
+    let tracks: [Track]
+    var numbered = false
+    var showArtwork = false
+    var albumBadge: String?
+    /// On an album page, its artist: songs say only who else is on them ("ft. Future").
+    var albumArtist: String?
+    /// The album or playlist these are, so playing from here is remembered for Continue Listening.
+    var context: PlayContext?
+    /// A playlist's songs can be taken out of it (by position: the same song can be there twice).
+    var onRemove: ((Int) -> Void)?
+
+    /// An album on more than one disc gets a "Disc 2" heading where each disc starts.
+    private var discs: Bool { numbered && Set(tracks.map { $0.discNumber ?? 1 }).count > 1 }
+
+    var body: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
+                if discs, index == 0 || tracks[index - 1].discNumber != track.discNumber {
+                    Text("Disc \(track.discNumber ?? 1)")
+                        .font(.headline).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, index == 0 ? 0 : 18).padding(.bottom, 6).padding(.horizontal, 8)
+                }
+                TrackRow(track: track, index: index, numbered: numbered, showArtwork: showArtwork, albumBadge: albumBadge,
+                         albumArtist: albumArtist, isCurrent: model.player.current?.libraryTrack?.id == track.id)
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) { model.player.play(tracks, startAt: index, context: context) }
+                    .draggable(DraggedTracks(tracks: [track])) {
+                        Label(track.title, systemImage: "music.note").padding(6).background(.regularMaterial, in: Capsule())
+                    }
+                    .trackContextMenu(track, in: tracks, onRemove: onRemove.map { remove in { remove(index) } })
+                Divider().opacity(0.4)
+            }
+        }
+    }
+}
+
+private struct TrackRow: View {
+    @Environment(AppModel.self) private var model
+    let track: Track
+    let index: Int
+    let numbered: Bool
+    let showArtwork: Bool
+    let albumBadge: String?
+    let albumArtist: String?
+    let isCurrent: Bool
+    @State private var hovering = false
+
+    /// Under the title: on an album, only who else is on the song; elsewhere, artist and album.
+    private var subtitle: String? {
+        if numbered && !showArtwork {
+            switch AlbumCredit.of(track, albumArtist: albumArtist) {
+            case let .featuring(names): return "ft. \(names)"
+            case let .other(artist): return artist
+            case nil: return nil
+            }
+        }
+        let line = [track.artistName, track.albumName].compactMap { $0 }.joined(separator: " · ")
+        return line.isEmpty ? nil : line
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if showArtwork {
+                Artwork(url: model.coverURL(track.coverArtID ?? track.albumID, size: 80), cornerRadius: 3).frame(width: 34, height: 34)
+            } else {
+                Group {
+                    if isCurrent {
+                        Image(systemName: model.player.isPlaying ? "speaker.wave.2.fill" : "speaker.fill").foregroundStyle(.tint)
+                    } else if hovering {
+                        Button { model.player.play([track]) } label: { Image(systemName: "play.fill") }.buttonStyle(.plain)
+                    } else {
+                        Text(numbered ? "\(track.trackNumber ?? index + 1)" : "\(index + 1)").foregroundStyle(.secondary)
+                    }
+                }
+                .frame(width: 26, alignment: .trailing)
+                .monospacedDigit()
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(track.title).lineLimit(1).foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                    if let chip = AudioQuality.trackChip(track, albumBadge: albumBadge) { QualityChip(label: chip) }
+                }
+                if let subtitle {
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            Spacer()
+            if model.usesRatings, let rating = track.rating {
+                Text(String(repeating: "★", count: rating)).font(.caption).foregroundStyle(.secondary)
+            } else if !model.usesRatings, track.starred {
+                Image(systemName: "heart.fill").font(.caption).foregroundStyle(.secondary)
+            }
+            Text(formatDuration(track.duration)).foregroundStyle(.secondary).monospacedDigit()
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .background(hovering ? Color.primary.opacity(0.05) : .clear, in: RoundedRectangle(cornerRadius: 5))
+        .onHover { hovering = $0 }
+    }
+}
+
+/// An album the library only partly has, as the whole album: the songs you have (as anywhere), and
+/// in their places the ones you don't, dimmed; a click on any plays the album from there, the
+/// missing songs fetched (Play now) as the queue reaches them, as on the Android app.
+private struct AlbumRowsList: View {
+    @Environment(AppModel.self) private var model
+    let rows: [AlbumRow]
+    let album: Album
+
+    var body: some View {
+        let badge = AudioQuality.albumBadge(album.tracks)
+        let have = rows.filter { if case .have = $0 { return true }; return false }.count
+        VStack(alignment: .leading, spacing: 0) {
+            Text("You have \(have) of the album's \(rows.count) songs: the others play through Play now, or can be requested.")
+                .font(.callout).foregroundStyle(.secondary).padding(.bottom, 8)
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                Group {
+                    switch row {
+                    case let .have(track, _):
+                        TrackRow(track: track, index: index, numbered: true, showArtwork: false, albumBadge: badge,
+                                 albumArtist: album.artistName, isCurrent: model.player.current?.libraryTrack?.id == track.id)
+                            .contextMenu { Button("Play from Here") { play(from: index) } }
+                    case let .missing(song, _):
+                        HStack(spacing: 12) {
+                            Text("\(index + 1)").foregroundStyle(.tertiary).frame(width: 26, alignment: .trailing).monospacedDigit()
+                            Text(song.title).foregroundStyle(.secondary).lineLimit(1)
+                            Spacer()
+                            if let status = model.fetchStatus[song.key] {
+                                ProgressView().controlSize(.small)
+                                Text(status).font(.caption).foregroundStyle(.secondary)
+                            } else {
+                                Text("Not in library").font(.caption).foregroundStyle(.tertiary)
+                            }
+                            Text(formatDuration(TimeInterval(song.durationMs ?? 0) / 1000)).foregroundStyle(.tertiary).monospacedDigit()
+                        }
+                        .padding(.vertical, 6).padding(.horizontal, 8)
+                        .contextMenu {
+                            Button("Play Now") { play(from: index) }
+                            Button("Play Next") { model.queueCatalog(song, next: true) }
+                            Button("Add to Queue") { model.queueCatalog(song, next: false) }
+                            if song.recordingID != nil {
+                                Divider()
+                                Button("Request Song") { Task { await model.request(song) } }
+                            }
+                        }
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) { play(from: index) }
+                Divider().opacity(0.4)
+            }
+        }
+    }
+
+    private func play(from index: Int) {
+        model.player.play(entries: rows.map(\.queueEntry), startAt: index, title: album.name)
+    }
+}
+
+extension AlbumRow {
+    var queueEntry: QueueEntry {
+        switch self {
+        case let .have(track, _): .track(track)
+        case let .missing(song, _): .catalog(song)
+        }
+    }
+}
+
+// MARK: Artists
+
+struct ArtistsView: View {
+    @Environment(AppModel.self) private var model
+    @State private var artists: [Artist] = []
+    @State private var filter = ""
+    @State private var loading = true
+
+    private var shown: [Artist] {
+        filter.isEmpty ? artists : artists.filter { $0.name.localizedCaseInsensitiveContains(filter) }
+    }
+
+    var body: some View {
+        List(shown) { artist in
+            NavigationLink(value: Route.artist(artist.id)) {
+                HStack(spacing: 10) {
+                    Artwork(url: model.coverURL(artist.coverArtID ?? artist.id, size: 100), cornerRadius: 20, symbol: "music.mic")
+                        .frame(width: 40, height: 40)
+                    VStack(alignment: .leading) {
+                        HStack(spacing: 6) {
+                            Text(artist.name)
+                            if let original = model.originalName(of: artist.name) { Text(original).foregroundStyle(.secondary) }
+                        }
+                        Text(artist.albumCount == 1 ? "1 album" : "\(artist.albumCount) albums").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .overlay { if loading && artists.isEmpty { ProgressView() } }
+        .navigationTitle("Artists")
+        .searchable(text: $filter, placement: .toolbar, prompt: "Filter artists")
+        .task {
+            if let cached = model.artistList { artists = cached }
+            defer { loading = false }
+            do {
+                artists = try await model.subsonic?.artists() ?? []
+                model.artistList = artists
+            } catch {
+                model.handle(error)
+            }
+        }
+    }
+}
+
+struct ArtistDetailView: View {
+    @Environment(AppModel.self) private var model
+    let artistID: String
+    @State private var artist: Artist?
+    @State private var albums: [Album] = []
+    @State private var info: ArtistInfo?
+    @State private var catalog: CatalogArtistPage?
+    @State private var discography: [CatalogAlbum] = []
+    /// Albums by others with a track crediting this artist.
+    @State private var appearsOn: [Album] = []
+    @State private var starred = false
+    @State private var bioExpanded = false
+
+    /// The catalogue's albums that aren't in the library (continuo), to request.
+    private var missing: [CatalogAlbum] {
+        discography.filter { !$0.availability.isInLibrary }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                HStack(alignment: .bottom, spacing: 20) {
+                    Artwork(url: info?.imageURL ?? model.coverURL(artist?.coverArtID ?? artistID, size: 600), cornerRadius: 110, symbol: "music.mic")
+                        .frame(width: 180, height: 180)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(artist?.name ?? "").font(.largeTitle.weight(.bold))
+                        if let original = model.originalName(of: artist?.name) {
+                            Text(original).font(.title2).foregroundStyle(.secondary)
+                        }
+                        HStack {
+                            Button { Task { await playAll(shuffle: false) } } label: { Label("Play", systemImage: "play.fill") }
+                                .buttonStyle(.borderedProminent)
+                            Button { Task { await playAll(shuffle: true) } } label: { Label("Shuffle", systemImage: "shuffle") }
+                            if let artist {
+                                Button {
+                                    starred.toggle()
+                                    Task { try? await model.subsonic?.setStarred(.artist(artist.id), starred) }
+                                } label: { Image(systemName: starred ? "heart.fill" : "heart") }
+                                    .help(starred ? "Remove from Favourites" : "Add to Favourites")
+                                KeepDownloadedButton(target: .artist(id: artist.id, name: artist.name))
+                                    .labelStyle(.iconOnly).help("Keep this artist's albums downloaded")
+                            }
+                        }
+                        .controlSize(.large)
+                    }
+                }
+                if let top = catalog?.topTracks, !top.isEmpty {
+                    Section {
+                        CatalogTrackList(tracks: Array(top.prefix(10)), playsAsList: true, title: artist?.name)
+                    } header: { SectionTitle("Top Songs") }
+                }
+                if !albums.isEmpty {
+                    Section {
+                        AlbumGrid(albums: albums.filter { !model.singleSongAlbumIDs.contains($0.id) })
+                    } header: { SectionTitle("Albums") }
+                }
+                if !appearsOn.isEmpty {
+                    Section {
+                        AlbumGrid(albums: appearsOn)
+                    } header: { SectionTitle("Appears On") }
+                }
+                if !missing.isEmpty {
+                    Section {
+                        CatalogAlbumGrid(albums: missing)
+                    } header: { SectionTitle("More by \(artist?.name ?? "them")", subtitle: "Not in your library: click one to request it") }
+                }
+                if let bio = catalog?.biography ?? info?.biography, !bio.isEmpty {
+                    Section {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(stripHTML(bio)).foregroundStyle(.secondary).textSelection(.enabled)
+                                .lineLimit(bioExpanded ? nil : 5)
+                            Button(bioExpanded ? "Show Less" : "Read More") { bioExpanded.toggle() }.buttonStyle(.link)
+                        }
+                        .frame(maxWidth: 700, alignment: .leading)
+                    } header: { SectionTitle("About") }
+                }
+                if let similar = info?.similarArtists, !similar.isEmpty {
+                    Section {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 16) {
+                                ForEach(similar) { a in
+                                    NavigationLink(value: Route.artist(a.id)) {
+                                        VStack {
+                                            Artwork(url: model.coverURL(a.coverArtID ?? a.id, size: 200), cornerRadius: 50, symbol: "music.mic")
+                                                .frame(width: 100, height: 100)
+                                            Text(a.name).font(.caption).lineLimit(1).frame(width: 100)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    } header: { SectionTitle("Similar Artists") }
+                }
+            }
+            .padding(24)
+        }
+        .navigationTitle(artist?.name ?? "")
+        .task(id: artistID) { await load() }
+    }
+
+    private func load() async {
+        guard let subsonic = model.subsonic else { return }
+        do {
+            let (a, list) = try await subsonic.artist(id: artistID)
+            artist = a
+            starred = a.starred
+            albums = list.sorted { ($0.year ?? 0) > ($1.year ?? 0) }
+        } catch {
+            model.handle(error)
+            return
+        }
+        info = try? await subsonic.artistInfo(id: artistID)
+        if let a = artist {
+            // The library's songs naming them, kept when the credit really is theirs, on others' albums.
+            let found = (try? await subsonic.search(a.name, artists: 0, albums: 0, tracks: 300).tracks) ?? []
+            let own = Set(albums.map(\.id))
+            var others: [Album] = []
+            for id in ArtistCredits.appearsOn(a, among: found).filter({ !own.contains($0) }).prefix(18) {
+                if let album = try? await subsonic.album(id: id) { others.append(album) }
+            }
+            appearsOn = others.sorted { ($0.year ?? 0) > ($1.year ?? 0) }
+        }
+        guard let continuo = model.continuo, let name = artist?.name else { return }
+        // The catalogue artist of the same name: its top songs and what isn't in the library yet.
+        if let hit = try? await continuo.search(name, limit: 5).artists.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }),
+           let mbid = hit.musicBrainzID {
+            catalog = try? await continuo.catalogArtist(musicBrainzID: mbid)
+            discography = (try? await continuo.catalogArtistAlbums(musicBrainzID: mbid)) ?? []
+        }
+    }
+
+    private func playAll(shuffle: Bool) async {
+        guard let subsonic = model.subsonic else { return }
+        var tracks: [Track] = []
+        for album in albums {
+            if let full = try? await subsonic.album(id: album.id) { tracks += full.tracks }
+        }
+        model.player.play(tracks, shuffle: shuffle, title: artist?.name)
+    }
+}
+
+struct SectionTitle: View {
+    let title: String
+    var subtitle: String?
+
+    init(_ title: String, subtitle: String? = nil) {
+        self.title = title
+        self.subtitle = subtitle
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.title2.weight(.semibold))
+            if let subtitle { Text(subtitle).font(.callout).foregroundStyle(.secondary) }
+        }
+    }
+}
+
+func stripHTML(_ text: String) -> String {
+    text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        .replacingOccurrences(of: "&amp;", with: "&").replacingOccurrences(of: "&quot;", with: "\"")
+        .replacingOccurrences(of: "&#39;", with: "'").trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+// MARK: Songs
+
+struct SongsView: View {
+    @Environment(AppModel.self) private var model
+    @State private var tracks: [Track] = []
+    @State private var exhausted = false
+    @State private var selection = Set<Track.ID>()
+    @State private var sortOrder = [KeyPathComparator(\Track.title, comparator: .localizedStandard)]
+
+    var body: some View {
+        Table(tracks, selection: $selection, sortOrder: $sortOrder) {
+            TableColumn("Title", value: \.title, comparator: .localizedStandard) { track in
+                HStack(spacing: 6) {
+                    if model.player.current?.libraryTrack?.id == track.id {
+                        Image(systemName: "speaker.wave.2.fill").foregroundStyle(.tint).font(.caption)
+                    }
+                    Text(track.title)
+                    if let chip = AudioQuality.trackChip(track, albumBadge: nil) { QualityChip(label: chip) }
+                }
+            }
+            TableColumn("Artist", value: \.sortArtist, comparator: .localizedStandard) { Text($0.artistName ?? "") }
+            TableColumn("Album", value: \.sortAlbum, comparator: .localizedStandard) { Text($0.albumName ?? "") }
+            TableColumn("Time", value: \.duration) { Text(formatDuration($0.duration)).monospacedDigit() }
+                .width(min: 50, ideal: 60, max: 80)
+        }
+        .contextMenu(forSelectionType: Track.ID.self) { ids in
+            let picked = tracks.filter { ids.contains($0.id) }
+            Button("Play") { play(picked) }
+            Button("Play Next") { model.player.playNext(picked.map(QueueEntry.track)) }
+            Button("Add to Queue") { model.player.addToQueue(picked.map(QueueEntry.track)) }
+            Button("Download") { model.downloads.download(picked) }
+            AddToPlaylistMenu(trackIDs: picked.map(\.id))
+            if picked.count == 1, let track = picked.first {
+                Divider()
+                if let albumID = track.albumID { Button("Go to Album") { model.path.append(Route.album(albumID)) } }
+                if let artistID = track.artistID { Button("Go to Artist") { model.path.append(Route.artist(artistID)) } }
+                Button("Song Info") { model.songInfo = track }
+            }
+        } primaryAction: { ids in
+            // Double-click: the list from that song on, in the order shown.
+            guard let first = tracks.firstIndex(where: { ids.contains($0.id) }) else { return }
+            model.player.play(tracks, startAt: first, title: "Songs")
+        }
+        .onChange(of: sortOrder) { tracks.sort(using: sortOrder) }
+        .navigationTitle("Songs")
+        .navigationSubtitle(exhausted ? "\(tracks.count) songs" : "\(tracks.count) songs, loading…")
+        .toolbar {
+            Button { model.player.play(tracks, shuffle: true, title: "Songs") } label: { Label("Shuffle All", systemImage: "shuffle") }
+                .disabled(tracks.isEmpty)
+        }
+        .task { if tracks.isEmpty { await loadAll() } }
+    }
+
+    private func play(_ picked: [Track]) {
+        model.player.play(picked.count == 1 ? Array(tracks.drop { $0.id != picked[0].id }) : picked, title: "Songs")
+    }
+
+    /// Every song, a page at a time (Navidrome lists them all for an empty search), so the table can
+    /// sort the whole library; the first page shows at once.
+    private func loadAll() async {
+        guard let subsonic = model.subsonic else { return }
+        var loaded: [Track] = []
+        while !Task.isCancelled {
+            do {
+                let page = try await subsonic.search("", artists: 0, albums: 0, tracks: 500, trackOffset: loaded.count).tracks
+                loaded += page
+                tracks = loaded.sorted(using: sortOrder)
+                if page.count < 500 { break }
+            } catch {
+                model.handle(error)
+                break
+            }
+        }
+        exhausted = true
+    }
+}
+
+private extension Track {
+    var sortArtist: String { artistName ?? "" }
+    var sortAlbum: String { albumName ?? "" }
+}
+
+// MARK: Playlists
+
+struct PlaylistsView: View {
+    @Environment(AppModel.self) private var model
+    @State private var playlists: [Playlist] = []
+    @State private var naming = false
+    @State private var newName = ""
+    @State private var renaming: Playlist?
+
+    var body: some View {
+        List(playlists) { playlist in
+            NavigationLink(value: Route.playlist(playlist.id)) {
+                HStack(spacing: 10) {
+                    Artwork(url: model.coverURL(playlist.coverArtID, size: 100), cornerRadius: 4, symbol: "music.note.list")
+                        .frame(width: 40, height: 40)
+                    VStack(alignment: .leading) {
+                        Text(playlist.name)
+                        Text("\(playlist.songCount) songs · \(formatLong(playlist.duration))").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .dropDestination(for: DraggedTracks.self) { drops, _ in
+                let ids = drops.flatMap(\.tracks).map(\.id)
+                Task {
+                    do {
+                        try await model.subsonic?.updatePlaylist(id: playlist.id, adding: ids)
+                        model.notice = "Added to \(playlist.name)"
+                        model.downloads.libraryChanged()
+                        await load()
+                    } catch {
+                        model.handle(error)
+                    }
+                }
+                return !ids.isEmpty
+            }
+            .contextMenu {
+                KeepDownloadedButton(target: .playlist(id: playlist.id, name: playlist.name))
+                Button("Rename…") {
+                    renaming = playlist
+                    newName = playlist.name
+                }
+                Divider()
+                Button("Delete Playlist", role: .destructive) {
+                    Task {
+                        try? await model.subsonic?.deletePlaylist(id: playlist.id)
+                        await load()
+                    }
+                }
+            }
+        }
+        .navigationTitle("Playlists")
+        .toolbar {
+            Button { naming = true } label: { Label("New Playlist", systemImage: "plus") }
+        }
+        .alert("New Playlist", isPresented: $naming) {
+            TextField("Name", text: $newName)
+            Button("Create") {
+                let name = newName
+                newName = ""
+                Task {
+                    _ = try? await model.subsonic?.createPlaylist(name: name)
+                    await load()
+                }
+            }
+            Button("Cancel", role: .cancel) { newName = "" }
+        }
+        .alert("Rename Playlist", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $newName)
+            Button("Rename") {
+                guard let playlist = renaming else { return }
+                let name = newName.trimmingCharacters(in: .whitespaces)
+                newName = ""
+                renaming = nil
+                guard !name.isEmpty, name != playlist.name else { return }
+                Task {
+                    do {
+                        try await model.subsonic?.updatePlaylist(id: playlist.id, name: name)
+                    } catch {
+                        model.handle(error)
+                    }
+                    await load()
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                newName = ""
+                renaming = nil
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        await model.refreshPlaylists()
+        playlists = model.playlists
+    }
+}
+
+struct PlaylistDetailView: View {
+    @Environment(AppModel.self) private var model
+    let playlistID: String
+    @State private var playlist: Playlist?
+
+    var body: some View {
+        ScrollView {
+            if let playlist {
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(alignment: .bottom, spacing: 20) {
+                        Artwork(url: model.coverURL(playlist.coverArtID, size: 600), cornerRadius: 10, symbol: "music.note.list")
+                            .frame(width: 200, height: 200)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(playlist.name).font(.largeTitle.weight(.bold))
+                            if let comment = playlist.comment, !comment.isEmpty { Text(comment).foregroundStyle(.secondary) }
+                            Text("\(playlist.songCount) songs · \(formatLong(playlist.duration))").foregroundStyle(.secondary)
+                            HStack {
+                                Button { model.player.play(playlist.tracks, context: .playlist(playlist)) } label: { Label("Play", systemImage: "play.fill") }
+                                    .buttonStyle(.borderedProminent)
+                                Button { model.player.play(playlist.tracks, shuffle: true, context: .playlist(playlist)) } label: {
+                                    Label("Shuffle", systemImage: "shuffle")
+                                }
+                                KeepDownloadedButton(target: .playlist(id: playlist.id, name: playlist.name))
+                                    .labelStyle(.iconOnly).help("Keep this playlist downloaded, as it changes")
+                                Menu {
+                                    Button("Play Next") { model.player.playNext(playlist.tracks.map(QueueEntry.track)) }
+                                    Button("Add to Queue") { model.player.addToQueue(playlist.tracks.map(QueueEntry.track)) }
+                                    Divider()
+                                    Toggle("Public", isOn: Binding(get: { playlist.isPublic }, set: { on in
+                                        self.playlist?.isPublic = on
+                                        Task { try? await model.subsonic?.updatePlaylist(id: playlist.id, isPublic: on) }
+                                    }))
+                                } label: { Image(systemName: "ellipsis") }
+                                    .menuIndicator(.hidden)
+                                    .fixedSize()
+                            }
+                            .controlSize(.large)
+                        }
+                    }
+                    TrackList(tracks: playlist.tracks, showArtwork: true, context: .playlist(playlist), onRemove: { index in
+                        Task {
+                            try? await model.subsonic?.updatePlaylist(id: playlist.id, removingIndices: [index])
+                            self.playlist = try? await model.subsonic?.playlist(id: playlistID)
+                        }
+                    })
+                }
+                .padding(24)
+            } else {
+                ProgressView().padding(60)
+            }
+        }
+        .navigationTitle(playlist?.name ?? "")
+        .task(id: playlistID) {
+            do {
+                playlist = try await model.subsonic?.playlist(id: playlistID)
+            } catch {
+                model.handle(error)
+            }
+        }
+    }
+}
+
+// MARK: Genres
+
+struct GenresView: View {
+    @Environment(AppModel.self) private var model
+    @State private var genres: [Genre] = []
+
+    var body: some View {
+        List(genres) { genre in
+            NavigationLink(value: Route.genre(genre.name)) {
+                HStack {
+                    Text(genre.name)
+                    Spacer()
+                    Text("\(genre.albumCount) albums").foregroundStyle(.secondary)
+                }
+            }
+        }
+        .navigationTitle("Genres")
+        .task {
+            do {
+                genres = try await model.subsonic?.genres() ?? []
+            } catch {
+                model.handle(error)
+            }
+        }
+    }
+}
+
+struct GenreDetailView: View {
+    @Environment(AppModel.self) private var model
+    let genre: String
+    @State private var albums: [Album] = []
+
+    var body: some View {
+        ScrollView {
+            AlbumGrid(albums: albums).padding(20)
+        }
+        .navigationTitle(genre)
+        .toolbar {
+            Button {
+                Task {
+                    if let songs = try? await model.subsonic?.songs(.genre(genre), size: 300) {
+                        model.player.play(songs, shuffle: true, title: genre)
+                    }
+                }
+            } label: { Label("Shuffle Genre", systemImage: "shuffle") }
+            KeepDownloadedButton(target: .genre(genre)).help("Keep this genre's songs downloaded")
+        }
+        .task(id: genre) {
+            albums = (try? await model.subsonic?.albums(genre: genre, size: 500)) ?? []
+        }
+    }
+}
+
+// MARK: Favourites
+
+struct FavouritesView: View {
+    @Environment(AppModel.self) private var model
+    @State private var starred = Starred()
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                if !starred.tracks.isEmpty {
+                    Section {
+                        TrackList(tracks: starred.tracks, showArtwork: true)
+                    } header: {
+                        HStack {
+                            SectionTitle("Songs")
+                            Spacer()
+                            Button { model.player.play(starred.tracks, shuffle: true, title: "Favourites") } label: {
+                                Label("Shuffle", systemImage: "shuffle")
+                            }
+                            KeepDownloadedButton(target: .favourites).labelStyle(.iconOnly).help("Keep favourite songs downloaded")
+                        }
+                    }
+                }
+                if !starred.albums.isEmpty {
+                    Section { AlbumGrid(albums: starred.albums) } header: { SectionTitle("Albums") }
+                }
+                if starred.tracks.isEmpty && starred.albums.isEmpty {
+                    Placeholder(title: "No favourites yet", symbol: "heart",
+                                message: "Songs and albums you favourite show up here.")
+                }
+            }
+            .padding(24)
+        }
+        .navigationTitle("Favourites")
+        .task {
+            do {
+                starred = try await model.subsonic?.starred() ?? Starred()
+            } catch {
+                model.handle(error)
+            }
+        }
+    }
+}

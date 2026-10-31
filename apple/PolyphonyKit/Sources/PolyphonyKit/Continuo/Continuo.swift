@@ -34,6 +34,8 @@ public struct ContinuoSession: Sendable, Codable, Equatable {
         public let baseUrl: String
         public let username: String
         public let password: String
+        /// Where speakers should fetch from instead (continuo's plain-HTTP LAN door), when configured.
+        public let receiverBaseUrl: String?
     }
 
     public let accessToken: String
@@ -114,14 +116,7 @@ public struct ContinuoClient: Sendable {
     }
 
     func send<T: Decodable, B: Encodable>(_ method: String, _ path: String, body: B?, token: String? = nil) async throws -> T {
-        var request = HTTPRequest(method: method, url: baseURL.appendingPathComponent(path),
-                                  headers: ["Accept": "application/json"])
-        if let body {
-            request.body = try JSONEncoder().encode(body)
-            request.headers["Content-Type"] = "application/json"
-        }
-        if let token { request.headers["Authorization"] = "Bearer \(token)" }
-        let response = try await transport.send(request)
+        let response = try await raw(method, path, body: body, token: token)
         guard (200..<300).contains(response.status) else { throw Self.error(from: response) }
         do {
             return try JSONDecoder().decode(T.self, from: response.body)
@@ -129,6 +124,23 @@ public struct ContinuoClient: Sendable {
             throw ContinuoError(status: response.status, code: "unexpected_response",
                                 message: "Unexpected answer from continuo.", retryable: false)
         }
+    }
+
+    /// The answer as it came, whatever its status: for calls where a 404 or 409 means something.
+    func raw<B: Encodable>(_ method: String, _ path: String, query: [URLQueryItem] = [], body: B?,
+                           token: String?) async throws -> HTTPResponse {
+        var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        if !query.isEmpty {
+            components.queryItems = query
+            components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        }
+        var request = HTTPRequest(method: method, url: components.url!, headers: ["Accept": "application/json"])
+        if let body {
+            request.body = try JSONEncoder().encode(body)
+            request.headers["Content-Type"] = "application/json"
+        }
+        if let token { request.headers["Authorization"] = "Bearer \(token)" }
+        return try await transport.send(request)
     }
 
     static func error(from response: HTTPResponse) -> ContinuoError {
@@ -198,6 +210,12 @@ public actor ContinuoAccount {
         }
         if s.expiresAt.timeIntervalSince(now()) > margin { return s.accessToken }
         return try await refreshed().accessToken
+    }
+
+    /// A refresh now, whatever the clock says: the server refused a token it should have taken
+    /// (continuo restarted with a new key, or the clocks disagree).
+    public func refreshNow() async throws -> String {
+        try await refreshed().accessToken
     }
 
     private func refreshed() async throws -> ContinuoSession {

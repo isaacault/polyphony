@@ -1,0 +1,221 @@
+import AppKit
+import PolyphonyKit
+import SwiftUI
+
+enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
+    case home, search, explore, artists, albums, songs, playlists, genres, favourites, downloads, inbox, requests, removed
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .home: "Home"
+        case .search: "Search"
+        case .explore: "Explore"
+        case .artists: "Artists"
+        case .albums: "Albums"
+        case .songs: "Songs"
+        case .playlists: "Playlists"
+        case .genres: "Genres"
+        case .favourites: "Favourites"
+        case .downloads: "Downloads"
+        case .inbox: "Inbox"
+        case .requests: "Requests"
+        case .removed: "Recently Removed"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .home: "house"
+        case .search: "magnifyingglass"
+        case .explore: "safari"
+        case .artists: "music.mic"
+        case .albums: "square.stack"
+        case .songs: "music.note"
+        case .playlists: "music.note.list"
+        case .genres: "guitars"
+        case .favourites: "heart"
+        case .downloads: "arrow.down.to.line"
+        case .inbox: "tray"
+        case .requests: "arrow.down.circle"
+        case .removed: "trash"
+        }
+    }
+}
+
+struct RootView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        switch model.state {
+        case .loading:
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .signedOut:
+            SignInView()
+        case .signedIn:
+            MainWindow()
+                .sheet(isPresented: Binding(get: { model.addingServer }, set: { model.addingServer = $0 })) {
+                    SignInView(adding: true).frame(width: 520, height: 520)
+                }
+        }
+    }
+}
+
+enum InspectorPane: String { case queue, lyrics }
+
+struct MainWindow: View {
+    @Environment(AppModel.self) private var model
+    @State private var inspector: InspectorPane?
+    @State private var keyMonitor: Any?
+
+    var body: some View {
+        @Bindable var model = model
+        NavigationSplitView {
+            List(selection: $model.sidebar) {
+                Section {
+                    row(.home)
+                    row(.search)
+                    if model.isContinuo { row(.explore) }
+                }
+                Section("Library") {
+                    ForEach([SidebarItem.artists, .albums, .songs, .playlists, .genres, .favourites, .downloads]) { row($0) }
+                }
+                if model.isContinuo {
+                    Section("Server") {
+                        row(.inbox).badge(model.unreadCount)
+                        row(.requests)
+                        row(.removed)
+                    }
+                }
+            }
+            .navigationSplitViewColumnWidth(min: 170, ideal: 200)
+        } detail: {
+            NavigationStack(path: $model.path) {
+                detail(for: model.sidebar ?? .home)
+                    .navigationDestination(for: Route.self) { route in destination(route) }
+            }
+        }
+        .onChange(of: model.sidebar) { model.path = NavigationPath() }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            PlayerBar(inspector: $inspector)
+        }
+        .inspector(isPresented: Binding(get: { inspector != nil }, set: { if !$0 { inspector = nil } })) {
+            Group {
+                switch inspector {
+                case .lyrics: LyricsView()
+                default: QueueView()
+                }
+            }
+            .inspectorColumnWidth(min: 260, ideal: 320, max: 460)
+        }
+        .overlay {
+            if model.nowPlayingExpanded, model.player.current != nil {
+                NowPlayingView().transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(duration: 0.35), value: model.nowPlayingExpanded)
+        .overlay(alignment: .top) { NoticeBanner() }
+        .sheet(item: $model.songInfo) { track in
+            VStack(alignment: .leading, spacing: 14) {
+                Text(track.title).font(.title2.weight(.semibold))
+                Text([track.artistName, track.albumName].compactMap { $0 }.joined(separator: " — ")).foregroundStyle(.secondary)
+                SongInfo(track: track)
+                HStack {
+                    Spacer()
+                    Button("Done") { model.songInfo = nil }.keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(24)
+            .frame(minWidth: 340)
+        }
+        .onAppear { installSpaceToPlay() }
+        .onDisappear { if let keyMonitor { NSEvent.removeMonitor(keyMonitor) } }
+    }
+
+    private func row(_ item: SidebarItem) -> some View {
+        Label(item.title, systemImage: item.symbol).tag(item)
+    }
+
+    @ViewBuilder
+    private func detail(for item: SidebarItem) -> some View {
+        switch item {
+        case .home: HomeView()
+        case .search: SearchView()
+        case .explore: ExploreView()
+        case .artists: ArtistsView()
+        case .albums: AlbumsView()
+        case .songs: SongsView()
+        case .playlists: PlaylistsView()
+        case .genres: GenresView()
+        case .favourites: FavouritesView()
+        case .downloads: DownloadsView()
+        case .inbox: InboxView()
+        case .requests: RequestsView()
+        case .removed: RemovedAlbumsView()
+        }
+    }
+
+    @ViewBuilder
+    private func destination(_ route: Route) -> some View {
+        switch route {
+        case let .album(id): AlbumDetailView(albumID: id)
+        case let .artist(id): ArtistDetailView(artistID: id)
+        case let .playlist(id): PlaylistDetailView(playlistID: id)
+        case let .genre(name): GenreDetailView(genre: name)
+        case let .catalogAlbum(album): CatalogAlbumView(album: album)
+        case let .catalogArtist(artist): CatalogArtistView(artist: artist)
+        case let .discoveryPlaylist(playlist): DiscoveryPlaylistView(playlist: playlist)
+        }
+    }
+
+    /// Space plays and pauses, as in Music, except while typing (a text field has the focus).
+    private func installSpaceToPlay() {
+        guard keyMonitor == nil else { return }
+        let player = model.player
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.keyCode == 49, event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty else { return event }
+            // Local monitors run on the main thread; only a Bool crosses back (NSEvent isn't Sendable).
+            let played = MainActor.assumeIsolated { () -> Bool in
+                guard !(NSApp.keyWindow?.firstResponder is NSText) else { return false }
+                player.togglePlay()
+                return true
+            }
+            return played ? nil : event
+        }
+    }
+}
+
+/// A short message at the top ("Requested Parachutes"), gone after a few seconds.
+struct NoticeBanner: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if model.offline {
+            Button { model.go(to: .downloads) } label: {
+                Label(model.offlineMode ? "Offline mode: playing what's downloaded" : "Can't reach \(model.server?.address.host ?? "the server"): what's downloaded still plays",
+                      systemImage: "wifi.slash")
+                    .font(.callout)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(.regularMaterial, in: Capsule())
+                    .shadow(radius: 4, y: 2)
+            }
+            .buttonStyle(.plain)
+            .help("Go to Downloads")
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        } else if let notice = model.notice {
+            Text(notice)
+                .font(.callout)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(.regularMaterial, in: Capsule())
+                .shadow(radius: 4, y: 2)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .task(id: notice) {
+                    try? await Task.sleep(for: .seconds(4))
+                    withAnimation { model.notice = nil }
+                }
+        }
+    }
+}
