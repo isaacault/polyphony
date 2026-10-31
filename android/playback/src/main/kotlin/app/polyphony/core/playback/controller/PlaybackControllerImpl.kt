@@ -27,6 +27,7 @@ import app.polyphony.core.playback.engine.ServerLookup
 import app.polyphony.core.playback.engine.TranscodeDecisionEngine
 import app.polyphony.core.playback.stream.StreamResolver
 import app.polyphony.core.playback.queue.MediaItemFactory
+import app.polyphony.core.playback.queue.UserQueue
 import app.polyphony.core.playback.queue.QueueMath
 import app.polyphony.core.playback.queue.QueueStore
 import app.polyphony.core.playback.session.CustomCommands
@@ -199,11 +200,13 @@ class PlaybackControllerImpl @Inject constructor(
         for (i in 0 until count) {
             tracks += trackFor(player.getMediaItemAt(i))
         }
+        val flags = (0 until count).map { MediaItemFactory.isQueued(player.getMediaItemAt(it)) }
         _state.update {
             val index = player.currentMediaItemIndex
             it.copy(
                 queue = tracks.toImmutableList(),
                 currentIndex = index,
+                queuedNext = UserQueue.waiting(flags, index),
                 transcode = effectiveDecision(tracks.getOrNull(index)?.id, engine.decision.value),
             )
         }
@@ -356,8 +359,13 @@ class PlaybackControllerImpl @Inject constructor(
                 CustomCommands.of(CustomCommands.SET_PLAY_CONTEXT),
                 Bundle().apply { putString(CustomCommands.ARG_CONTEXT, PlayContextCodec.encode(context)) },
             )
+            // Songs you queued and haven't heard yet carry over (as on Spotify): straight after the
+            // new list's first song, inserted after it's set so shuffle never scatters them.
+            val waiting = waitingItems(c)
             c.shuffleModeEnabled = shuffle
-            c.setMediaItems(items, start.coerceIn(0, items.lastIndex), positionMs.coerceAtLeast(0L))
+            val first = start.coerceIn(0, items.lastIndex)
+            c.setMediaItems(items, first, positionMs.coerceAtLeast(0L))
+            if (waiting.isNotEmpty()) c.addMediaItems(first + 1, waiting)
             c.prepare()
             c.play()
             c.sendCustomCommand(
@@ -367,27 +375,20 @@ class PlaybackControllerImpl @Inject constructor(
         }
     }
 
-    override fun playNext(tracks: List<Track>) {
-        if (tracks.isEmpty()) return
-        queueStore.putAll(tracks)
-        val items = tracks.map(::itemFor)
-        withController { c ->
-            val wasEmpty = c.mediaItemCount == 0
-            c.addMediaItems(QueueMath.insertAfterCurrentIndex(c.mediaItemCount, c.currentMediaItemIndex), items)
-            if (wasEmpty) {
-                c.prepare()
-                c.play()
-            }
-        }
-    }
+    override fun playNext(tracks: List<Track>) = enqueue(tracks, playNext = true)
 
-    override fun addToQueue(tracks: List<Track>) {
+    override fun addToQueue(tracks: List<Track>) = enqueue(tracks, playNext = false)
+
+    /** Your songs ("Next in queue", UserQueue): Play next at the front of them, Add to queue at the
+     *  back, both before the list you pressed play on resumes. */
+    private fun enqueue(tracks: List<Track>, playNext: Boolean) {
         if (tracks.isEmpty()) return
         queueStore.putAll(tracks)
-        val items = tracks.map(::itemFor)
+        val items = tracks.map { queuedItemFor(it) }
         withController { c ->
             val wasEmpty = c.mediaItemCount == 0
-            c.addMediaItems(c.mediaItemCount, items)
+            val flags = (0 until c.mediaItemCount).map { MediaItemFactory.isQueued(c.getMediaItemAt(it)) }
+            c.addMediaItems(UserQueue.insertIndex(flags, c.currentMediaItemIndex, playNext), items)
             if (wasEmpty) {
                 c.prepare()
                 c.play()
@@ -447,5 +448,18 @@ class PlaybackControllerImpl @Inject constructor(
     private fun itemFor(track: Track): MediaItem {
         val artwork = serverLookup.providerFor(track.serverId)?.artworkUrl(track.artworkId, 1200) ?: track.artworkUrl
         return MediaItemFactory.fromTrack(track, artwork)
+    }
+
+    private fun queuedItemFor(track: Track): MediaItem {
+        val artwork = serverLookup.providerFor(track.serverId)?.artworkUrl(track.artworkId, 1200) ?: track.artworkUrl
+        return MediaItemFactory.fromTrack(track, artwork, queued = true)
+    }
+
+    /** Your queued songs still to come (the flagged run after the current one). */
+    private fun waitingItems(c: Player): List<MediaItem> {
+        val current = c.currentMediaItemIndex
+        val flags = (0 until c.mediaItemCount).map { MediaItemFactory.isQueued(c.getMediaItemAt(it)) }
+        val n = UserQueue.waiting(flags, current)
+        return (current + 1 until current + 1 + n).map { c.getMediaItemAt(it) }
     }
 }

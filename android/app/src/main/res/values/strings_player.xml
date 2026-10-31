@@ -53,6 +53,8 @@
     <string name="queue_previously_played">Previously played</string>
     <string name="queue_now_playing">Now playing</string>
     <string name="queue_up_next">Up next</string>
+    <string name="queue_next_in_queue">Next in queue</string>
+    <string name="queue_next_from">Next from %1$s</string>
     <string name="queue_drag">Drag to reorder</string>
     <string name="queue_on_phone">On the phone: plays without a connection</string>
 

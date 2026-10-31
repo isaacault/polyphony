@@ -55,6 +55,7 @@ import app.polyphony.core.playback.engine.LatencyPlayerListener
 import app.polyphony.core.playback.engine.ServerLookup
 import app.polyphony.core.playback.engine.TranscodeDecisionEngine
 import app.polyphony.core.playback.queue.MediaItemFactory
+import app.polyphony.core.playback.queue.QueueShuffleOrder
 import app.polyphony.core.playback.queue.PersistedQueue
 import app.polyphony.core.playback.queue.QueuePersistence
 import app.polyphony.core.playback.queue.QueueStore
@@ -287,6 +288,8 @@ class PlaybackService : MediaLibraryService() {
         exo.setAudioSessionId(audioSessionId)
         applyPreload(exo, playback.preloadNextTrack)
         exo.setPlaybackSpeed(playback.playbackSpeed)
+        // Shuffle mixes the list you pressed play on, never the songs you queued (UserQueue).
+        exo.setShuffleOrder(QueueShuffleOrder())
         return exo
     }
 
