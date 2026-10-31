@@ -36,11 +36,12 @@ struct PlayQueueTests {
         #expect(q.current?.entry.libraryTrack?.id == "5" && ids(q.upNext).first == "6")
     }
 
-    @Test func playNextGoesRightAfterAndAppendAtTheEnd() {
+    @Test func yourQueueComesBeforeTheListResumes() {
         var q = PlayQueue([.track(t("a")), .track(t("b"))])
         q.playNext([.track(t("x"))])
         q.append([.track(t("z"))])
-        #expect(ids(q.upNext) == ["x", "b", "z"])
+        #expect(ids(q.upNext) == ["x", "z", "b"], "Add to queue: behind yours, before the album carries on")
+        #expect(q.queuedNext == 2)
     }
 
     @Test func removingWhatsPlayingMovesToWhatWasNext() {

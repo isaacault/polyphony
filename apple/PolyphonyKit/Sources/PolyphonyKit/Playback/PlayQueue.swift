@@ -62,10 +62,13 @@ public struct PlayQueue: Sendable, Equatable {
     public struct Item: Sendable, Hashable, Identifiable {
         public let id: UUID
         public var entry: QueueEntry
+        /// A song you added (Play next, Add to queue): "Next in queue", before the list resumes.
+        public var queued: Bool
 
-        public init(_ entry: QueueEntry, id: UUID = UUID()) {
+        public init(_ entry: QueueEntry, id: UUID = UUID(), queued: Bool = false) {
             self.id = id
             self.entry = entry
+            self.queued = queued
         }
     }
 
@@ -104,6 +107,23 @@ public struct PlayQueue: Sendable, Equatable {
     }
 
     /// What's already played, oldest first.
+    /// How many of the songs right after the current one are yours ("Next in queue", as on
+    /// Spotify): they play before the list you pressed play on resumes.
+    public var queuedNext: Int {
+        guard let position else { return 0 }
+        var n = 0
+        for i in order.dropFirst(position + 1) {
+            guard items[i].queued else { break }
+            n += 1
+        }
+        return n
+    }
+
+    /// Your songs still to come, to carry over when something new is played.
+    public var waitingQueued: [QueueEntry] {
+        Array(upNext.prefix(queuedNext).map(\.entry))
+    }
+
     public var history: [Item] {
         guard let position else { return [] }
         return order.prefix(position).map { items[$0] }
@@ -183,7 +203,10 @@ public struct PlayQueue: Sendable, Equatable {
             return
         }
         if on {
-            order = [currentIndex] + items.indices.filter { $0 != currentIndex }.shuffled()
+            // Shuffle mixes the list, never your queue: yours stay straight after the current song.
+            let yours = upNext.prefix(queuedNext).compactMap { q in items.firstIndex(where: { $0.id == q.id }) }
+            let rest = items.indices.filter { $0 != currentIndex && !yours.contains($0) }
+            order = [currentIndex] + yours + rest.shuffled()
             position = 0
         } else {
             order = Array(items.indices)
@@ -191,20 +214,31 @@ public struct PlayQueue: Sendable, Equatable {
         }
     }
 
-    /// Play these right after the current entry.
+    /// Play next: the front of your queue, straight after the current song (contract/cases/queue.json).
     public mutating func playNext(_ entries: [QueueEntry]) {
-        insert(entries, afterPosition: position ?? -1)
+        insert(entries, afterPosition: position ?? -1, queued: true)
     }
 
-    /// Add these at the end.
+    /// Add to queue: the back of your queue, before the list you pressed play on resumes (with none
+    /// of yours waiting, straight after the current song, as Play next).
     public mutating func append(_ entries: [QueueEntry]) {
-        insert(entries, afterPosition: order.count - 1)
+        guard let position else {
+            insert(entries, afterPosition: order.count - 1, queued: true)
+            return
+        }
+        insert(entries, afterPosition: position + queuedNext, queued: true)
     }
 
-    private mutating func insert(_ entries: [QueueEntry], afterPosition p: Int) {
+    /// Something new played while some of yours wait: they go straight after its first song.
+    public mutating func carryQueued(_ entries: [QueueEntry]) {
+        guard let position, !entries.isEmpty else { return }
+        insert(entries, afterPosition: position, queued: true)
+    }
+
+    private mutating func insert(_ entries: [QueueEntry], afterPosition p: Int, queued: Bool = false) {
         guard !entries.isEmpty else { return }
         let start = items.count
-        items += entries.map { Item($0) }
+        items += entries.map { Item($0, queued: queued) }
         let added = Array(start..<items.count)
         order.insert(contentsOf: added, at: p + 1)
         if position == nil { position = 0 }

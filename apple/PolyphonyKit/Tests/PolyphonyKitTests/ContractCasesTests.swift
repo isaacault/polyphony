@@ -158,3 +158,48 @@ struct AlbumTracklistContractTests {
         #expect(song.recordingID == "rec-0" && song.albumReleaseGroupID == "rg" && song.artist == "Alabaster dePlume" && song.key == "mb:rec:rec-0")
     }
 }
+
+struct QueueContractTests {
+    @Test func theQueueAsTheContractHasIt() throws {
+        let cases = try #require(try contract("queue")["cases"] as? [[String: Any]])
+        #expect(cases.count >= 7)
+        func entry(_ id: String) -> QueueEntry { .track(Track(id: id, title: id)) }
+        for c in cases {
+            let name = string(c["name"]) ?? "?"
+            let start = try #require(c["start"] as? [String])
+            var q = PlayQueue(start.map(entry))
+            for op in try #require(c["ops"] as? [[String: Any]]) {
+                if let id = string(op["add"]) { q.append([entry(id)]) }
+                if let id = string(op["next"]) { q.playNext([entry(id)]) }
+                if let n = int(op["advance"]) { for _ in 0..<n { q.advanceOnEnd() } }
+                if let list = op["play"] as? [String] {
+                    let waiting = q.waitingQueued
+                    q = PlayQueue(list.map(entry), startAt: int(op["at"]) ?? 0)
+                    q.carryQueued(waiting)
+                }
+            }
+            if let current = string(c["current"]) { #expect(q.current?.entry.libraryTrack?.id == current, "\(name)") }
+            let pairs: [[Any]] = try #require(c["upNext"] as? [[Any]])
+            var expected: [String] = []
+            for pair in pairs {
+                let id = pair[0] as? String ?? "?"
+                let flag = (pair[1] as? NSNumber)?.boolValue ?? false
+                expected.append("\(id):\(flag)")
+            }
+            var got: [String] = []
+            for item in q.upNext {
+                let id = item.entry.libraryTrack?.id ?? "?"
+                got.append("\(id):\(item.queued)")
+            }
+            #expect(got == expected, Comment(rawValue: name))
+        }
+    }
+
+    @Test func shuffleMixesTheListNeverYourQueue() {
+        var q = PlayQueue((0..<20).map { .track(Track(id: "s\($0)", title: "s\($0)")) })
+        q.append([.track(Track(id: "mine-1", title: "m1")), .track(Track(id: "mine-2", title: "m2"))])
+        q.setShuffle(true)
+        #expect(q.upNext.prefix(2).map { $0.entry.libraryTrack?.id } == ["mine-1", "mine-2"])
+        #expect(q.queuedNext == 2)
+    }
+}
