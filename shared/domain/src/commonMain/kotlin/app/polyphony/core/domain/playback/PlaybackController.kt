@@ -15,6 +15,8 @@ enum class RepeatMode { OFF, ALL, ONE }
 data class PlaybackState(
     val queue: ImmutableList<Track> = persistentListOf(),
     val currentIndex: Int = -1,
+    /** How many songs after the current one are yours (Play next, Add to queue): "Next in queue". */
+    val queuedNext: Int = 0,
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
     val shuffleEnabled: Boolean = false,

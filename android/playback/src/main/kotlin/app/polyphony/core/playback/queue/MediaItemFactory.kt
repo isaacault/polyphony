@@ -20,6 +20,8 @@ object MediaItemFactory {
     const val EXTRA_ALBUM_ID = "app.polyphony.ALBUM_ID"
     const val EXTRA_ARTIST_ID = "app.polyphony.ARTIST_ID"
     const val EXTRA_STARRED = "app.polyphony.STARRED"
+    /** A song you added (Play next, Add to queue): "Next in queue", before the list resumes (UserQueue). */
+    const val EXTRA_QUEUED = "app.polyphony.QUEUED"
 
     fun uriFor(serverId: String, trackId: String): Uri =
         Uri.Builder().scheme(SCHEME).authority("track").appendPath(serverId).appendPath(trackId).build()
@@ -32,7 +34,7 @@ object MediaItemFactory {
         return segments[0] to segments[1]
     }
 
-    fun fromTrack(track: Track, artworkUrl: String? = track.artworkUrl): MediaItem {
+    fun fromTrack(track: Track, artworkUrl: String? = track.artworkUrl, queued: Boolean = false): MediaItem {
         val extras = Bundle().apply {
             putString(EXTRA_TRACK_ID, track.id)
             putString(EXTRA_SERVER_ID, track.serverId)
@@ -40,6 +42,7 @@ object MediaItemFactory {
             track.albumId?.let { putString(EXTRA_ALBUM_ID, it) }
             track.artistId?.let { putString(EXTRA_ARTIST_ID, it) }
             putBoolean(EXTRA_STARRED, track.starred)
+            if (queued) putBoolean(EXTRA_QUEUED, true)
         }
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
@@ -64,6 +67,9 @@ object MediaItemFactory {
             .setMediaMetadata(metadata)
             .build()
     }
+
+    /** Whether the item is one you added (Play next, Add to queue). */
+    fun isQueued(item: MediaItem): Boolean = item.mediaMetadata.extras?.getBoolean(EXTRA_QUEUED) == true
 
     /** Recovers the [Track] embedded in an item's extras, if present. */
     fun trackFrom(item: MediaItem): Track? {

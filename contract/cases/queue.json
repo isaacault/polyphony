@@ -1,0 +1,231 @@
+{
+  "about": "The queue as Spotify has it (the Android app's UserQueue, PolyphonyKit's PlayQueue): after the current song, 'Next in queue' (songs you added: flag true) then 'Next from' what you pressed play on (flag false). add = Add to queue (the back of yours), next = Play next (the front of yours), advance = the song ended n times, play = play a new list from 'at'. The queue starts playing 'start' from its first song. upNext lists what follows the current song, with flags; current is the song playing when given.",
+  "cases": [
+    {
+      "name": "nothing of yours waiting: play next and add to queue both go straight after the current",
+      "start": [
+        "a",
+        "b",
+        "c"
+      ],
+      "ops": [
+        {
+          "add": "x"
+        }
+      ],
+      "upNext": [
+        [
+          "x",
+          true
+        ],
+        [
+          "b",
+          false
+        ],
+        [
+          "c",
+          false
+        ]
+      ]
+    },
+    {
+      "name": "add to queue goes behind what you've queued, before the album resumes",
+      "start": [
+        "a",
+        "b",
+        "c"
+      ],
+      "ops": [
+        {
+          "add": "x"
+        },
+        {
+          "add": "y"
+        }
+      ],
+      "upNext": [
+        [
+          "x",
+          true
+        ],
+        [
+          "y",
+          true
+        ],
+        [
+          "b",
+          false
+        ],
+        [
+          "c",
+          false
+        ]
+      ]
+    },
+    {
+      "name": "play next goes in front of what you've queued",
+      "start": [
+        "a",
+        "b",
+        "c"
+      ],
+      "ops": [
+        {
+          "add": "x"
+        },
+        {
+          "add": "y"
+        },
+        {
+          "next": "z"
+        }
+      ],
+      "upNext": [
+        [
+          "z",
+          true
+        ],
+        [
+          "x",
+          true
+        ],
+        [
+          "y",
+          true
+        ],
+        [
+          "b",
+          false
+        ],
+        [
+          "c",
+          false
+        ]
+      ]
+    },
+    {
+      "name": "yours play first, then the album carries on",
+      "start": [
+        "a",
+        "b",
+        "c"
+      ],
+      "ops": [
+        {
+          "add": "x"
+        },
+        {
+          "advance": 1
+        }
+      ],
+      "current": "x",
+      "upNext": [
+        [
+          "b",
+          false
+        ],
+        [
+          "c",
+          false
+        ]
+      ]
+    },
+    {
+      "name": "queueing while one of yours plays still goes before the album",
+      "start": [
+        "a",
+        "b",
+        "c"
+      ],
+      "ops": [
+        {
+          "add": "x"
+        },
+        {
+          "add": "y"
+        },
+        {
+          "advance": 1
+        },
+        {
+          "add": "w"
+        }
+      ],
+      "current": "x",
+      "upNext": [
+        [
+          "y",
+          true
+        ],
+        [
+          "w",
+          true
+        ],
+        [
+          "b",
+          false
+        ],
+        [
+          "c",
+          false
+        ]
+      ]
+    },
+    {
+      "name": "playing something new keeps what you queued, straight after its first song",
+      "start": [
+        "a",
+        "b",
+        "c"
+      ],
+      "ops": [
+        {
+          "add": "x"
+        },
+        {
+          "play": [
+            "p",
+            "q",
+            "r"
+          ],
+          "at": 1
+        }
+      ],
+      "current": "q",
+      "upNext": [
+        [
+          "x",
+          true
+        ],
+        [
+          "r",
+          false
+        ]
+      ]
+    },
+    {
+      "name": "the end of the list: added songs still come after the current",
+      "start": [
+        "a"
+      ],
+      "ops": [
+        {
+          "add": "x"
+        },
+        {
+          "add": "y"
+        }
+      ],
+      "upNext": [
+        [
+          "x",
+          true
+        ],
+        [
+          "y",
+          true
+        ]
+      ]
+    }
+  ]
+}

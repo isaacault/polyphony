@@ -142,16 +142,23 @@ fun QueueSheet(
                             // Where the queue stands, as captions inside the rows (separate items
                             // would shift the indices the drag-to-reorder works with).
                             val current = playback.currentIndex
+                            // As on Spotify: yours first ("Next in queue"), then the rest of what you
+                            // pressed play on ("Next from <album>").
+                            val queued = playback.queuedNext
+                            val fromList = current + 1 + queued
                             val caption = when {
                                 isDragging -> null
-                                index == 0 && current > 0 -> R.string.queue_previously_played
-                                index == current -> R.string.queue_now_playing
-                                index == current + 1 -> R.string.queue_up_next
+                                index == 0 && current > 0 -> stringResource(R.string.queue_previously_played)
+                                index == current -> stringResource(R.string.queue_now_playing)
+                                index == current + 1 && queued > 0 -> stringResource(R.string.queue_next_in_queue)
+                                index == fromList && queued > 0 -> playback.queueTitle?.let { stringResource(R.string.queue_next_from, it) }
+                                    ?: stringResource(R.string.queue_up_next)
+                                index == current + 1 -> stringResource(R.string.queue_up_next)
                                 else -> null
                             }
                             if (caption != null) {
                                 Text(
-                                    stringResource(caption),
+                                    caption,
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 2.dp),
