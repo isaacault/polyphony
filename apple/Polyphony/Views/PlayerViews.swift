@@ -149,19 +149,35 @@ struct QueueView: View {
             if let current = player.queue.current {
                 Section("Now Playing") { QueueRow(item: current, dimmed: false) }
             }
-            if !player.queue.upNext.isEmpty {
-                Section {
-                    ForEach(player.queue.upNext) { item in
+            // As on Spotify: yours first ("Next in Queue"), then the rest of what you pressed play on.
+            let mine = Array(player.queue.upNext.prefix(player.queue.queuedNext))
+            let rest = Array(player.queue.upNext.dropFirst(mine.count))
+            if !mine.isEmpty {
+                Section("Next in Queue") {
+                    ForEach(mine) { item in
                         QueueRow(item: item, dimmed: false)
                             .contextMenu { Button("Remove from Queue") { player.remove(item.id) } }
                     }
                     .onMove { from, to in
-                        if let first = from.first { player.moveUpNext(from: first, to: to > first ? to - 1 : to) }
+                        if let first = from.first { player.moveUpNext(from: first, to: min(to > first ? to - 1 : to, mine.count - 1)) }
+                    }
+                }
+            }
+            if !rest.isEmpty {
+                Section {
+                    ForEach(rest) { item in
+                        QueueRow(item: item, dimmed: false)
+                            .contextMenu { Button("Remove from Queue") { player.remove(item.id) } }
+                    }
+                    .onMove { from, to in
+                        if let first = from.first {
+                            player.moveUpNext(from: first + mine.count, to: max(to > first ? to - 1 : to, 0) + mine.count)
+                        }
                     }
                 } header: {
                     HStack {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(player.queue.title.map { "Up Next · \($0)" } ?? "Up Next")
+                            Text(player.queue.title.map { "Next from \($0)" } ?? "Up Next")
                             // As the Android app's queue: how much is left.
                             let left = player.queue.upNext
                             Text("\(left.count) songs · \(formatLong(left.reduce(0) { $0 + $1.entry.duration }))")

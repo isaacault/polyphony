@@ -154,7 +154,10 @@ public final class PlayerController {
     public func play(entries: [QueueEntry], startAt index: Int = 0, shuffle: Bool = false, title: String? = nil,
                      context: PlayContext? = nil, position: TimeInterval = 0) {
         let repeatMode = queue.repeatMode
+        // Songs you queued and haven't heard yet carry over, straight after the new first song (Spotify's way).
+        let waiting = queue.waitingQueued
         queue = PlayQueue(entries, startAt: index, shuffle: shuffle, title: title)
+        queue.carryQueued(waiting)
         queue.repeatMode = repeatMode
         queue.context = context
         loadCurrent(autoplay: true, startAt: position)
