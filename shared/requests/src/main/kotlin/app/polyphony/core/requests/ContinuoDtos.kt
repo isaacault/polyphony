@@ -572,3 +572,7 @@ internal data class ResolvedArtistDto(val musicBrainzArtistId: String, val name:
 /** `GET /v1/library/artist-names`. */
 @Serializable
 internal data class ArtistNameDto(val name: String, val originalName: String? = null, val sortName: String? = null)
+
+/** GET /v1/play-now/{id}/receiver (continuo#98): a signed link a speaker plays without a token. */
+@Serializable
+internal data class ReceiverLinkDto(val url: String, val expiresAt: Long? = null)

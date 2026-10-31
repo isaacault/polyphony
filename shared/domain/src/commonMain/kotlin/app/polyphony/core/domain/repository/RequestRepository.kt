@@ -134,6 +134,13 @@ interface RequestRepository {
     /** Where the player fetches a Play now song's audio, with this install's authorisation. */
     suspend fun playNowStream(server: Server, streamId: String): StreamRequest
 
+    /**
+     * A link a speaker (DLNA, Cast) can play a Play now song from without a token (continuo#98):
+     * on the server's LAN door for receivers, signed for this device, good for hours.
+     */
+    suspend fun playNowReceiverUrl(server: Server, streamId: String): String =
+        throw UnsupportedOperationException("This server can't hand speakers a Play now link.")
+
     /** Request just this song (MusicBrainz recording) of the album [albumReleaseGroupId]. */
     suspend fun requestTrack(server: Server, recordingId: String, albumReleaseGroupId: String): RequestOutcome
 

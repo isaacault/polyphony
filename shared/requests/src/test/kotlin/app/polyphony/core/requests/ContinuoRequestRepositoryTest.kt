@@ -139,6 +139,17 @@ class ContinuoRequestRepositoryTest {
     }
 
     @Test
+    fun `a speaker gets a signed Play now link from continuo`() = runTest {
+        val fake = FakeContinuo().apply {
+            routes["GET /v1/play-now/s-1/receiver"] = { _, _ ->
+                200 to """{"url":"http://192.168.0.101/v1/play-now/s-1/audio?d=d1&exp=9&sig=ab","expiresAt":9}"""
+            }
+        }
+        val url = repo(fake, FakeServers(server)).playNowReceiverUrl(server, "s-1")
+        assertEquals("http://192.168.0.101/v1/play-now/s-1/audio?d=d1&exp=9&sig=ab", url)
+    }
+
+    @Test
     fun `search maps availability and drops third-party artwork`() = runTest {
         val fake = FakeContinuo().apply { routes["GET /v1/search"] = { _, _ -> 200 to searchBody } }
         val results = repo(fake, FakeServers(server)).search(server, "geogaddi")
