@@ -217,6 +217,12 @@ class ContinuoRequestRepository internal constructor(
         headers = mapOf("Authorization" to "Bearer ${client.accessToken(server, force = false)}"),
     )
 
+    override suspend fun playNowReceiverUrl(server: Server, streamId: String): String {
+        val reply = client.get(server, "/v1/play-now/${URLEncoder.encode(streamId, "UTF-8")}/receiver")
+        if (reply.code !in 200..299) throw client.serverError(reply, "no speaker link for that song")
+        return client.decode(ReceiverLinkDto.serializer(), reply.body).url
+    }
+
     override suspend fun requestTrack(server: Server, recordingId: String, albumReleaseGroupId: String): RequestOutcome =
         sendRequest(server, Json.encodeToString(CreateTrackRequestBody.serializer(), CreateTrackRequestBody("track", recordingId, albumReleaseGroupId)))
 
