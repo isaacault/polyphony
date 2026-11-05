@@ -29,6 +29,8 @@ data class TranscodeDecision(
         DOWNLOADED("Downloaded"),
         /** The server failed to deliver the transcoded stream; original quality was used instead. */
         FALLBACK("Transcoding unavailable"),
+        /** An already-compressed file streamed as it is rather than re-encoded ([LossySourceRule]). */
+        LOSSY_SOURCE("Already compressed"),
     }
 
     val explanation: String
