@@ -68,7 +68,10 @@ import app.polyphony.core.playback.stream.QueuePrefetcher
 import app.polyphony.core.playback.transcode.AppliedQuality
 import app.polyphony.core.playback.transcode.QualityChangeRule
 import app.polyphony.core.playback.session.SessionActions
+import app.polyphony.core.playback.session.SeekableStreamsPlayer
 import app.polyphony.core.playback.session.SessionExtras
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.SettableFuture
 import app.polyphony.core.playback.stream.StreamCache
 import app.polyphony.core.playback.stream.StreamResolver
 import app.polyphony.core.playback.timer.SleepTimer
@@ -169,7 +172,7 @@ class PlaybackService : MediaLibraryService() {
         localPlayer = buildLocalPlayer(initial.playback)
         prefetcher = QueuePrefetcher(scope, streamResolver, streamCache, streamingUpstream)
         val players = PlayerFactory.create(this, localPlayer, castManager.isSupported, converter)
-        basePlayer = players.session
+        basePlayer = SeekableStreamsPlayer(players.session, ::seekByReload)
         player = basePlayer
 
         sleepTimer = SleepTimer(scope, pause = { player.pause() }, setVolume = { player.volume = it })
@@ -552,14 +555,42 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    private fun reloadCurrentItem() {
+    /**
+     * A scrub in a song the local player cannot seek in (a live transcode, see
+     * [SeekableStreamsPlayer]): wait off the main thread until the server knows the song's length,
+     * then reopen it at [positionMs], now seekable. If the length doesn't come in time the song
+     * plays on where it was.
+     */
+    private fun seekByReload(index: Int, positionMs: Long): ListenableFuture<*> {
+        val done = SettableFuture.create<Unit>()
+        val item = player.takeIf { index in 0 until it.mediaItemCount }?.getMediaItemAt(index)
+        val uri = item?.localConfiguration?.uri
+        if (item == null || uri == null) return done.apply { set(Unit) }
+        scope.launch {
+            try {
+                val ready = withContext(Dispatchers.IO) { streamResolver.awaitKnownLength(uri, SEEK_LENGTH_WAIT_MS) }
+                if (player !== basePlayer || player.currentMediaItem?.mediaId != item.mediaId) return@launch
+                if (ready) {
+                    Log.i(TAG, "Seeking in a live transcode: reopening it at $positionMs ms with a known length")
+                    reloadCurrentItem(positionMs)
+                } else {
+                    Log.w(TAG, "Can't seek yet: the server is still transcoding \"${item.mediaMetadata.title}\"")
+                }
+            } finally {
+                done.set(Unit)
+            }
+        }
+        return done
+    }
+
+    private fun reloadCurrentItem(atPositionMs: Long? = null) {
         val items = currentItems()
         if (items.isEmpty()) return
         val index = player.currentMediaItemIndex.coerceIn(0, items.lastIndex)
         // A new player period with a fresh extractor: the stream may resolve afresh (new quality,
-        // the original after a failed transcode).
+        // the original after a failed transcode, a known length).
         items[index].mediaId.takeIf { it.isNotEmpty() }?.let(streamResolver::unpin)
-        val position = player.currentPosition
+        val position = atPositionMs ?: player.currentPosition
         val playWhenReady = player.playWhenReady
         player.setMediaItems(items, index, position)
         player.prepare()
@@ -977,5 +1008,7 @@ class PlaybackService : MediaLibraryService() {
         const val SESSION_ID = "polyphony"
         const val NOTIFICATION_CHANNEL_ID = "polyphony_playback"
         private const val PRELOAD_DURATION_US = 10_000_000L
+        /** How long a scrub in a live transcode waits for the server to finish it. */
+        private const val SEEK_LENGTH_WAIT_MS = 8_000L
     }
 }
