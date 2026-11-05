@@ -59,6 +59,7 @@ import app.polyphony.core.playback.queue.QueueShuffleOrder
 import app.polyphony.core.playback.queue.PersistedQueue
 import app.polyphony.core.playback.queue.QueuePersistence
 import app.polyphony.core.playback.queue.QueueStore
+import app.polyphony.core.playback.remote.PlayNowReceiverLinks
 import app.polyphony.core.playback.reporting.PlaybackReporter
 import app.polyphony.core.playback.session.CustomCommands
 import app.polyphony.core.playback.session.PlayContextCodec
@@ -122,6 +123,7 @@ class PlaybackService : MediaLibraryService() {
     @Inject lateinit var serverLookup: ServerLookup
     @Inject lateinit var dlnaManager: DlnaManager
     @Inject lateinit var dlnaResolver: PolyphonyDlnaResolver
+    @Inject lateinit var playNowLinks: PlayNowReceiverLinks
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var localPlayer: ExoPlayer
@@ -432,6 +434,18 @@ class PlaybackService : MediaLibraryService() {
             val server = serverLookup.providerFor(serverId)?.server ?: return@launch
             withContext(Dispatchers.IO) { runCatching { requestRepository.prioritisePlayNow(server, streams.map { it.first }) } }
         }
+    }
+
+    /**
+     * On a speaker (Cast, DLNA), fetch the queue's Play now links ahead: Cast's converter can't
+     * wait for one, so a song whose link is in hand starts at once.
+     */
+    private fun warmPlayNowLinks() {
+        if (dlnaPlayer == null && castManager.currentTargetSync() == null) return
+        val streams = currentItems().mapNotNull { item ->
+            PlayNowIds.streamId(item.mediaId)?.let { stream -> MediaItemFactory.serverIdFrom(item)?.let { it to stream } }
+        }
+        streams.groupBy({ it.first }, { it.second }).forEach { (serverId, ids) -> playNowLinks.warm(serverId, ids) }
     }
 
     /**
@@ -760,6 +774,7 @@ class PlaybackService : MediaLibraryService() {
                 scheduleSave()
                 updateButtons()
                 syncPlayNowOrder()
+                warmPlayNowLinks()
             }
             if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
                 queueStore.retain(currentItems().map { it.mediaId })
