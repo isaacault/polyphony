@@ -3,6 +3,7 @@ package app.polyphony.ui.browse.library
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -153,6 +154,8 @@ fun DiscoveryPlaylistScreen(viewModel: DiscoveryPlaylistViewModel = hiltViewMode
         }
     }
     Scaffold(
+        // The list's padding has the navigation bar (LocalContentBottomPadding); not twice.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { Text(state.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },

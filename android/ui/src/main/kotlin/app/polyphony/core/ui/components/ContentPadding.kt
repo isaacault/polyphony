@@ -8,7 +8,8 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Extra bottom space screens must leave for overlays docked at the bottom (mini player, bottom
- * bar) when the shell lets content scroll underneath them. The shell provides it; screens read it.
+ * bar, and the system navigation bar under them) when the shell lets content scroll underneath
+ * them. The shell provides it; screens read it and add no navigation bar inset of their own.
  */
 val LocalContentBottomPadding = compositionLocalOf { 0.dp }
 
