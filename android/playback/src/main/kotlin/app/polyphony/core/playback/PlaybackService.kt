@@ -556,6 +556,9 @@ class PlaybackService : MediaLibraryService() {
         val items = currentItems()
         if (items.isEmpty()) return
         val index = player.currentMediaItemIndex.coerceIn(0, items.lastIndex)
+        // A new player period with a fresh extractor: the stream may resolve afresh (new quality,
+        // the original after a failed transcode).
+        items[index].mediaId.takeIf { it.isNotEmpty() }?.let(streamResolver::unpin)
         val position = player.currentPosition
         val playWhenReady = player.playWhenReady
         player.setMediaItems(items, index, position)
@@ -604,6 +607,7 @@ class PlaybackService : MediaLibraryService() {
         from.removeListener(latencyListener)
         runCatching { from.stop() }
         runCatching { from.clearMediaItems() }
+        streamResolver.retainPins(emptySet()) // every item gets a new period on the new output
 
         player = to
         dlnaPlayer = to as? DlnaPlayer
@@ -701,6 +705,9 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             if (mediaItem?.mediaId != retryTrackId) { retryTrackId = null; retryCount = 0 }
+            // Only the current song's period and the next one's (preloading) can still re-open a stream.
+            val next = player.nextMediaItemIndex.takeIf { it != C.INDEX_UNSET }?.let { player.getMediaItemAt(it).mediaId }
+            streamResolver.retainPins(setOfNotNull(mediaItem?.mediaId, next))
             val track = mediaItem?.let { trackFor(it) }
             reporter.onTrackStarted(track)
             recordContextProgress()
