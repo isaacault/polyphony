@@ -109,6 +109,47 @@ class DlnaPlaybackEngineTest {
     }
 
     @Test
+    fun `a renderer frozen at the old end is followed onto the armed track while it plays, then fed one track at a time`() = runTest {
+        // The Yamaha RX-V483 case: after the gapless hand-off it reports PLAYING at a's end for
+        // the whole of b. The phone must show b playing (not a's last second), never re-cue b,
+        // and start c itself when b ends.
+        val (t, e) = fixture(durations = mapOf("a" to 10_000, "b" to 20_000, "c" to 6_000)) {
+            freezeAtHandoff = true
+        }
+        e.start("a", "b", "c")
+        advanceTimeBy(2_500)
+        assertTrue("b should be armed as the next track", t.calls.contains("setNext:b"))
+        advanceTimeBy(14_500) // a ends at 10 s; its frozen report gives the hand-off away a few seconds later
+        val during = e.state.value
+        assertEquals("the engine must follow the renderer onto b", 1, during.currentIndex)
+        assertTrue("b's position comes from the engine's clock, not a's frozen end: ${during.positionAt(testScheduler.currentTime)}",
+            during.positionAt(testScheduler.currentTime) in 3_000L..9_000L)
+        assertEquals(20_000L, during.durationMs)
+        assertTrue("no gapless arming on a renderer whose reports freeze", t.calls.none { it == "setNext:c" })
+        advanceTimeBy(18_000) // b ends at 30 s; the renderer stops
+        val after = e.state.value
+        assertEquals(2, after.currentIndex)
+        assertEquals("b must never be re-cued", 0, t.calls.count { it == "setUri:b" })
+        assertEquals("c is started with SetAVTransportURI", 1, t.calls.count { it == "setUri:c" })
+    }
+
+    @Test
+    fun `a phone that polls late does not replay a track the renderer already played unnoticed`() = runTest {
+        // Status queries take 2.5 s each (a dozing phone), so polls are ~6 s apart, more than the
+        // old 3 s cap on each counted gap. The frozen renderer must still be followed, and b never
+        // started a second time.
+        val (t, e) = fixture(durations = mapOf("a" to 30_000, "b" to 20_000, "c" to 6_000)) {
+            freezeAtHandoff = true
+            statusLatencyMs = 2_500
+        }
+        e.start("a", "b", "c")
+        advanceTimeBy(70_000)
+        assertTrue("b should have been armed", t.calls.contains("setNext:b"))
+        assertEquals("b must never be re-cued", 0, t.calls.count { it == "setUri:b" })
+        assertEquals("the queue moves on to c", 1, t.calls.count { it == "setUri:c" })
+    }
+
+    @Test
     fun `queue ends after the last track when repeat is off`() = runTest {
         val (_, e) = fixture { supportsSetNext = false }
         e.start("c")

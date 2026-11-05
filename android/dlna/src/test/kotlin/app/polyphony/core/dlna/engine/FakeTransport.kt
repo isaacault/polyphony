@@ -2,6 +2,7 @@ package app.polyphony.core.dlna.engine
 
 import app.polyphony.core.dlna.service.TransportState
 import app.polyphony.core.dlna.soap.DlnaException
+import kotlinx.coroutines.delay
 
 /**
  * A renderer simulator driven by a virtual clock: position advances while PLAYING, tracks end at
@@ -20,6 +21,8 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
     /** The worst renderers freeze every field (URI, duration, position at the old end) after a
      *  hand-off while still reporting PLAYING, so there is no signal that a track changed. */
     var freezeAtHandoff = false
+    /** How long each status query takes, so polls come late (a phone with its screen off). */
+    var statusLatencyMs = 0L
 
     var state = TransportState.NO_MEDIA_PRESENT
         private set
@@ -72,6 +75,7 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
     override suspend fun setUri(url: String, metadata: String) {
         guard(); calls += "setUri:$url"; currentUri = url; nextUri = null; reportedUri = url; pendingReportedUri = null
         durationMs = durations[url]; basePositionMs = 0; state = TransportState.STOPPED
+        frozen = null // a fresh SetAVTransportURI resets even a frozen renderer's reports
     }
 
     override suspend fun setNextUri(url: String, metadata: String) {
@@ -92,6 +96,7 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
     override suspend fun seek(positionMs: Long) { guard(); calls += "seek:$positionMs"; basePositionMs = positionMs; playingSince = clock() }
 
     override suspend fun positionInfo(): TransportPosition {
+        if (statusLatencyMs > 0) delay(statusLatencyMs)
         guard(); tick()
         frozen?.let { return it }
         val uri = reportedUri ?: currentUri
@@ -100,7 +105,10 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
         return TransportPosition(uri, position(), durationMs)
     }
 
-    override suspend fun transportState(): TransportState { guard(); tick(); return state }
+    override suspend fun transportState(): TransportState {
+        if (statusLatencyMs > 0) delay(statusLatencyMs)
+        guard(); tick(); return state
+    }
 
     override suspend fun setVolume(percent: Int) { guard(); volume = percent }
 

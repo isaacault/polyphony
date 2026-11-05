@@ -61,6 +61,17 @@ class DlnaPlaybackEngine<T : Any>(
     /** Wall time of the previous poll, and how long the renderer has reported PLAYING since the current item was loaded (pauses excluded). */
     private var lastPollAt = 0L
     private var playedMsSinceLoad = 0L
+    private var lastPollPlaying = false
+
+    /** The position the renderer last reported while PLAYING, and since when it has not moved. */
+    private var lastReportedPositionMs: Long? = null
+    private var reportUnchangedSinceMs = 0L
+
+    /**
+     * The frozen position a renderer kept reporting after a gapless hand-off (the Yamaha RX-V483
+     * does this). Reports of it are ignored, and the engine's own clock is used, until it changes.
+     */
+    private var staleReportedPositionMs: Long? = null
 
     private data class LoadedTrack(val index: Int, val uid: Long, val url: String)
 
@@ -397,6 +408,9 @@ class DlnaPlaybackEngine<T : Any>(
         pausedByStop = false
         playedMsSinceLoad = 0L
         lastPollAt = 0L
+        lastPollPlaying = false
+        lastReportedPositionMs = null
+        staleReportedPositionMs = null
         _state.update { it.copy(playbackState = EnginePlaybackState.BUFFERING, isLoading = true, error = null, durationMs = -1) }
         var url: String? = null
         try {
@@ -430,6 +444,9 @@ class DlnaPlaybackEngine<T : Any>(
         val now = clock()
         playStartedAt = now
         lastCommandAt = now
+        // Count played time from the Play command, not from the first poll, which may come late.
+        lastPollAt = now
+        lastPollPlaying = true
         _state.update { it.copy(playbackState = EnginePlaybackState.READY, isLoading = false, playWhenReady = true, positionSampledAtMs = now, error = null) }
     }
 
@@ -549,17 +566,27 @@ class DlnaPlaybackEngine<T : Any>(
         val sinceCommand = now - lastCommandAt
         val s0 = _state.value
         val transportNow = transportResult.getOrNull()
-        if (transportNow == TransportState.PLAYING && lastPollAt > 0) {
-            playedMsSinceLoad += (now - lastPollAt).coerceIn(0, pollIntervalMs * 3)
+        val playingNow = transportNow == TransportState.PLAYING
+        if (playingNow && lastPollAt > 0) {
+            val gap = (now - lastPollAt).coerceAtLeast(0)
+            // PLAYING at both ends: the renderer played the whole gap, however late this poll came
+            // (a phone with its screen off polls late). Otherwise it started somewhere in between.
+            playedMsSinceLoad += if (lastPollPlaying) gap else gap.coerceAtMost(pollIntervalMs)
         }
+        lastPollPlaying = playingNow
         lastPollAt = now
 
         positionResult.getOrNull()?.let { p ->
             val armed = armedNext
-            val reason = armed?.let { handoffReason(it, current, p, s0, now, sinceCommand, transportNow) }
+            val frozenForMs = trackFrozenReport(p, transportNow, now)
+            val reason = armed?.let { handoffReason(it, current, p, s0, now, sinceCommand, transportNow, frozenForMs) }
             if (armed != null && reason != null) {
                 advanceToArmed(armed, p, s0, now, reason)
-            } else {
+            } else if (isStaleReport(p)) {
+                // Still the frozen report from before the hand-off: keep the engine's own clock.
+            } else if (armed == null || playingNow) {
+                // While a hand-off may be under way, a STOPPED or TRANSITIONING sample must not
+                // overwrite the duration and position the hand-off checks compare against.
                 if (p.durationMs != null && p.durationMs > 0 && p.durationMs != s0.durationMs) {
                     _state.update { it.copy(durationMs = p.durationMs) }
                 }
@@ -659,10 +686,39 @@ class DlnaPlaybackEngine<T : Any>(
     }
 
     /**
+     * How long the renderer has reported the same position while PLAYING (0 when it is moving or
+     * not playing). A renderer that is really playing moves on every poll.
+     */
+    private fun trackFrozenReport(p: TransportPosition, transportNow: TransportState?, now: Long): Long {
+        val pos = p.positionMs
+        if (transportNow != TransportState.PLAYING || pos == null) {
+            lastReportedPositionMs = null
+            return 0L
+        }
+        val last = lastReportedPositionMs
+        if (last == null || kotlin.math.abs(pos - last) > FROZEN_JITTER_MS) {
+            lastReportedPositionMs = pos
+            reportUnchangedSinceMs = now
+            return 0L
+        }
+        return now - reportUnchangedSinceMs
+    }
+
+    /** True while the renderer still repeats the frozen report from before a hand-off. */
+    private fun isStaleReport(p: TransportPosition): Boolean {
+        val stale = staleReportedPositionMs ?: return false
+        val pos = p.positionMs ?: return true
+        if (kotlin.math.abs(pos - stale) <= FROZEN_JITTER_MS) return true
+        staleReportedPositionMs = null // the renderer reports live values again
+        return false
+    }
+
+    /**
      * Why we believe the renderer moved on to the armed next track by itself, or null. The URI is
      * the authoritative signal, but some renderers keep reporting the previous TrackURI after a
      * SetNextAVTransportURI hand-off, so a position that jumps back near the end of the current
-     * track, a position past its end, or a duration that becomes the next track's all count too.
+     * track, a position past its end, a position frozen near the end while PLAYING, or a duration
+     * that becomes the next track's all count too.
      */
     private fun handoffReason(
         armed: LoadedTrack,
@@ -672,6 +728,7 @@ class DlnaPlaybackEngine<T : Any>(
         now: Long,
         sinceCommand: Long,
         transportNow: TransportState?,
+        frozenForMs: Long,
     ): String? {
         if (p.trackUri != null && sameUrl(p.trackUri, armed.url) && !sameUrl(p.trackUri, current.url)) return "uri"
         if (sinceCommand <= SETTLE_MS || transportNow != TransportState.PLAYING || !s0.isPlayingNow) return null
@@ -681,6 +738,7 @@ class DlnaPlaybackEngine<T : Any>(
             val nearEnd = expected >= s0.durationMs - NEAR_END_WINDOW_MS
             if (nearEnd && pos + REGRESSION_MS < expected) return "position jumped back"
             if (pos > s0.durationMs + END_TOLERANCE_MS) return "position past the end"
+            if (pos >= s0.durationMs - NEAR_END_WINDOW_MS && frozenForMs >= FROZEN_HANDOFF_MS) return REASON_FROZEN
         }
         val armedDuration = resolvedCache[armed.uid]?.durationMs ?: return null
         if (p.durationMs != null && p.durationMs > 0 && s0.durationMs > 0 && armedDuration > 0 &&
@@ -691,19 +749,34 @@ class DlnaPlaybackEngine<T : Any>(
     }
 
     private fun advanceToArmed(armed: LoadedTrack, p: TransportPosition, s0: EngineState<T>, now: Long, reason: String) {
-        // A renderer reporting time past the old end is still counting from the previous track's start.
-        val position = p.positionMs?.let { if (s0.durationMs > 0 && it > s0.durationMs + END_TOLERANCE_MS) it - s0.durationMs else it } ?: 0L
+        val frozen = reason == REASON_FROZEN
+        val position = when {
+            // The report stopped moving when the previous track ended; the next one has played since.
+            frozen -> now - reportUnchangedSinceMs
+            // A renderer reporting time past the old end is still counting from the previous track's start.
+            else -> p.positionMs?.let { if (s0.durationMs > 0 && it > s0.durationMs + END_TOLERANCE_MS) it - s0.durationMs else it } ?: 0L
+        }
         log("renderer moved to the next track on its own ($reason); now at index ${armed.index}")
+        if (frozen) {
+            // Its reports stay pinned to the old track, so a second silent hand-off could not be
+            // followed: from now on each track is started with SetAVTransportURI, which resets them.
+            staleReportedPositionMs = p.positionMs
+            if (setNextSupported != false) {
+                setNextSupported = false
+                log("renderer reports a frozen position after a gapless hand-off; starting each track itself from now on")
+            }
+        }
         loaded = armed
         armedNext = null
         playStartedAt = now
         playedMsSinceLoad = position
+        val reportedDuration = p.durationMs?.takeIf { d -> d > 0 && !frozen }
         _state.update {
             it.copy(
                 currentIndex = armed.index,
                 positionMs = position,
                 positionSampledAtMs = now,
-                durationMs = p.durationMs?.takeIf { d -> d > 0 } ?: resolvedCache[armed.uid]?.durationMs ?: -1,
+                durationMs = reportedDuration ?: resolvedCache[armed.uid]?.durationMs ?: -1,
                 playbackState = EnginePlaybackState.READY,
                 isLoading = false,
                 discontinuityCounter = it.discontinuityCounter + 1,
@@ -714,13 +787,16 @@ class DlnaPlaybackEngine<T : Any>(
     /**
      * The renderer stopped at what looks like the end of the current track, but it has reported
      * PLAYING for long enough to have gone through the armed next track as well without telling
-     * us. Count that track as finished so it is not started a second time.
+     * us. Count that track as finished so it is not started a second time. Played time is only
+     * known as well as the polls sample it, so the cut is halfway into the armed track: nearer
+     * the current track's length, it stopped there; nearer both lengths, it played both.
      */
     private fun skipArmedIfAlreadyPlayed(s: EngineState<T>) {
         val armed = armedNext ?: return
         val armedDuration = resolvedCache[armed.uid]?.durationMs ?: return
-        if (s.durationMs <= 0 || armedDuration <= 0) return
-        if (playedMsSinceLoad >= s.durationMs + armedDuration - END_TOLERANCE_MS) {
+        val currentDuration = loaded?.let { resolvedCache[it.uid]?.durationMs }?.takeIf { it > 0 } ?: s.durationMs
+        if (currentDuration <= 0 || armedDuration <= 0) return
+        if (playedMsSinceLoad >= currentDuration + armedDuration / 2) {
             log("renderer stopped after also playing the queued track (index ${armed.index}) unnoticed; skipping it")
             _state.update { it.copy(currentIndex = armed.index) }
         }
@@ -747,6 +823,11 @@ class DlnaPlaybackEngine<T : Any>(
         const val REGRESSION_MS = 5_000L
         const val NEAR_END_WINDOW_MS = 20_000L
         const val DURATION_MATCH_MS = 2_000L
+        /** Reported positions this close count as "not moving" (renderers round to whole seconds). */
+        const val FROZEN_JITTER_MS = 500L
+        /** A PLAYING renderer whose position has not moved for this long near a track's end has handed off. */
+        const val FROZEN_HANDOFF_MS = 4_000L
+        const val REASON_FROZEN = "position frozen at the end"
         const val UNKNOWN_DURATION_MIN_PLAY_MS = 5_000L
     }
 }
