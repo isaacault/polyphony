@@ -9,6 +9,7 @@ import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.NetworkMonitor
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.SettingsRepository
+import app.polyphony.core.domain.transcode.LossySourceRule
 import app.polyphony.core.domain.transcode.TranscodeProfile
 import app.polyphony.core.domain.transcode.TranscodeDecision
 import app.polyphony.core.playback.engine.ServerLookup
@@ -136,6 +137,8 @@ class StreamResolver @Inject constructor(
         CodecSupport.adjust(decision.profile, CodecSupport.supported(provider.server)).let { adjusted ->
             if (adjusted !== decision.profile) decision = decision.copy(profile = adjusted)
         }
+        // An MP3 (or other lossy file) streams as it is unless the connection is struggling.
+        decision = LossySourceRule.apply(decision, track)
         val request = provider.streamRequest(track, decision.profile)
         var key = "$trackId|${decision.profile.fingerprint}"
         // Offline or on mobile data, a complete copy already on the phone beats none or another
