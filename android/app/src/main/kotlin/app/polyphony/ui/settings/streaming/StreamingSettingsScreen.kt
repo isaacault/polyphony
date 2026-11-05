@@ -208,6 +208,12 @@ fun StreamingSettingsScreen(viewModel: StreamingViewModel = hiltViewModel()) {
                 onCheckedChange = { on -> viewModel.updatePolicy { it.copy(meteredWifiAsCellular = on) } },
             )
             SwitchPreference(
+                title = stringResource(R.string.settings_streaming_away_wifi),
+                summary = stringResource(R.string.settings_streaming_away_wifi_summary),
+                checked = policy.awayWifiAsCellular,
+                onCheckedChange = { on -> viewModel.updatePolicy { it.copy(awayWifiAsCellular = on) } },
+            )
+            SwitchPreference(
                 title = stringResource(R.string.settings_streaming_reload_current),
                 summary = stringResource(R.string.settings_streaming_reload_current_summary),
                 checked = policy.reloadCurrentTrackOnChange,

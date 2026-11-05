@@ -95,4 +95,31 @@ class TranscodeResolverTest {
         val d = resolver.resolve(TranscodePolicy(), profiles + custom, TranscodeContext(wifi, tv, deviceProfileId = "custom.1"))
         assertEquals("custom.1", d.profile.id)
     }
+
+    @Test
+    fun `wifi away from home gets the mobile data profile`() {
+        val policy = TranscodePolicy(wifiProfileId = TranscodeProfile.CAST_SAFE_ID, cellularProfileId = TranscodeProfile.HIGH_ID)
+        val away = resolver.resolve(policy, profiles, TranscodeContext(wifi, atHome = false))
+        assertEquals(TranscodeProfile.HIGH_ID, away.profile.id)
+        assertEquals(TranscodeDecision.Reason.AWAY_RULE, away.reason)
+        val home = resolver.resolve(policy, profiles, TranscodeContext(wifi, atHome = true))
+        assertEquals(TranscodeDecision.Reason.WIFI_RULE, home.reason)
+        // Not known (no receiver address, not checked yet): the Wi-Fi rule, as before.
+        val unknown = resolver.resolve(policy, profiles, TranscodeContext(wifi, atHome = null))
+        assertEquals(TranscodeDecision.Reason.WIFI_RULE, unknown.reason)
+        val off = resolver.resolve(policy.copy(awayWifiAsCellular = false), profiles, TranscodeContext(wifi, atHome = false))
+        assertEquals(TranscodeDecision.Reason.WIFI_RULE, off.reason)
+    }
+
+    @Test
+    fun `mobile data stays the mobile data rule whatever the home check says`() {
+        val d = resolver.resolve(TranscodePolicy(), profiles, TranscodeContext(cellular, atHome = false))
+        assertEquals(TranscodeDecision.Reason.CELLULAR_RULE, d.reason)
+    }
+
+    @Test
+    fun `high is opus at 160 kbps`() {
+        assertEquals(AudioCodec.OPUS, TranscodeProfile.HIGH.codec)
+        assertEquals(160, TranscodeProfile.HIGH.maxBitrateKbps)
+    }
 }

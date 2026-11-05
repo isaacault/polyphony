@@ -52,8 +52,9 @@ class JellyfinStreamParamsTest {
 
     @Test
     fun `lossy file under the cap direct plays and over the cap transcodes`() {
-        // 192 kbps MP3 is under the 256 kbps "High" cap → direct play, original MIME.
-        val under = JellyfinStreamParams.from(TranscodeProfile.HIGH, mp3)
+        // 192 kbps MP3 is under a 256 kbps Opus cap → direct play, original MIME.
+        val opus256 = TranscodeProfile("test.opus256", "Opus 256", codec = AudioCodec.OPUS, maxBitrateKbps = 256)
+        val under = JellyfinStreamParams.from(opus256, mp3)
         assertFalse(under.likelyTranscoded)
         assertEquals("audio/mpeg", under.mimeTypeFor(mp3))
         assertTrue(under.containers.contains("mp3"))

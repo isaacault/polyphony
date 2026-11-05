@@ -15,6 +15,7 @@ import app.polyphony.core.domain.model.ServerOptions
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.repository.NetworkMonitor
 import app.polyphony.core.playback.cast.CastManager
+import app.polyphony.core.playback.engine.HomeNetworkDetector
 import app.polyphony.platform.LocalNetworkAccess
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
@@ -44,6 +45,7 @@ class DiagnosticsExporter @Inject constructor(
     private val castController: CastController,
     private val streamResolver: StreamResolver,
     private val networkMonitor: NetworkMonitor,
+    private val homeNetworkDetector: HomeNetworkDetector,
     private val castManager: CastManager,
     private val dlnaManager: DlnaManager,
 ) {
@@ -107,7 +109,7 @@ class DiagnosticsExporter @Inject constructor(
 
         appendLine("== Network ==")
         val n = networkMonitor.state.value
-        appendLine("monitor: kind=${n.kind} metered=${n.isMetered} vpn=${n.isVpn}")
+        appendLine("monitor: kind=${n.kind} metered=${n.isMetered} vpn=${n.isVpn} home=${homeNetworkDetector.atHome.value ?: "unknown"}")
         describeNetworks().forEach(::appendLine)
         appendLine()
 
