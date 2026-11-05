@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.media3.common.MediaItem
 import app.polyphony.core.dlna.engine.DlnaMediaResolver
 import app.polyphony.core.dlna.engine.DlnaPlaybackEngine
+import app.polyphony.core.dlna.engine.EnginePlaybackState
 import app.polyphony.core.dlna.engine.RendererTransport
 import app.polyphony.core.dlna.player.DlnaPlayer
 import app.polyphony.core.dlna.service.AvTransportService
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -91,6 +93,8 @@ class DlnaManager @Inject constructor(
     private var discoveryRefs = 0
     private var eventJob: Job? = null
     private var volumeJob: Job? = null
+    private var keepAwakeJob: Job? = null
+    private val keepAwake = DlnaKeepAwake(context)
     private var engineScope: CoroutineScope? = null
 
     fun setSessionListener(listener: DlnaSessionListener?) { sessionListener = listener }
@@ -238,6 +242,18 @@ class DlnaManager @Inject constructor(
                         _state.update { if (it.isConnected) it.copy(volume = v / 100f) else it }
                     }
                 }
+                keepAwakeJob?.cancel()
+                keepAwakeJob = scope.launch {
+                    // Awake while the renderer plays; each track change renews the wake lock.
+                    engine.state
+                        .map { s ->
+                            val active = s.playWhenReady && !s.released &&
+                                (s.playbackState == EnginePlaybackState.READY || s.playbackState == EnginePlaybackState.BUFFERING)
+                            active to s.currentIndex
+                        }
+                        .distinctUntilChanged()
+                        .collect { (active, _) -> keepAwake.hold(active) }
+                }
                 runCatching { transcodeProfileRepository.rememberRemoteDevice(entry.renderer.target, connected = true) }
                 withContext(Dispatchers.Main) { sessionListener?.onDlnaSessionAvailable(player, entry.renderer) }
             } catch (t: Throwable) {
@@ -256,6 +272,9 @@ class DlnaManager @Inject constructor(
         _activePlayer.value = null
         volumeJob?.cancel()
         volumeJob = null
+        keepAwakeJob?.cancel()
+        keepAwakeJob = null
+        keepAwake.hold(false)
         withContext(Dispatchers.Main) {
             runCatching { sessionListener?.onDlnaSessionUnavailable() }
             runCatching { player.release() }
