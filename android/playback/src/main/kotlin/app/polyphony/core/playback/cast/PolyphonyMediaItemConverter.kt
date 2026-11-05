@@ -4,12 +4,14 @@ import android.net.Uri
 import android.util.Log
 import androidx.media3.cast.MediaItemConverter
 import androidx.media3.common.MediaItem
+import app.polyphony.core.domain.model.PlayNowIds
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.transcode.OutputTarget
 import app.polyphony.core.playback.engine.ServerLookup
 import app.polyphony.core.playback.engine.TranscodeDecisionEngine
 import app.polyphony.core.playback.queue.MediaItemFactory
 import app.polyphony.core.playback.queue.QueueStore
+import app.polyphony.core.playback.remote.PlayNowReceiverLinks
 import app.polyphony.core.playback.remote.RemoteUrlResolver
 import app.polyphony.core.playback.transcode.CodecSupport
 import app.polyphony.core.playback.util.PlaybackJson
@@ -25,7 +27,8 @@ import javax.inject.Singleton
 /**
  * Converts queue items for the Cast receiver. Receivers fetch URLs themselves, so the real stream
  * URL (with the per-device / network transcoding decision) is baked in here. Custom headers cannot
- * be sent by a receiver; providers embed authentication in the URL.
+ * be sent by a receiver; providers embed authentication in the URL. A Play now song has no library
+ * stream: it gets the link continuo signs for speakers ([PlayNowReceiverLinks]), the file as it is.
  */
 @Singleton
 class PolyphonyMediaItemConverter @Inject constructor(
@@ -34,6 +37,7 @@ class PolyphonyMediaItemConverter @Inject constructor(
     private val engine: TranscodeDecisionEngine,
     private val castManager: CastManager,
     private val remoteUrls: RemoteUrlResolver,
+    private val playNowLinks: PlayNowReceiverLinks,
 ) : MediaItemConverter {
 
     override fun toMediaQueueItem(mediaItem: MediaItem): MediaQueueItem {
@@ -47,9 +51,15 @@ class PolyphonyMediaItemConverter @Inject constructor(
             val adjusted = server?.let { CodecSupport.adjust(d.profile, CodecSupport.supported(it)) } ?: d.profile
             if (adjusted !== d.profile) d.copy(profile = adjusted) else d
         }
-        val request = provider?.streamRequest(track, decision.profile)?.let { req ->
-            if (server != null) req.copy(url = remoteUrls.forReceiver(req.url, server)) else req
+        val playNow = PlayNowIds.streamId(track.id)
+        val request = if (playNow != null) {
+            null
+        } else {
+            provider?.streamRequest(track, decision.profile)?.let { req ->
+                if (server != null) req.copy(url = remoteUrls.forReceiver(req.url, server)) else req
+            }
         }
+        val url = if (playNow != null) playNowLinks.blocking(track.serverId, playNow) else request?.url
 
         val metadata = MediaMetadata(MediaMetadata.MEDIA_TYPE_MUSIC_TRACK).apply {
             putString(MediaMetadata.KEY_TITLE, track.title)
@@ -71,10 +81,11 @@ class PolyphonyMediaItemConverter @Inject constructor(
         val mime = request?.mimeType ?: track.mimeType ?: guessMime(track.container)
         Log.i(
             "PolyphonyCast",
-            "Queue item for ${target.key}: \"${track.title}\" ${track.container} -> ${decision.profile.name} (${decision.reason}) " +
-                "mime=$mime transcoded=${request?.isTranscoded} host=${request?.url?.let { Uri.parse(it).host }}",
+            "Queue item for ${target.key}: \"${track.title}\" ${track.container} -> " +
+                (if (playNow != null) "Play now link" else "${decision.profile.name} (${decision.reason})") +
+                " mime=$mime transcoded=${request?.isTranscoded} host=${url?.let { Uri.parse(it).host }}",
         )
-        val info = MediaInfo.Builder(request?.url ?: "")
+        val info = MediaInfo.Builder(url ?: "")
             .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
             .setContentType(mime)
             .setMetadata(metadata)

@@ -8,14 +8,13 @@ import app.polyphony.core.dlna.service.RendererFormatSupport
 import app.polyphony.core.domain.model.PlayNowIds
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.DlnaRenderer
-import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.playback.engine.ServerLookup
+import app.polyphony.core.playback.remote.PlayNowReceiverLinks
 import app.polyphony.core.playback.remote.RemoteUrlResolver
 import app.polyphony.core.playback.transcode.CodecSupport
 import app.polyphony.core.playback.engine.TranscodeDecisionEngine
 import app.polyphony.core.playback.queue.MediaItemFactory
 import app.polyphony.core.playback.queue.QueueStore
-import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,7 +30,7 @@ class PolyphonyDlnaResolver @Inject constructor(
     private val serverLookup: ServerLookup,
     private val engine: TranscodeDecisionEngine,
     private val remoteUrls: RemoteUrlResolver,
-    private val requests: RequestRepository,
+    private val playNowLinks: PlayNowReceiverLinks,
 ) : DlnaMediaResolver {
 
     override suspend fun resolve(item: MediaItem, renderer: DlnaRenderer): ResolvedStream? {
@@ -73,15 +72,7 @@ class PolyphonyDlnaResolver @Inject constructor(
      * as it is (continuo serves it untranscoded).
      */
     private suspend fun resolvePlayNow(track: Track, streamId: String): ResolvedStream? {
-        val server = serverLookup.serverFor(track.serverId) ?: return null
-        val url = try {
-            requests.playNowReceiverUrl(server, streamId)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "no speaker link for Play now \"${track.title}\": ${e.message}")
-            return null
-        }
+        val url = playNowLinks.get(track.serverId, streamId) ?: return null
         return ResolvedStream(
             url = url,
             mimeType = track.mimeType ?: playNowMime(track.container),
