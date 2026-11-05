@@ -109,35 +109,66 @@ class DlnaPlaybackEngineTest {
     }
 
     @Test
-    fun `a renderer frozen at the old end is followed onto the armed track while it plays, then fed one track at a time`() = runTest {
-        // The Yamaha RX-V483 case: after the gapless hand-off it reports PLAYING at a's end for
-        // the whole of b. The phone must show b playing (not a's last second), never re-cue b,
-        // and start c itself when b ends.
-        val (t, e) = fixture(durations = mapOf("a" to 10_000, "b" to 20_000, "c" to 6_000)) {
+    fun `a renderer whose report freezes is followed through every gapless hand-off`() = runTest {
+        // The Yamaha RX-V483 case: after the first gapless hand-off it reports PLAYING at a's end
+        // for good. The phone must show b, then c, playing (never a's last second), keep handing
+        // the next track over with SetNext (gapless), and never re-cue a track.
+        val (t, e) = fixture(durations = mapOf("a" to 10_000, "b" to 20_000, "c" to 15_000)) {
             freezeAtHandoff = true
         }
         e.start("a", "b", "c")
         advanceTimeBy(2_500)
         assertTrue("b should be armed as the next track", t.calls.contains("setNext:b"))
         advanceTimeBy(14_500) // a ends at 10 s; its frozen report gives the hand-off away a few seconds later
-        val during = e.state.value
-        assertEquals("the engine must follow the renderer onto b", 1, during.currentIndex)
-        assertTrue("b's position comes from the engine's clock, not a's frozen end: ${during.positionAt(testScheduler.currentTime)}",
-            during.positionAt(testScheduler.currentTime) in 3_000L..9_000L)
-        assertEquals(20_000L, during.durationMs)
-        assertTrue("no gapless arming on a renderer whose reports freeze", t.calls.none { it == "setNext:c" })
-        advanceTimeBy(18_000) // b ends at 30 s; the renderer stops
-        val after = e.state.value
-        assertEquals(2, after.currentIndex)
-        assertEquals("b must never be re-cued", 0, t.calls.count { it == "setUri:b" })
-        assertEquals("c is started with SetAVTransportURI", 1, t.calls.count { it == "setUri:c" })
+        val onB = e.state.value
+        assertEquals("the engine must follow the renderer onto b", 1, onB.currentIndex)
+        assertTrue("b's position comes from the engine's clock, not a's frozen end: ${onB.positionAt(testScheduler.currentTime)}",
+            onB.positionAt(testScheduler.currentTime) in 3_000L..9_000L)
+        assertEquals(20_000L, onB.durationMs)
+        advanceTimeBy(2_000)
+        assertTrue("c is armed for a gapless hand-off too", t.calls.contains("setNext:c"))
+        advanceTimeBy(19_000) // b ends at 30 s and the renderer moves to c; the report stays frozen at a's end
+        val onC = e.state.value
+        assertEquals("the engine's clock follows the renderer onto c", 2, onC.currentIndex)
+        assertEquals(15_000L, onC.durationMs)
+        advanceTimeBy(14_000) // c ends at 45 s: the renderer stops, the queue is done
+        assertEquals(EnginePlaybackState.ENDED, e.state.value.playbackState)
+        assertEquals("only a was ever started with SetAVTransportURI", listOf("setUri:a"), t.calls.filter { it.startsWith("setUri") })
+    }
+
+    @Test
+    fun `a frozen renderer whose TrackMetaData follows the playing track is followed at once`() = runTest {
+        val (t, e) = fixture(durations = mapOf("a" to 10_000, "b" to 20_000, "c" to 15_000)) {
+            freezeAtHandoff = true
+            reportsItemId = true
+        }
+        e.start("a", "b", "c")
+        advanceTimeBy(12_100) // a ends at 10 s; the next poll's TrackMetaData already names b
+        assertEquals(1, e.state.value.currentIndex)
+        advanceTimeBy(20_000) // b ends at 30 s
+        assertEquals(2, e.state.value.currentIndex)
+        assertEquals(listOf("setUri:a"), t.calls.filter { it.startsWith("setUri") })
+    }
+
+    @Test
+    fun `a frozen renderer whose GetMediaInfo shows the hand-off is followed at once`() = runTest {
+        val (t, e) = fixture(durations = mapOf("a" to 10_000, "b" to 20_000, "c" to 15_000)) {
+            freezeAtHandoff = true
+            reportsMediaInfo = true
+        }
+        e.start("a", "b", "c")
+        advanceTimeBy(12_100)
+        assertEquals(1, e.state.value.currentIndex)
+        advanceTimeBy(20_000)
+        assertEquals(2, e.state.value.currentIndex)
+        assertEquals(listOf("setUri:a"), t.calls.filter { it.startsWith("setUri") })
     }
 
     @Test
     fun `a phone that polls late does not replay a track the renderer already played unnoticed`() = runTest {
         // Status queries take 2.5 s each (a dozing phone), so polls are ~6 s apart, more than the
-        // old 3 s cap on each counted gap. The frozen renderer must still be followed, and b never
-        // started a second time.
+        // old 3 s cap on each counted gap. The frozen renderer must still be followed, and no
+        // track started a second time.
         val (t, e) = fixture(durations = mapOf("a" to 30_000, "b" to 20_000, "c" to 6_000)) {
             freezeAtHandoff = true
             statusLatencyMs = 2_500
@@ -145,8 +176,8 @@ class DlnaPlaybackEngineTest {
         e.start("a", "b", "c")
         advanceTimeBy(70_000)
         assertTrue("b should have been armed", t.calls.contains("setNext:b"))
-        assertEquals("b must never be re-cued", 0, t.calls.count { it == "setUri:b" })
-        assertEquals("the queue moves on to c", 1, t.calls.count { it == "setUri:c" })
+        assertEquals("no track is re-cued", listOf("setUri:a"), t.calls.filter { it.startsWith("setUri") })
+        assertEquals("the queue reached c", 2, e.state.value.currentIndex)
     }
 
     @Test

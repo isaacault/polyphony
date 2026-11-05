@@ -54,6 +54,11 @@ class DlnaPlaybackEngine<T : Any>(
     private var pollJob: Job? = null
     private var consecutivePollFailures = 0
     private var setNextSupported: Boolean? = null
+    private var mediaInfoSupported: Boolean? = null
+    /** The armed track's uid once GetMediaInfo has shown it as the queued NextURI. */
+    private var mediaInfoShowedArmed: Long? = null
+    /** When the current armed next track was handed to the renderer. */
+    private var armedAt = 0L
     private var loaded: LoadedTrack? = null
     private var armedNext: LoadedTrack? = null
     private val resolvedCache = HashMap<Long, ResolvedStream>()
@@ -578,11 +583,17 @@ class DlnaPlaybackEngine<T : Any>(
 
         positionResult.getOrNull()?.let { p ->
             val armed = armedNext
+            val stale = isStaleReport(p)
             val frozenForMs = trackFrozenReport(p, transportNow, now)
-            val reason = armed?.let { handoffReason(it, current, p, s0, now, sinceCommand, transportNow, frozenForMs) }
+            var reason = armed?.let { handoffReason(it, current, p, s0, now, sinceCommand, transportNow, frozenForMs, stale) }
+            if (armed != null && reason == null && playingNow && s0.isPlayingNow && sinceCommand > SETTLE_MS &&
+                s0.durationMs > 0 && clockPosition(s0, now) >= s0.durationMs - MEDIA_INFO_WINDOW_MS
+            ) {
+                reason = mediaInfoReason(armed, current, s0, now)
+            }
             if (armed != null && reason != null) {
-                advanceToArmed(armed, p, s0, now, reason)
-            } else if (isStaleReport(p)) {
+                advanceToArmed(armed, p, s0, now, reason, stale)
+            } else if (stale) {
                 // Still the frozen report from before the hand-off: keep the engine's own clock.
             } else if (armed == null || playingNow) {
                 // While a hand-off may be under way, a STOPPED or TRANSITIONING sample must not
@@ -675,6 +686,7 @@ class DlnaPlaybackEngine<T : Any>(
         try {
             tx { transport.setNextUri(resolved.url, DidlLite.build(resolved, itemId = nextItem.uid.toString())) }
             armedNext = LoadedTrack(nextIndex, nextItem.uid, resolved.url)
+            armedAt = clock()
             if (setNextSupported == null) setNextSupported = true
         } catch (c: CancellationException) {
             throw c
@@ -713,12 +725,48 @@ class DlnaPlaybackEngine<T : Any>(
         return false
     }
 
+    /** The engine's own idea of the position: the last sample plus the time since, not capped at the end. */
+    private fun clockPosition(s: EngineState<T>, now: Long): Long =
+        if (s.isPlayingNow) s.positionMs + (now - s.positionSampledAtMs).coerceAtLeast(0) else s.positionMs
+
     /**
-     * Why we believe the renderer moved on to the armed next track by itself, or null. The URI is
-     * the authoritative signal, but some renderers keep reporting the previous TrackURI after a
-     * SetNextAVTransportURI hand-off, so a position that jumps back near the end of the current
-     * track, a position past its end, a position frozen near the end while PLAYING, or a duration
-     * that becomes the next track's all count too.
+     * GetMediaInfo near the end of a track: a renderer that hides a hand-off in GetPositionInfo
+     * may still show it here, as the armed URI becoming the current one or the queued next one
+     * being used up. Null when it shows neither, or does not answer GetMediaInfo.
+     */
+    private suspend fun mediaInfoReason(armed: LoadedTrack, current: LoadedTrack, s0: EngineState<T>, now: Long): String? {
+        if (mediaInfoSupported == false || now - armedAt <= SETTLE_MS) return null
+        val media = try {
+            tx { transport.mediaInfo() }
+        } catch (c: CancellationException) {
+            throw c
+        } catch (_: Throwable) {
+            null
+        }
+        if (media == null) {
+            mediaInfoSupported = false
+            return null
+        }
+        mediaInfoSupported = true
+        val currentUri = media.currentUri
+        if (currentUri != null && sameUrl(currentUri, armed.url) && !sameUrl(currentUri, current.url)) return "GetMediaInfo current URI"
+        if (media.nextUri != null && sameUrl(media.nextUri, armed.url)) mediaInfoShowedArmed = armed.uid
+        // The queued next was taken: only meaningful if GetMediaInfo showed it queued before, and
+        // once the current track should have ended.
+        if (media.nextUri == null && mediaInfoShowedArmed == armed.uid &&
+            clockPosition(s0, now) >= s0.durationMs - END_TOLERANCE_MS
+        ) return "GetMediaInfo next URI taken"
+        return null
+    }
+
+    /**
+     * Why we believe the renderer moved on to the armed next track by itself, or null. The URI and
+     * TrackMetaData's item id are authoritative, but some renderers keep reporting the previous
+     * track after a SetNextAVTransportURI hand-off, so a position that jumps back near the end of
+     * the current track, a position past its end, a position frozen near the end while PLAYING, or
+     * a duration that becomes the next track's all count too. Once a renderer's report has frozen
+     * ([stale]), its position and duration describe the old track, so only the engine's own clock
+     * running past the current track's end counts.
      */
     private fun handoffReason(
         armed: LoadedTrack,
@@ -729,9 +777,15 @@ class DlnaPlaybackEngine<T : Any>(
         sinceCommand: Long,
         transportNow: TransportState?,
         frozenForMs: Long,
+        stale: Boolean,
     ): String? {
         if (p.trackUri != null && sameUrl(p.trackUri, armed.url) && !sameUrl(p.trackUri, current.url)) return "uri"
+        val itemId = p.trackItemId
+        if (itemId != null && itemId == armed.uid.toString() && itemId != current.uid.toString()) return "track metadata"
         if (sinceCommand <= SETTLE_MS || transportNow != TransportState.PLAYING || !s0.isPlayingNow) return null
+        if (stale) {
+            return if (s0.durationMs > 0 && clockPosition(s0, now) >= s0.durationMs + CLOCK_GRACE_MS) REASON_CLOCK else null
+        }
         val pos = p.positionMs
         if (pos != null && s0.durationMs > 0) {
             val expected = s0.positionAt(now)
@@ -748,29 +802,35 @@ class DlnaPlaybackEngine<T : Any>(
         return null
     }
 
-    private fun advanceToArmed(armed: LoadedTrack, p: TransportPosition, s0: EngineState<T>, now: Long, reason: String) {
+    private fun advanceToArmed(armed: LoadedTrack, p: TransportPosition, s0: EngineState<T>, now: Long, reason: String, stale: Boolean) {
         val frozen = reason == REASON_FROZEN
+        val reportDescribesOldTrack = frozen || stale
         val position = when {
             // The report stopped moving when the previous track ended; the next one has played since.
             frozen -> now - reportUnchangedSinceMs
+            // The report is stale: the time past the old track's end on the engine's clock.
+            stale -> (clockPosition(s0, now) - s0.durationMs).coerceAtLeast(0)
             // A renderer reporting time past the old end is still counting from the previous track's start.
             else -> p.positionMs?.let { if (s0.durationMs > 0 && it > s0.durationMs + END_TOLERANCE_MS) it - s0.durationMs else it } ?: 0L
         }
-        log("renderer moved to the next track on its own ($reason); now at index ${armed.index}")
+        val itemIdSeen = when (p.trackItemId) {
+            null -> "none"
+            armed.uid.toString() -> "next"
+            loaded?.uid?.toString() -> "previous"
+            else -> "other"
+        }
+        log("renderer moved to the next track on its own ($reason); now at index ${armed.index} " +
+            "[report frozen=$reportDescribesOldTrack, TrackMetaData item=$itemIdSeen, GetMediaInfo=${mediaInfoSupported ?: "unasked"}]")
         if (frozen) {
-            // Its reports stay pinned to the old track, so a second silent hand-off could not be
-            // followed: from now on each track is started with SetAVTransportURI, which resets them.
+            // Its reports stay pinned to the old track: ignore them, and follow later hand-offs by
+            // TrackMetaData, GetMediaInfo or the engine's clock. SetNext stays armed (gapless).
             staleReportedPositionMs = p.positionMs
-            if (setNextSupported != false) {
-                setNextSupported = false
-                log("renderer reports a frozen position after a gapless hand-off; starting each track itself from now on")
-            }
         }
         loaded = armed
         armedNext = null
         playStartedAt = now
         playedMsSinceLoad = position
-        val reportedDuration = p.durationMs?.takeIf { d -> d > 0 && !frozen }
+        val reportedDuration = p.durationMs?.takeIf { d -> d > 0 && !reportDescribesOldTrack }
         _state.update {
             it.copy(
                 currentIndex = armed.index,
@@ -828,6 +888,11 @@ class DlnaPlaybackEngine<T : Any>(
         /** A PLAYING renderer whose position has not moved for this long near a track's end has handed off. */
         const val FROZEN_HANDOFF_MS = 4_000L
         const val REASON_FROZEN = "position frozen at the end"
+        const val REASON_CLOCK = "clock past the end"
+        /** With a stale report, the engine's clock this far past a track's end means the next one is playing. */
+        const val CLOCK_GRACE_MS = 2_500L
+        /** GetMediaInfo is asked only this close to a track's end, while a next track is armed. */
+        const val MEDIA_INFO_WINDOW_MS = 5_000L
         const val UNKNOWN_DURATION_MIN_PLAY_MS = 5_000L
     }
 }

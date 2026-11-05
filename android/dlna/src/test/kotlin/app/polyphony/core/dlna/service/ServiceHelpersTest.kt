@@ -81,4 +81,14 @@ class ServiceHelpersTest {
         assertTrue(didl.contains("<res protocolInfo=\"http-get:*:audio/flac:DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000\" duration=\"0:04:05.500\">http://nas:4533/rest/stream?id=1&amp;u=a</res>"))
         assertTrue(didl.endsWith("</item></DIDL-Lite>"))
     }
+
+    @Test
+    fun `item id is read back from TrackMetaData, including the double-escaped quotes some renderers send`() {
+        val didl = DidlLite.build(ResolvedStream(url = "http://x/s", mimeType = "audio/flac", durationMs = null, title = "T"), itemId = "175")
+        assertEquals("175", DidlLite.itemId(didl))
+        // The Yamaha RX-V483 echoes it as <item id=&quot;175&quot; parentID=&quot;-1&quot; ...>.
+        assertEquals("175", DidlLite.itemId("<DIDL-Lite><item id=&quot;175&quot; parentID=&quot;-1&quot; restricted=&quot;1&quot;><dc:title>T</dc:title></item></DIDL-Lite>"))
+        assertNull(DidlLite.itemId(null))
+        assertNull(DidlLite.itemId("NOT_IMPLEMENTED"))
+    }
 }
