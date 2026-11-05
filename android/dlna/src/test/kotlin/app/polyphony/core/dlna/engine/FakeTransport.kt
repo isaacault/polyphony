@@ -1,5 +1,6 @@
 package app.polyphony.core.dlna.engine
 
+import app.polyphony.core.dlna.service.DidlLite
 import app.polyphony.core.dlna.service.TransportState
 import app.polyphony.core.dlna.soap.DlnaException
 import kotlinx.coroutines.delay
@@ -37,8 +38,13 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
     /** The URI reported by positionInfo; lags one hand-off behind when [staleTrackUri] is set. */
     private var reportedUri: String? = null
     private var pendingReportedUri: String? = null
-    /** A frozen snapshot of the first track's end, reported forever once [freezeAtHandoff] fires. */
+    /** A frozen snapshot of the first track's end, reported until the next SetAVTransportURI once [freezeAtHandoff] fires. */
     private var frozen: TransportPosition? = null
+    /** TrackMetaData follows the track really playing, even while the position report is frozen. */
+    var reportsItemId = false
+    /** GetMediaInfo answers with the live current and next URIs (null: the action is not supported). */
+    var reportsMediaInfo = false
+    private val itemIdByUrl = mutableMapOf<String, String?>()
 
     /** Move the renderer into an externally-controlled state (someone pressed a button on it). */
     fun externalPause() { tick(); if (state == TransportState.PLAYING) { basePositionMs = position(); state = TransportState.PAUSED_PLAYBACK } }
@@ -72,13 +78,17 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
 
     private fun guard() { if (failAll) throw DlnaException(0, "Renderer unreachable") }
 
+    override suspend fun mediaInfo(): TransportMedia? = if (reportsMediaInfo) { guard(); tick(); TransportMedia(currentUri, nextUri) } else null
+
     override suspend fun setUri(url: String, metadata: String) {
+        itemIdByUrl[url] = DidlLite.itemId(metadata)
         guard(); calls += "setUri:$url"; currentUri = url; nextUri = null; reportedUri = url; pendingReportedUri = null
         durationMs = durations[url]; basePositionMs = 0; state = TransportState.STOPPED
         frozen = null // a fresh SetAVTransportURI resets even a frozen renderer's reports
     }
 
     override suspend fun setNextUri(url: String, metadata: String) {
+        itemIdByUrl[url] = DidlLite.itemId(metadata)
         guard(); setNextAttempts++
         if (!supportsSetNext) throw DlnaException(401, "Invalid Action")
         calls += "setNext:$url"; nextUri = url
@@ -98,11 +108,12 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
     override suspend fun positionInfo(): TransportPosition {
         if (statusLatencyMs > 0) delay(statusLatencyMs)
         guard(); tick()
-        frozen?.let { return it }
+        val liveItemId = if (reportsItemId) currentUri?.let { itemIdByUrl[it] } else null
+        frozen?.let { return it.copy(trackItemId = liveItemId) }
         val uri = reportedUri ?: currentUri
         // A stale renderer catches up to the real URI on the following poll.
         if (pendingReportedUri != null) { reportedUri = pendingReportedUri; pendingReportedUri = null }
-        return TransportPosition(uri, position(), durationMs)
+        return TransportPosition(uri, position(), durationMs, liveItemId)
     }
 
     override suspend fun transportState(): TransportState {

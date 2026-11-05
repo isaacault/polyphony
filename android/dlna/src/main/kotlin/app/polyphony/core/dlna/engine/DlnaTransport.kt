@@ -5,7 +5,16 @@ import app.polyphony.core.dlna.service.RenderingControlService
 import app.polyphony.core.dlna.service.TransportState
 import app.polyphony.core.dlna.soap.DlnaException
 
-data class TransportPosition(val trackUri: String?, val positionMs: Long?, val durationMs: Long?)
+data class TransportPosition(
+    val trackUri: String?,
+    val positionMs: Long?,
+    val durationMs: Long?,
+    /** TrackMetaData's DIDL `item id`: the engine sets it to the queue item's uid. */
+    val trackItemId: String? = null,
+)
+
+/** GetMediaInfo's URIs: what the renderer holds as current, and the queued next (null once used). */
+data class TransportMedia(val currentUri: String?, val nextUri: String?)
 
 /** The slice of a renderer the [DlnaPlaybackEngine] drives. Fakeable for tests. */
 interface DlnaTransport {
@@ -21,6 +30,8 @@ interface DlnaTransport {
     suspend fun setVolume(percent: Int)
     suspend fun getVolume(): Int?
     suspend fun setMute(muted: Boolean) {}
+    /** GetMediaInfo, or null when the renderer does not answer it. */
+    suspend fun mediaInfo(): TransportMedia? = null
 }
 
 /** Real transport over AVTransport + RenderingControl SOAP services. */
@@ -36,8 +47,9 @@ class RendererTransport(
     override suspend fun seek(positionMs: Long) = avTransport.seek(positionMs)
     override suspend fun positionInfo(): TransportPosition {
         val p = avTransport.positionInfo()
-        return TransportPosition(p.trackUri, p.relTimeMs, p.trackDurationMs)
+        return TransportPosition(p.trackUri, p.relTimeMs, p.trackDurationMs, p.trackItemId)
     }
+    override suspend fun mediaInfo(): TransportMedia? = avTransport.mediaInfo().let { TransportMedia(it.currentUri, it.nextUri) }
     override suspend fun transportState(): TransportState = avTransport.transportInfo().state
     override suspend fun setVolume(percent: Int) {
         renderingControl?.setVolume(percent) ?: throw DlnaException(0, "Renderer has no RenderingControl service")

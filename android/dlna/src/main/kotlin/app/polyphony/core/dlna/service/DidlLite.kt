@@ -30,4 +30,14 @@ object DidlLite {
             append("</item></DIDL-Lite>")
         }
     }
+
+    private val ITEM_ID = Regex("""<item\b[^>]*?\bid\s*=\s*(?:"|'|&quot;)([^"'&<>]+)(?:"|'|&quot;)""")
+
+    /**
+     * The `item id` of the DIDL-Lite a renderer echoes back as TrackMetaData (the engine sets it to
+     * the queue item's uid), or null. Accepts the double-escaped quotes some renderers return
+     * (the Yamaha RX-V483 sends `id=&quot;175&quot;`).
+     */
+    fun itemId(metadata: String?): String? =
+        metadata?.let { ITEM_ID.find(it)?.groupValues?.get(1)?.trim()?.takeIf(String::isNotEmpty) }
 }

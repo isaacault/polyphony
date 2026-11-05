@@ -27,6 +27,8 @@ data class PositionInfo(
     val trackUri: String?,
     val relTimeMs: Long?,
     val absTimeMs: Long?,
+    /** The `item id` from TrackMetaData's DIDL-Lite, when the renderer echoes it. */
+    val trackItemId: String? = null,
 )
 
 data class MediaInfo(val nrTracks: Int, val mediaDurationMs: Long?, val currentUri: String?, val nextUri: String?)
@@ -66,6 +68,7 @@ class AvTransportService(private val soap: SoapClient, val service: UpnpService)
             trackUri = out["TrackURI"]?.takeIf { it.isNotBlank() },
             relTimeMs = UpnpTime.parse(out["RelTime"])?.takeIf { it >= 0 },
             absTimeMs = UpnpTime.parse(out["AbsTime"])?.takeIf { it >= 0 },
+            trackItemId = DidlLite.itemId(out["TrackMetaData"]),
         )
     }
 
