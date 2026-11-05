@@ -3,6 +3,7 @@ package app.polyphony.core.playback.stream
 import android.content.Context
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.cache.ContentMetadata
+import androidx.media3.datasource.cache.ContentMetadataMutations
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -41,6 +42,26 @@ class StreamCache @Inject constructor(@ApplicationContext private val context: C
     fun completeKey(trackId: String): String? {
         val c = cache ?: return null
         return c.keys.firstOrNull { it.startsWith("$trackId|") && isComplete(c, it) }
+    }
+
+    /** A completely cached key starting with [prefix], or null. */
+    @Synchronized
+    fun completeKeyWithPrefix(prefix: String): String? {
+        val c = cache ?: return null
+        return c.keys.firstOrNull { it.startsWith(prefix) && isComplete(c, it) }
+    }
+
+    /**
+     * Records [length] as [key]'s full size, so reading it (even only its cached start) reports a
+     * known length: ExoPlayer can then seek in it and resume it with byte ranges.
+     */
+    @Synchronized
+    fun storeContentLength(key: String, length: Long) {
+        val c = cache ?: return
+        if (ContentMetadata.getContentLength(c.getContentMetadata(key)) == length) return
+        runCatching {
+            c.applyContentMetadataMutations(key, ContentMetadataMutations().also { ContentMetadataMutations.setContentLength(it, length) })
+        }
     }
 
     /** True when every byte of [key] is cached. */

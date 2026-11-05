@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.ResolvingDataSource
 import app.polyphony.core.domain.model.PlayNowIds
+import app.polyphony.core.domain.model.ServerType
+import app.polyphony.core.domain.model.StreamRequest
 import app.polyphony.core.domain.repository.DownloadRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.NetworkMonitor
@@ -21,8 +23,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,6 +49,7 @@ class StreamResolver @Inject constructor(
     private val requestRepository: RequestRepository,
     private val streamCache: StreamCache,
     private val networkMonitor: NetworkMonitor,
+    private val okHttpClient: OkHttpClient,
 ) : ResolvingDataSource.Resolver {
 
     /** Session memory of transcodes this server could not deliver. */
@@ -98,6 +104,42 @@ class StreamResolver @Inject constructor(
         return resolved
     }
 
+    private val probeClient: OkHttpClient by lazy {
+        okHttpClient.newBuilder()
+            .connectTimeout(PROBE_TIMEOUT_S, TimeUnit.SECONDS)
+            .readTimeout(PROBE_TIMEOUT_S, TimeUnit.SECONDS)
+            .callTimeout(PROBE_TIMEOUT_S + 1, TimeUnit.SECONDS)
+            .build()
+    }
+
+    /** The exact length of a transcode the server has finished, or null while it is still live. */
+    private fun probeTranscodeLength(request: StreamRequest): Long? = runCatching {
+        val builder = Request.Builder().url(request.url)
+            .header("Range", "bytes=0-0")
+            .header("Accept-Encoding", "identity")
+        request.headers.forEach { (k, v) -> builder.header(k, v) }
+        probeClient.newCall(builder.build()).execute().use { response ->
+            if (response.code == 206) TranscodeLength.totalFromContentRange(response.header("Content-Range")) else null
+        }
+    }.getOrNull()
+
+    /**
+     * Waits (blocking, off the main thread) up to [timeoutMs] for the stream [uri] would open now
+     * to have a known length, so that reopening it makes it seekable. True at once for downloads
+     * and completely cached songs.
+     */
+    fun awaitKnownLength(uri: Uri, timeoutMs: Long): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (true) {
+            val spec = runCatching { resolve(DataSpec(uri), ahead = true) }.getOrElse { return false } ?: return true
+            if (spec.uri.scheme == "file" || TranscodeLength.hasKnownLength(spec.key) ||
+                spec.key?.let(streamCache::isComplete) == true
+            ) return true
+            if (System.currentTimeMillis() >= deadline) return false
+            Thread.sleep(LENGTH_POLL_MS)
+        }
+    }
+
     /** The next open of [trackId] resolves afresh (the service is starting it in a new player period). */
     fun unpin(trackId: String) {
         synchronized(pins) { pins.remove(trackId) }
@@ -141,6 +183,15 @@ class StreamResolver @Inject constructor(
         decision = LossySourceRule.apply(decision, track)
         val request = provider.streamRequest(track, decision.profile)
         var key = "$trackId|${decision.profile.fingerprint}"
+        if (request.isTranscoded && provider.server.type == ServerType.SUBSONIC && !streamCache.isComplete(key)) {
+            // A transcode Navidrome has finished has an exact length: under its own key, the player
+            // can seek in it and resume it. A live one keeps the plain key (and plays as before).
+            key = streamCache.completeKeyWithPrefix(TranscodeLength.lengthKeyPrefix(key))
+                ?: probeTranscodeLength(request)?.let { total ->
+                    TranscodeLength.keyWithLength(key, total).also { streamCache.storeContentLength(it, total) }
+                }
+                ?: key
+        }
         // Offline or on mobile data, a complete copy already on the phone beats none or another
         // download, whatever quality it was cached at (a song fetched ahead on Wi-Fi, say).
         val network = networkMonitor.state.value
@@ -223,5 +274,7 @@ class StreamResolver @Inject constructor(
     private companion object {
         /** A bound for pins the service never released; normally only the current and next songs hold one. */
         const val MAX_PINS = 8
+        const val PROBE_TIMEOUT_S = 2L
+        const val LENGTH_POLL_MS = 500L
     }
 }
