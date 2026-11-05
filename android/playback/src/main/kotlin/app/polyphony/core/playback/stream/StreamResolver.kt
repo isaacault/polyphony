@@ -67,8 +67,45 @@ class StreamResolver @Inject constructor(
         }
     }
 
+    /**
+     * What each song's stream was first opened as (URL, headers, cache key), per track id. ExoPlayer
+     * re-opens a song's stream inside the same player period after a network error, possibly from
+     * byte 0, and keeps the extractor it picked for the first bytes. Re-resolving there could hand
+     * it another format (the decision moved from MP3 on Wi-Fi to Opus on mobile data, or a complete
+     * copy of another quality turned up in the cache): the MP3 extractor finds no frames in Opus,
+     * reaches the end of input cleanly, and the song skips to the next one partway through. So a
+     * song keeps its first resolution until the playback service starts it afresh ([unpin]).
+     */
+    private val pins = LinkedHashMap<String, DataSpec>()
+
     @Throws(IOException::class)
-    override fun resolveDataSpec(dataSpec: DataSpec): DataSpec = resolve(dataSpec, ahead = false)!!
+    override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
+        val trackId = MediaItemFactory.parseUri(dataSpec.uri)?.second
+            ?: return resolve(dataSpec, ahead = false)!!
+        synchronized(pins) { pins[trackId] }?.let { pinned ->
+            return dataSpec.buildUpon()
+                .setUri(pinned.uri)
+                .setHttpRequestHeaders(dataSpec.httpRequestHeaders + pinned.httpRequestHeaders)
+                .setKey(pinned.key)
+                .build()
+        }
+        val resolved = resolve(dataSpec, ahead = false)!!
+        synchronized(pins) {
+            pins[trackId] = resolved
+            while (pins.size > MAX_PINS) pins.remove(pins.keys.first())
+        }
+        return resolved
+    }
+
+    /** The next open of [trackId] resolves afresh (the service is starting it in a new player period). */
+    fun unpin(trackId: String) {
+        synchronized(pins) { pins.remove(trackId) }
+    }
+
+    /** Forget every pin but [keep]'s (the current and next songs, whose periods may still be loading). */
+    fun retainPins(keep: Set<String>) {
+        synchronized(pins) { pins.keys.retainAll(keep) }
+    }
 
     /**
      * What [resolveDataSpec] would play, for fetching a queued song ahead into the stream cache
@@ -179,4 +216,9 @@ class StreamResolver @Inject constructor(
 
     /** Keep the opaque URI in reported events so logs never leak auth tokens. */
     override fun resolveReportedUri(uri: Uri): Uri = uri
+
+    private companion object {
+        /** A bound for pins the service never released; normally only the current and next songs hold one. */
+        const val MAX_PINS = 8
+    }
 }
