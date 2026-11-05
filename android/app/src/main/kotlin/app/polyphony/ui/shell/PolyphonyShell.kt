@@ -57,11 +57,12 @@ import app.polyphony.ui.player.PlayerViewModel
 import kotlinx.coroutines.launch
 
 /**
- * Bottom space taken by the shell's chrome (bottom bar + mini player), excluding the system
- * navigation bar inset. Content scrolls underneath, so scrolling screens add
- * `LocalContentPadding.current.calculateBottomPadding()` (or `LocalContentBottomPadding`, the
- * same value as a Dp from core:ui) to their list content padding, on top of their normal system
- * bar insets. Do not add both.
+ * Bottom space taken by the shell's chrome: the bottom bar, the mini player and the system
+ * navigation bar under them (the whole height from the window's bottom edge). Content scrolls
+ * underneath, so scrolling screens add `LocalContentPadding.current.calculateBottomPadding()` (or
+ * `LocalContentBottomPadding`, the same value as a Dp from core:ui) to their list content padding,
+ * and no navigation bar inset of their own (a Scaffold's default insets would count it twice).
+ * Do not add both.
  */
 val LocalContentPadding = compositionLocalOf { PaddingValues(0.dp) }
 
@@ -103,8 +104,10 @@ fun PolyphonyShell(
     val miniExtraBottom = if (showBottomBar) 0.dp else navBarInset
     val peekHeight = barTotal + miniExtraBottom + Dimens.miniPlayerHeight
 
+    // Everything docked at the bottom, the navigation bar included: the mini player sits above it
+    // on every screen, so leaving it out hid the last row of a list behind the player.
     val chromeTarget = (if (showBottomBar) Dimens.bottomBarHeight else 0.dp) +
-        (if (showPlayer) Dimens.miniPlayerHeight else 0.dp)
+        (if (showPlayer) Dimens.miniPlayerHeight else 0.dp) + navBarInset
     val animatedChrome by animateDpAsState(chromeTarget, animationSpec = Motion.sheetSpring(), label = "chrome")
     // The sheet spring is underdamped, so on the way down to 0 dp (leaving a browse route while the
     // player stops, or entering onboarding/add-server) it briefly overshoots negative, and
@@ -252,7 +255,7 @@ fun PolyphonyShell(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = chrome + navBarInset)
+                    .padding(bottom = chrome)
                     .graphicsLayer { alpha = 1f - sheetState.fraction },
             )
 

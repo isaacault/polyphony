@@ -67,7 +67,8 @@ fun HeroScaffold(
     val surface = MaterialTheme.colorScheme.surface
     // Opaque root: without it the previous screen ghosts through during navigation transitions.
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        content(PaddingValues(bottom = LocalContentBottomPadding.current))
+        // The same breathing room under the last row as listContentPadding gives.
+        content(PaddingValues(bottom = LocalContentBottomPadding.current + 24.dp))
         TopAppBar(
             title = {
                 Text(
