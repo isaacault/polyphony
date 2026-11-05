@@ -42,6 +42,7 @@ class TranscodeDecisionEngine @Inject constructor(
     castController: CastController,
     dlnaController: DlnaController,
     private val latencyMonitor: LatencyMonitor,
+    homeNetworkDetector: HomeNetworkDetector,
     private val resolver: TranscodeResolver,
     @PlaybackScope scope: CoroutineScope,
 ) {
@@ -53,6 +54,7 @@ class TranscodeDecisionEngine @Inject constructor(
         val remoteDevices: List<RemoteDevicePreference> = emptyList(),
         val latencyDegraded: Boolean = false,
         val revision: Int = 0,
+        val atHome: Boolean? = null,
     )
 
     private val refreshTick = MutableStateFlow(0)
@@ -65,6 +67,7 @@ class TranscodeDecisionEngine @Inject constructor(
         transcodeProfileRepository.remoteDevices,
         latencyMonitor.degraded,
         refreshTick,
+        homeNetworkDetector.atHome,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         Inputs(
@@ -75,6 +78,7 @@ class TranscodeDecisionEngine @Inject constructor(
             remoteDevices = values[4] as List<RemoteDevicePreference>,
             latencyDegraded = values[5] as Boolean,
             revision = values[6] as Int,
+            atHome = values[7] as Boolean?,
         )
     }.stateIn(scope, SharingStarted.Eagerly, Inputs())
 
@@ -116,6 +120,7 @@ class TranscodeDecisionEngine @Inject constructor(
                 target = target,
                 latencyDegraded = inputs.latencyDegraded,
                 deviceProfileId = override,
+                atHome = inputs.atHome,
             ),
         )
     }

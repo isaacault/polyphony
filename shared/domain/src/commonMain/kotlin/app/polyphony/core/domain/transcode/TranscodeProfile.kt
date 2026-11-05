@@ -70,7 +70,8 @@ data class TranscodeProfile(
             LOSSLESS_CAPPED_ID, "Lossless, capped to 16-bit/48 kHz",
             codec = AudioCodec.FLAC, maxSampleRateHz = 48_000, maxBitDepth = 16, builtIn = true,
         )
-        val HIGH = TranscodeProfile(HIGH_ID, "High", codec = AudioCodec.OPUS, maxBitrateKbps = 256, builtIn = true)
+        /** Opus at 160 kbps from a lossless source is transparent for most listeners; 256 spent data nobody hears. */
+        val HIGH = TranscodeProfile(HIGH_ID, "High", codec = AudioCodec.OPUS, maxBitrateKbps = 160, builtIn = true)
         val BALANCED = TranscodeProfile(BALANCED_ID, "Balanced", codec = AudioCodec.OPUS, maxBitrateKbps = 128, builtIn = true)
         val SAVER = TranscodeProfile(SAVER_ID, "Data saver", codec = AudioCodec.OPUS, maxBitrateKbps = 64, builtIn = true)
         val CAST_SAFE = TranscodeProfile(CAST_SAFE_ID, "Cast compatible", codec = AudioCodec.MP3, maxBitrateKbps = 320, builtIn = true)

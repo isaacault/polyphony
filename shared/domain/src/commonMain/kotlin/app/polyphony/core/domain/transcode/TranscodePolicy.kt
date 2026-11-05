@@ -8,7 +8,8 @@ import kotlinx.serialization.Serializable
  * Resolution order (see [TranscodeResolver]):
  *  1. Explicit per-device override for the current remote output (Cast / DLNA).
  *  2. [castDefaultProfileId] when playing to any remote output.
- *  3. Network rule: cellular / metered → [cellularProfileId], Wi-Fi / Ethernet → [wifiProfileId].
+ *  3. Network rule: cellular / metered / Wi-Fi away from home → [cellularProfileId],
+ *     Wi-Fi / Ethernet → [wifiProfileId].
  *  4. [defaultProfileId].
  *  Then, if latency degradation is active and [AdaptiveLatencySettings.enabled], the high-latency
  *  profile caps whatever was selected (the lower quality of the two wins).
@@ -21,6 +22,11 @@ data class TranscodePolicy(
     val cellularProfileId: String? = TranscodeProfile.BALANCED_ID,
     /** Treat metered Wi-Fi (hotspots) like cellular. */
     val meteredWifiAsCellular: Boolean = true,
+    /**
+     * Treat Wi-Fi away from home like cellular: Wi-Fi on which the server cannot be reached at its
+     * receiver (LAN) address. Unknown (no receiver address, not checked yet) keeps the Wi-Fi rule.
+     */
+    val awayWifiAsCellular: Boolean = true,
     val castDefaultProfileId: String? = null,
     val adaptiveLatency: AdaptiveLatencySettings = AdaptiveLatencySettings(),
     /**

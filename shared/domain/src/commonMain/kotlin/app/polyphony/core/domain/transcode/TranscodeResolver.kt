@@ -8,6 +8,8 @@ data class TranscodeContext(
     val latencyDegraded: Boolean = false,
     /** Explicit profile id configured for [target], if the user set one. */
     val deviceProfileId: String? = null,
+    /** On the home network (the server answers at its LAN address); null when unknown. */
+    val atHome: Boolean? = null,
 )
 
 data class TranscodeDecision(
@@ -20,6 +22,8 @@ data class TranscodeDecision(
         CAST_DEFAULT("Cast default"),
         WIFI_RULE("Wi-Fi rule"),
         CELLULAR_RULE("Mobile data rule"),
+        /** Wi-Fi away from home, given the mobile data profile. */
+        AWAY_RULE("Away from home"),
         DEFAULT("Default"),
         /** Served from a file on this device; no transcoding decision was involved. */
         DOWNLOADED("Downloaded"),
@@ -55,7 +59,7 @@ class TranscodeResolver {
             }
         }
         if (decision == null) {
-            decision = resolveNetworkRule(policy, context.network, ::lookup, fallback)
+            decision = resolveNetworkRule(policy, context.network, context.atHome, ::lookup, fallback)
         }
 
         var result = decision!!
@@ -74,14 +78,19 @@ class TranscodeResolver {
     private fun resolveNetworkRule(
         policy: TranscodePolicy,
         network: NetworkState,
+        atHome: Boolean?,
         lookup: (String?) -> TranscodeProfile?,
         fallback: TranscodeProfile,
     ): TranscodeDecision {
         val treatAsCellular = network.kind == NetworkKind.CELLULAR ||
             (network.isMetered && policy.meteredWifiAsCellular && network.kind != NetworkKind.NONE)
+        val awayOnWifi = policy.awayWifiAsCellular && atHome == false &&
+            (network.kind == NetworkKind.WIFI || network.kind == NetworkKind.ETHERNET)
         return when {
             treatAsCellular -> lookup(policy.cellularProfileId)
                 ?.let { TranscodeDecision(it, TranscodeDecision.Reason.CELLULAR_RULE) }
+            awayOnWifi -> lookup(policy.cellularProfileId)
+                ?.let { TranscodeDecision(it, TranscodeDecision.Reason.AWAY_RULE) }
             network.kind == NetworkKind.WIFI || network.kind == NetworkKind.ETHERNET -> lookup(policy.wifiProfileId)
                 ?.let { TranscodeDecision(it, TranscodeDecision.Reason.WIFI_RULE) }
             else -> null
