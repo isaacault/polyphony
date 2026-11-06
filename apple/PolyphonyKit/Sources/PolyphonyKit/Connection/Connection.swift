@@ -7,6 +7,8 @@ public struct SavedServer: Sendable, Codable, Equatable {
         case continuo
         /// A plain Subsonic server (Navidrome, …): the library only.
         case subsonic
+        /// A Jellyfin server: the library only, through its own API.
+        case jellyfin
     }
 
     public var kind: Kind
@@ -16,6 +18,19 @@ public struct SavedServer: Sendable, Codable, Equatable {
     public var subsonicPassword: String
     public var salt: String
     public var session: ContinuoSession?
+    /// A Jellyfin server's token for this device.
+    public var jellyfin: JellyfinSession?
+
+    /// The server's library, by the API it speaks.
+    public func library(transport: HTTPTransport = URLSessionTransport()) -> any MusicLibrary {
+        if kind == .jellyfin, let jellyfin {
+            return JellyfinClient(baseURL: address, session: jellyfin, transport: transport)
+        }
+        return SubsonicClient(credentials: subsonic, transport: transport)
+    }
+
+    /// Where the library lives: what a speaker's address replaces.
+    public var libraryBaseURL: URL { kind == .jellyfin ? address : subsonic.baseURL }
 
     public var subsonic: SubsonicCredentials {
         SubsonicCredentials(baseURL: kind == .continuo
@@ -128,15 +143,16 @@ public enum ConnectError: Error, Sendable, Equatable, CustomStringConvertible {
         case .badAddress: "That doesn't look like a server address."
         case .wrongPassword: "Wrong username or password."
         case let .unreachable(detail): "Couldn't reach the server (\(detail))."
-        case .notAMusicServer: "There's no continuo or Subsonic server at that address."
+        case .notAMusicServer: "There's no continuo, Subsonic or Jellyfin server at that address."
         case let .server(message): message
         }
     }
 }
 
 public enum Connector {
-    /// Signs in at [address]: as continuo when it is one, else as a plain Subsonic server. A wrong
-    /// password at a continuo is a wrong password, never a fall back to Subsonic.
+    /// Signs in at [address]: as continuo when it is one, else as Jellyfin when it says it is, else as
+    /// a plain Subsonic server. A wrong password at a continuo is a wrong password, never a fall back
+    /// to Subsonic.
     public static func connect(address: String, username: String, password: String, deviceName: String,
                                platform: String = "macos", transport: HTTPTransport = URLSessionTransport()) async throws -> SavedServer {
         guard let url = try? ServerAddress.normalise(address) else { throw ConnectError.badAddress }
@@ -155,6 +171,21 @@ public enum Connector {
             if !notContinuo { throw ConnectError.server(error.message) }
         } catch let error as TransportError {
             throw ConnectError.unreachable(error.underlying)
+        }
+
+        if (try? await JellyfinClient.isJellyfin(at: url, transport: transport)) == true {
+            do {
+                let (session, name) = try await JellyfinClient.signIn(baseURL: url, username: username, password: password,
+                                                                      deviceName: deviceName, transport: transport)
+                return SavedServer(kind: .jellyfin, address: url, subsonicUsername: name, subsonicPassword: "", salt: "",
+                                   session: nil, jellyfin: session)
+            } catch let error as ConnectError {
+                throw error
+            } catch let error as TransportError {
+                throw ConnectError.unreachable(error.underlying)
+            } catch {
+                throw ConnectError.server(String(describing: error))
+            }
         }
 
         let creds = SubsonicCredentials(baseURL: url, username: username, password: password)

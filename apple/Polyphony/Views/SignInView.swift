@@ -1,7 +1,7 @@
 import PolyphonyKit
 import SwiftUI
 
-/// Sign in to continuo (search, requests, Play now) or any Subsonic server (Navidrome…): the same
+/// Sign in to continuo (search, requests, Play now), any Subsonic server (Navidrome…) or Jellyfin: the same
 /// form; the app works out which it is.
 struct SignInView: View {
     @Environment(AppModel.self) private var model
@@ -20,7 +20,7 @@ struct SignInView: View {
                 .foregroundStyle(.tint)
             VStack(spacing: 4) {
                 Text("Polyphony").font(.largeTitle.weight(.semibold))
-                Text("Sign in to continuo or any Subsonic server, like Navidrome.")
+                Text("Sign in to continuo, Jellyfin or any Subsonic server, like Navidrome.")
                     .foregroundStyle(.secondary)
             }
             Form {

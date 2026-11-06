@@ -87,13 +87,13 @@ struct AlbumsView: View {
             }
         }
         .task(id: sort) { await load() }
-        .task { genres = (try? await model.subsonic?.genres().map(\.name)) ?? [] }
+        .task { genres = (try? await model.library?.genres().map(\.name)) ?? [] }
         // continuo counts albums' songs in the background: which are partial grows for a while.
         .task { await model.refreshSingles() }
     }
 
     private func load() async {
-        guard let subsonic = model.subsonic else { return }
+        guard let client = model.library else { return }
         if let cached = model.albumLists[sort] {
             albums = cached
         }
@@ -103,7 +103,7 @@ struct AlbumsView: View {
         do {
             // Pages of 500 until the library runs out (most libraries are a few pages).
             for offset in stride(from: 0, to: 20_000, by: 500) {
-                let page = try await subsonic.albums(sort, size: 500, offset: offset)
+                let page = try await client.albums(sort, size: 500, offset: offset)
                 all += page
                 if offset == 0 && albums.isEmpty { albums = all }
                 if page.count < 500 { break }
@@ -152,7 +152,7 @@ struct AlbumDetailView: View {
         .task(id: albumID) {
             whole = nil
             do {
-                album = try await model.subsonic?.album(id: albumID)
+                album = try await model.library?.album(id: albumID)
             } catch {
                 self.error = ErrorText.of(error)
                 return
@@ -219,7 +219,7 @@ private struct AlbumHeader: View {
                     } else {
                         Button {
                             Task {
-                                try? await model.subsonic?.setStarred(.album(album.id), !album.starred)
+                                try? await model.library?.setStarred(.album(album.id), !album.starred)
                                 album.starred.toggle()
                             }
                         } label: { Image(systemName: album.starred ? "heart.fill" : "heart") }
@@ -242,7 +242,7 @@ private struct AlbumHeader: View {
 
     private func rate(_ stars: Int) {
         album.rating = stars == 0 ? nil : stars
-        Task { try? await model.subsonic?.setRating(id: album.id, stars) }
+        Task { try? await model.library?.setRating(id: album.id, stars) }
     }
 }
 
@@ -496,7 +496,7 @@ struct ArtistsView: View {
             if let cached = model.artistList { artists = cached }
             defer { loading = false }
             do {
-                artists = try await model.subsonic?.artists() ?? []
+                artists = try await model.library?.artists() ?? []
                 model.artistList = artists
             } catch {
                 model.handle(error)
@@ -541,7 +541,7 @@ struct ArtistDetailView: View {
                             if let artist {
                                 Button {
                                     starred.toggle()
-                                    Task { try? await model.subsonic?.setStarred(.artist(artist.id), starred) }
+                                    Task { try? await model.library?.setStarred(.artist(artist.id), starred) }
                                 } label: { Image(systemName: starred ? "heart.fill" : "heart") }
                                     .help(starred ? "Remove from Favourites" : "Add to Favourites")
                                 KeepDownloadedButton(target: .artist(id: artist.id, name: artist.name))
@@ -607,9 +607,9 @@ struct ArtistDetailView: View {
     }
 
     private func load() async {
-        guard let subsonic = model.subsonic else { return }
+        guard let client = model.library else { return }
         do {
-            let (a, list) = try await subsonic.artist(id: artistID)
+            let (a, list) = try await client.artist(id: artistID)
             artist = a
             starred = a.starred
             albums = list.sorted { ($0.year ?? 0) > ($1.year ?? 0) }
@@ -617,14 +617,14 @@ struct ArtistDetailView: View {
             model.handle(error)
             return
         }
-        info = try? await subsonic.artistInfo(id: artistID)
+        info = try? await client.artistInfo(id: artistID)
         if let a = artist {
             // The library's songs naming them, kept when the credit really is theirs, on others' albums.
-            let found = (try? await subsonic.search(a.name, artists: 0, albums: 0, tracks: 300).tracks) ?? []
+            let found = (try? await client.search(a.name, artists: 0, albums: 0, tracks: 300).tracks) ?? []
             let own = Set(albums.map(\.id))
             var others: [Album] = []
             for id in ArtistCredits.appearsOn(a, among: found).filter({ !own.contains($0) }).prefix(18) {
-                if let album = try? await subsonic.album(id: id) { others.append(album) }
+                if let album = try? await client.album(id: id) { others.append(album) }
             }
             appearsOn = others.sorted { ($0.year ?? 0) > ($1.year ?? 0) }
         }
@@ -638,10 +638,10 @@ struct ArtistDetailView: View {
     }
 
     private func playAll(shuffle: Bool) async {
-        guard let subsonic = model.subsonic else { return }
+        guard let client = model.library else { return }
         var tracks: [Track] = []
         for album in albums {
-            if let full = try? await subsonic.album(id: album.id) { tracks += full.tracks }
+            if let full = try? await client.album(id: album.id) { tracks += full.tracks }
         }
         model.player.play(tracks, shuffle: shuffle, title: artist?.name)
     }
@@ -731,7 +731,7 @@ struct SongsView: View {
                 .disabled(tracks.isEmpty)
         }
         .task { if allTracks.isEmpty { await loadAll() } }
-        .task { genres = (try? await model.subsonic?.genres().map(\.name)) ?? [] }
+        .task { genres = (try? await model.library?.genres().map(\.name)) ?? [] }
     }
 
     private func play(_ picked: [Track]) {
@@ -741,11 +741,11 @@ struct SongsView: View {
     /// Every song, a page at a time (Navidrome lists them all for an empty search), so the table can
     /// sort the whole library; the first page shows at once.
     private func loadAll() async {
-        guard let subsonic = model.subsonic else { return }
+        guard let client = model.library else { return }
         var loaded: [Track] = []
         while !Task.isCancelled {
             do {
-                let page = try await subsonic.search("", artists: 0, albums: 0, tracks: 500, trackOffset: loaded.count).tracks
+                let page = try await client.search("", artists: 0, albums: 0, tracks: 500, trackOffset: loaded.count).tracks
                 loaded += page
                 allTracks = loaded.sorted(using: sortOrder)
                 if page.count < 500 { break }
@@ -814,7 +814,7 @@ struct PlaylistsView: View {
                 let ids = drops.flatMap(\.tracks).map(\.id)
                 Task {
                     do {
-                        try await model.subsonic?.updatePlaylist(id: playlist.id, adding: ids)
+                        try await model.library?.updatePlaylist(id: playlist.id, adding: ids)
                         model.notice = "Added to \(playlist.name)"
                         model.downloads.libraryChanged()
                         await load()
@@ -833,7 +833,7 @@ struct PlaylistsView: View {
                 Divider()
                 Button("Delete Playlist", role: .destructive) {
                     Task {
-                        try? await model.subsonic?.deletePlaylist(id: playlist.id)
+                        try? await model.library?.deletePlaylist(id: playlist.id)
                         await load()
                     }
                 }
@@ -859,7 +859,7 @@ struct PlaylistsView: View {
                 let name = newName
                 newName = ""
                 Task {
-                    _ = try? await model.subsonic?.createPlaylist(name: name)
+                    _ = try? await model.library?.createPlaylist(name: name)
                     await load()
                 }
             }
@@ -875,7 +875,7 @@ struct PlaylistsView: View {
                 guard !name.isEmpty, name != playlist.name else { return }
                 Task {
                     do {
-                        try await model.subsonic?.updatePlaylist(id: playlist.id, name: name)
+                        try await model.library?.updatePlaylist(id: playlist.id, name: name)
                     } catch {
                         model.handle(error)
                     }
@@ -926,7 +926,7 @@ struct PlaylistDetailView: View {
                                     Divider()
                                     Toggle("Public", isOn: Binding(get: { playlist.isPublic }, set: { on in
                                         self.playlist?.isPublic = on
-                                        Task { try? await model.subsonic?.updatePlaylist(id: playlist.id, isPublic: on) }
+                                        Task { try? await model.library?.updatePlaylist(id: playlist.id, isPublic: on) }
                                     }))
                                 } label: { Image(systemName: "ellipsis") }
                                     .menuIndicator(.hidden)
@@ -937,8 +937,8 @@ struct PlaylistDetailView: View {
                     }
                     TrackList(tracks: playlist.tracks, showArtwork: true, context: .playlist(playlist), onRemove: { index in
                         Task {
-                            try? await model.subsonic?.updatePlaylist(id: playlist.id, removingIndices: [index])
-                            self.playlist = try? await model.subsonic?.playlist(id: playlistID)
+                            try? await model.library?.updatePlaylist(id: playlist.id, removingIndices: [index])
+                            self.playlist = try? await model.library?.playlist(id: playlistID)
                         }
                     })
                 }
@@ -950,7 +950,7 @@ struct PlaylistDetailView: View {
         .navigationTitle(playlist?.name ?? "")
         .task(id: playlistID) {
             do {
-                playlist = try await model.subsonic?.playlist(id: playlistID)
+                playlist = try await model.library?.playlist(id: playlistID)
             } catch {
                 model.handle(error)
             }
@@ -977,7 +977,7 @@ struct GenresView: View {
         .navigationTitle("Genres")
         .task {
             do {
-                genres = try await model.subsonic?.genres() ?? []
+                genres = try await model.library?.genres() ?? []
             } catch {
                 model.handle(error)
             }
@@ -998,7 +998,7 @@ struct GenreDetailView: View {
         .toolbar {
             Button {
                 Task {
-                    if let songs = try? await model.subsonic?.songs(.genre(genre), size: 300) {
+                    if let songs = try? await model.library?.songs(.genre(genre), size: 300) {
                         model.player.play(songs, shuffle: true, title: genre)
                     }
                 }
@@ -1006,7 +1006,7 @@ struct GenreDetailView: View {
             KeepDownloadedButton(target: .genre(genre)).help("Keep this genre's songs downloaded")
         }
         .task(id: genre) {
-            albums = (try? await model.subsonic?.albums(genre: genre, size: 500)) ?? []
+            albums = (try? await model.library?.albums(genre: genre, size: 500)) ?? []
         }
     }
 }
@@ -1047,7 +1047,7 @@ struct FavouritesView: View {
         .navigationTitle("Favourites")
         .task {
             do {
-                starred = try await model.subsonic?.starred() ?? Starred()
+                starred = try await model.library?.starred() ?? Starred()
             } catch {
                 model.handle(error)
             }

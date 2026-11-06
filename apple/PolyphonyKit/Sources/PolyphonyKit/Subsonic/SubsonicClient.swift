@@ -61,12 +61,7 @@ public struct SubsonicClient: Sendable {
         return dto.model
     }
 
-    public enum AlbumListType: String, Sendable {
-        case newest, recent, frequent, random, starred
-        /// The user's top-rated albums (ratings mode's "Top rated").
-        case highest
-        case alphabeticalByName, alphabeticalByArtist
-    }
+    public typealias AlbumListType = PolyphonyKit.AlbumListType
 
     public func albums(_ type: AlbumListType, size: Int = 50, offset: Int = 0) async throws -> [Album] {
         let dto = try await call("getAlbumList2", ["type": type.rawValue, "size": "\(size)", "offset": "\(offset)"],
@@ -97,7 +92,7 @@ public struct SubsonicClient: Sendable {
         }
     }
 
-    public enum SongListType: Sendable, Hashable { case random, genre(String) }
+    public typealias SongListType = PolyphonyKit.SongListType
 
     public func albums(genre: String, size: Int = 100, offset: Int = 0) async throws -> [Album] {
         let dto = try await call("getAlbumList2", ["type": "byGenre", "genre": genre, "size": "\(size)", "offset": "\(offset)"],
@@ -126,7 +121,7 @@ public struct SubsonicClient: Sendable {
                        tracks: (dto?.song ?? []).map(\.model))
     }
 
-    public enum Item: Sendable, Hashable { case track(String), album(String), artist(String) }
+    public typealias Item = LibraryItem
 
     /// Favourite (or not) a song, album or artist.
     public func setStarred(_ item: Item, _ starred: Bool) async throws {

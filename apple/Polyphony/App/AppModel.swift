@@ -11,7 +11,7 @@ final class AppModel {
 
     private(set) var state: State = .loading
     private(set) var server: SavedServer?
-    private(set) var subsonic: SubsonicClient?
+    private(set) var library: (any MusicLibrary)?
     private(set) var continuo: ContinuoService?
     /// Library albums holding single songs (continuo): left out of the album lists unless asked for.
     private(set) var singleSongAlbumIDs: Set<String> = []
@@ -78,12 +78,12 @@ final class AppModel {
 
     /// Picks a collection up where it was left (the same song, a few seconds from where it stopped).
     func resume(_ entry: RecentContext) async {
-        guard let subsonic else { return }
+        guard let library else { return }
         do {
             let tracks: [Track]
             switch entry.context.kind {
-            case .album: tracks = try await subsonic.album(id: entry.context.id).tracks
-            case .playlist: tracks = try await subsonic.playlist(id: entry.context.id).tracks
+            case .album: tracks = try await library.album(id: entry.context.id).tracks
+            case .playlist: tracks = try await library.playlist(id: entry.context.id).tracks
             default: return
             }
             let point = ResumePoint.of(tracks, entry)
@@ -106,7 +106,7 @@ final class AppModel {
     private(set) var playlists: [Playlist] = []
 
     func refreshPlaylists() async {
-        if let list = try? await subsonic?.playlists() { playlists = list }
+        if let list = try? await library?.playlists() { playlists = list }
     }
 
     let player: PlayerController
@@ -180,7 +180,7 @@ final class AppModel {
     /// A URL a speaker can fetch: the receiver address in place of the library's base URL (the
     /// Android app's rule, shared through contract/cases/receiver.json).
     private func forSpeaker(_ url: URL) -> URL {
-        guard let base = server?.subsonic.baseURL.absoluteString else { return url }
+        guard let base = server?.libraryBaseURL.absoluteString else { return url }
         return URL(string: ReceiverURL.rewrite(url.absoluteString, baseURL: base, receiver: receiverAddress)) ?? url
     }
 
@@ -312,8 +312,8 @@ final class AppModel {
         player.resolve = { [weak self] entry in await self?.source(for: entry) }
         player.artwork = { [weak self] entry in self?.artworkURL(for: entry, size: 600) }
         player.scrobble = { [weak self] track, submission in
-            guard let subsonic = self?.subsonic else { return }
-            Task { try? await subsonic.scrobble(trackID: track.id, submission: submission) }
+            guard let library = self?.library else { return }
+            Task { try? await library.scrobble(trackID: track.id, submission: submission) }
         }
         player.playNowScrobble = { [weak self] streamID, listenedAt in
             guard let continuo = self?.continuo else { return }
@@ -350,10 +350,14 @@ final class AppModel {
     }
 
     /// Rate songs with stars (1–5) instead of the heart, as the Android app's Ratings mode.
-    private(set) var usesRatings = UserDefaults.standard.bool(forKey: "feedback.ratings")
+    private var wantsRatings = UserDefaults.standard.bool(forKey: "feedback.ratings")
+
+    /// Jellyfin has likes, not star ratings: favourites there, as on Android.
+    var usesRatings: Bool { wantsRatings && offersRatings }
+    var offersRatings: Bool { server?.kind != .jellyfin }
 
     func setUsesRatings(_ on: Bool) {
-        usesRatings = on
+        wantsRatings = on
         UserDefaults.standard.set(on, forKey: "feedback.ratings")
     }
 
@@ -395,9 +399,10 @@ final class AppModel {
             return
         }
         let kind = streaming.network.kind
-        let lan = HomeNetwork.lanBase(receiver: receiverAddress, baseURL: server.subsonic.baseURL)
+        let lan = HomeNetwork.lanBase(receiver: receiverAddress, baseURL: server.libraryBaseURL)
+        let speaksSubsonic = server.kind != .jellyfin
         homeCheck = Task { [weak self] in
-            let home = await HomeNetwork.check(kind: kind, lan: lan, subsonic: true, transport: ShortTimeoutTransport())
+            let home = await HomeNetwork.check(kind: kind, lan: lan, subsonic: speaksSubsonic, transport: ShortTimeoutTransport())
             guard !Task.isCancelled, let self else { return }
             if home != self.streaming.atHome {
                 DiagnosticLog.shared.log("streaming", "home network: \(home.map(String.init) ?? "unknown")")
@@ -414,10 +419,8 @@ final class AppModel {
         return (choice, "\(t.id)-\(choice.format ?? "raw")-\(choice.maxBitRateKbps ?? 0)", container)
     }
 
-    private func streamURL(_ t: Track, _ choice: StreamChoice, _ subsonic: SubsonicClient) -> URL {
-        // "raw" is the file as it is, whatever transcoding the server would otherwise apply.
-        subsonic.streamURL(trackID: t.id, maxBitRateKbps: choice.maxBitRateKbps,
-                           format: choice.format ?? (choice.maxBitRateKbps == nil ? "raw" : nil))
+    private func streamURL(_ t: Track, _ choice: StreamChoice, _ library: any MusicLibrary) -> URL {
+        library.streamURL(trackID: t.id, choice: choice)
     }
 
     /// Has the coming songs fetched whole, so a dropped connection doesn't stop the music at the next
@@ -432,7 +435,7 @@ final class AppModel {
                          onDevice: track.map { downloads.isDownloaded($0.id) } ?? false, fetchable: track != nil)
         }
         let wanted = PrefetchPlan.pick(upcoming, budget)
-        guard !wanted.isEmpty, let subsonic else { return }
+        guard !wanted.isEmpty, let library else { return }
         let songs = player.queue.upNext.compactMap(\.entry.libraryTrack)
         fetchAhead = Task { [weak self] in
             var fetched: Int64 = 0
@@ -440,7 +443,7 @@ final class AppModel {
                 guard let self, !Task.isCancelled, let track = songs.first(where: { $0.id == id }),
                       fetched < self.streamCache.fetchBudgetBytes else { return }
                 let stream = self.macStream(track)
-                guard let bytes = await self.streamCache.fetch(self.streamURL(track, stream.choice, subsonic), name: stream.cacheName,
+                guard let bytes = await self.streamCache.fetch(self.streamURL(track, stream.choice, library), name: stream.cacheName,
                                                                container: stream.container) else { return }
                 fetched += bytes
             }
@@ -534,7 +537,7 @@ final class AppModel {
         unreadCount = 0
         downloads.detach()
         server = nil
-        subsonic = nil
+        library = nil
         continuo = nil
         singleSongAlbumIDs = []
         albumLists = [:]
@@ -546,16 +549,15 @@ final class AppModel {
 
     private func attach(_ saved: SavedServer) async {
         server = saved
-        let client = SubsonicClient(credentials: saved.subsonic)
-        subsonic = client
+        let client = saved.library()
+        library = client
         downloads.attach(server: saved, library: client) { [weak self] track in
             // The quality chosen for downloads: the original file by default, unless this Mac can't
             // play it (then MP3 at 320 kbps).
             let profile = self?.streaming.profile(self?.downloads.qualityProfileID) ?? .original
             let choice = StreamChoice.forMac(profile, container: track.container)
             if choice.isOriginal { return (client.downloadURL(trackID: track.id), track.container) }
-            return (client.streamURL(trackID: track.id, maxBitRateKbps: choice.maxBitRateKbps, format: choice.format),
-                    choice.container(source: track.container))
+            return (client.streamURL(trackID: track.id, choice: choice), choice.container(source: track.container))
         }
         downloads.mayFetch = { [weak self] in
             guard let self else { return false }
@@ -627,6 +629,10 @@ final class AppModel {
             goOffline()
             return
         }
+        if case JellyfinError.http(status: 401) = error {
+            notice = "This Jellyfin server signed the Mac out: add it again in Settings > Servers."
+            return
+        }
         notice = ErrorText.of(error)
     }
 
@@ -658,8 +664,8 @@ final class AppModel {
         reachabilityTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
-                guard let self, let subsonic = self.subsonic else { return }
-                if (try? await subsonic.ping()) != nil {
+                guard let self, let library = self.library else { return }
+                if (try? await library.ping()) != nil {
                     self.unreachable = false
                     self.albumLists = [:]
                     DiagnosticLog.shared.log("offline", "back online")
@@ -716,7 +722,7 @@ final class AppModel {
                                showing: s.key == server?.key,
                                receiverAddress: UserDefaults.standard.string(forKey: "receiver." + (s.address.host ?? ""))
                                    ?? s.session?.library.receiverBaseUrl,
-                               libraryHost: s.subsonic.baseURL.host)
+                               libraryHost: s.libraryBaseURL.host)
         }
         let settings: [(String, String)] = [
             ("Streaming quality", "\(streaming.decision().profile.summary) (\(streaming.decision().explanation))"),
@@ -739,8 +745,8 @@ final class AppModel {
     // MARK: Artwork and audio
 
     func coverURL(_ coverArtID: String?, size: Int = 300) -> URL? {
-        guard let coverArtID, let subsonic else { return nil }
-        return subsonic.coverArtURL(id: coverArtID, size: size)
+        guard let coverArtID, let library else { return nil }
+        return library.coverArtURL(id: coverArtID, size: size)
     }
 
     func artworkURL(for entry: QueueEntry, size: Int) -> URL? {
@@ -762,16 +768,16 @@ final class AppModel {
                 let stream = macStream(t)
                 if let cached = streamCache.file(stream.cacheName) { return AudioSource(url: cached) }
                 if offlineMode { return nil }
-                return subsonic.map { AudioSource(url: streamURL(t, stream.choice, $0)) }
+                return library.map { AudioSource(url: streamURL(t, stream.choice, $0)) }
             }
             // A speaker fetches the audio itself, from an address it can reach, and shows the song: as
             // the rules say, in a format it says it plays.
-            guard let subsonic, let renderer = speaker else { return nil }
+            guard let library, let renderer = speaker else { return nil }
             let target = OutputTarget.dlna(udn: renderer.udn, name: renderer.name)
             let wanted = streaming.decision(for: target).profile
             let (profile, mime, substituted) = RendererCodecFallback.choose(wanted, container: t.container, formats: speakerFormats)
             if substituted { DiagnosticLog.shared.log("output", "\(renderer.name) doesn't take \(wanted.name): using \(profile.name)") }
-            let url = streamURL(t, .forRenderer(profile), subsonic)
+            let url = streamURL(t, .forRenderer(profile), library)
             let art = coverURL(t.coverArtID ?? t.albumID, size: 1200).map(forSpeaker)
             return AudioSource(url: forSpeaker(url), info: .init(title: t.title, artist: t.artistName, album: t.albumName, artworkURL: art,
                                                                 mimeType: mime, durationMs: Int(t.duration * 1000)))
@@ -820,8 +826,8 @@ final class AppModel {
     /// A catalogue song as something the player can play: the library's copy when it's there, else a
     /// Play now continuo fetches (nil when it can't, said in a notice).
     private func fetch(_ song: CatalogTrack) async -> QueueEntry? {
-        if case let .inLibrary(albumID?) = song.availability, let subsonic,
-           let album = try? await subsonic.album(id: albumID),
+        if case let .inLibrary(albumID?) = song.availability, let library,
+           let album = try? await library.album(id: albumID),
            let track = album.tracks.first(where: { $0.title.caseInsensitiveCompare(song.title) == .orderedSame }) {
             return .track(track)
         }
@@ -851,8 +857,8 @@ final class AppModel {
     /// Plays a song from the catalogue: from the library when it's there, else through Play now
     /// (continuo fetches it from Soulseek and streams it while it downloads).
     func play(_ track: CatalogTrack) async {
-        if case let .inLibrary(albumID?) = track.availability, let subsonic,
-           let album = try? await subsonic.album(id: albumID),
+        if case let .inLibrary(albumID?) = track.availability, let library,
+           let album = try? await library.album(id: albumID),
            let index = album.tracks.firstIndex(where: { $0.title.caseInsensitiveCompare(track.title) == .orderedSame }) {
             player.play(album.tracks, startAt: index, title: album.name)
             return

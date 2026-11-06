@@ -288,13 +288,25 @@ public enum LossySourceRule {
 public struct StreamChoice: Sendable, Hashable {
     public var format: String?
     public var maxBitRateKbps: Int?
+    /// Only Jellyfin honours these two.
+    public var maxSampleRateHz: Int?
+    public var maxBitDepth: Int?
 
-    public init(format: String? = nil, maxBitRateKbps: Int? = nil) {
+    public init(format: String? = nil, maxBitRateKbps: Int? = nil, maxSampleRateHz: Int? = nil, maxBitDepth: Int? = nil) {
         self.format = format
         self.maxBitRateKbps = maxBitRateKbps
+        self.maxSampleRateHz = maxSampleRateHz
+        self.maxBitDepth = maxBitDepth
     }
 
-    public var isOriginal: Bool { format == nil && maxBitRateKbps == nil }
+    private func capped(by profile: TranscodeProfile) -> StreamChoice {
+        var out = self
+        out.maxSampleRateHz = profile.maxSampleRateHz > 0 ? profile.maxSampleRateHz : nil
+        out.maxBitDepth = profile.maxBitDepth > 0 ? profile.maxBitDepth : nil
+        return out
+    }
+
+    public var isOriginal: Bool { format == nil && maxBitRateKbps == nil && maxSampleRateHz == nil && maxBitDepth == nil }
 
     /// The file extension and type of the stream, given the file it comes from.
     public func container(source: String?) -> String? { format ?? source }
@@ -314,6 +326,10 @@ public struct StreamChoice: Sendable, Hashable {
 
     /// For this Mac's own player.
     public static func forMac(_ profile: TranscodeProfile, container: String?) -> StreamChoice {
+        macChoice(profile, container: container).capped(by: profile)
+    }
+
+    private static func macChoice(_ profile: TranscodeProfile, container: String?) -> StreamChoice {
         switch profile.codec {
         case .opus, .vorbis:
             return StreamChoice(format: "mp3", maxBitRateKbps: mp3Equivalent(ofOggKbps: profile.maxBitrateKbps))
@@ -333,6 +349,10 @@ public struct StreamChoice: Sendable, Hashable {
 
     /// For something that fetches the audio itself and plays what it says it plays.
     public static func forRenderer(_ profile: TranscodeProfile) -> StreamChoice {
+        rendererChoice(profile).capped(by: profile)
+    }
+
+    private static func rendererChoice(_ profile: TranscodeProfile) -> StreamChoice {
         switch profile.codec {
         case .original: StreamChoice(maxBitRateKbps: profile.maxBitrateKbps > 0 ? profile.maxBitrateKbps : nil)
         case .flac: StreamChoice(format: "flac")

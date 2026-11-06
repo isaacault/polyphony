@@ -43,7 +43,7 @@ public struct DownloadRule: Sendable, Codable, Equatable, Identifiable {
 
 extension DownloadRule {
     /// The songs the rule wants, in its own order (best first), before [maxTracks].
-    public func tracks(from library: SubsonicClient) async throws -> [Track] {
+    public func tracks(from library: any MusicLibrary) async throws -> [Track] {
         func albumsTracks(_ albums: [Album]) async throws -> [Track] {
             var out: [Track] = []
             for album in albums { out += try await library.album(id: album.id).tracks }

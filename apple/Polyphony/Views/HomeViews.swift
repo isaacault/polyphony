@@ -118,12 +118,12 @@ struct HomeView: View {
     }
 
     private func load() async {
-        guard let subsonic = model.subsonic else { return }
-        async let added = subsonic.albums(.newest, size: 30)
-        async let played = subsonic.albums(.recent, size: 30)
-        async let most = subsonic.albums(.frequent, size: 30)
-        async let picks = subsonic.albums(.random, size: 30)
-        async let liked = subsonic.albums(model.usesRatings ? .highest : .starred, size: 30)
+        guard let client = model.library else { return }
+        async let added = client.albums(.newest, size: 30)
+        async let played = client.albums(.recent, size: 30)
+        async let most = client.albums(.frequent, size: 30)
+        async let picks = client.albums(.random, size: 30)
+        async let liked = client.albums(model.usesRatings ? .highest : .starred, size: 30)
         recentlyAdded = (try? await added) ?? []
         recentlyPlayed = (try? await played) ?? []
         mostPlayed = (try? await most) ?? []

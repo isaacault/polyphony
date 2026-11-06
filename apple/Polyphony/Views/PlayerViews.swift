@@ -212,7 +212,7 @@ struct QueueView: View {
             ?? "Queue \(Date().formatted(date: .abbreviated, time: .shortened))"
         Task {
             do {
-                try await model.subsonic?.createPlaylist(name: name, trackIDs: ids)
+                try await model.library?.createPlaylist(name: name, trackIDs: ids)
                 model.notice = "Saved as “\(name)”"
             } catch {
                 model.handle(error)
@@ -312,7 +312,7 @@ struct LyricsView: View {
         loading = true
         defer { loading = false }
         var found: Lyrics?
-        if let track = entry.libraryTrack, let own = try? await model.subsonic?.lyrics(trackID: track.id) {
+        if let track = entry.libraryTrack, let own = try? await model.library?.lyrics(trackID: track.id) {
             found = own
             lyrics = own
         }
@@ -350,7 +350,7 @@ struct SettingsView: View {
             Section("Account") {
                 LabeledContent("Signed in as", value: server.subsonicUsername)
                 LabeledContent("Server", value: server.address.absoluteString)
-                LabeledContent("Kind", value: server.kind == .continuo ? "continuo (search, requests, Play now)" : "Subsonic (library only)")
+                LabeledContent("Kind", value: server.kind == .continuo ? "continuo (search, requests, Play now)" : server.kind == .jellyfin ? "Jellyfin (library only)" : "Subsonic (library only)")
                 Button("Sign Out of This Server", role: .destructive) { Task { await model.signOut() } }
             }
             Section("Servers") {
@@ -446,9 +446,14 @@ struct SettingsView: View {
     private var general: some View {
         AppearanceSettings()
         Section("Favourites") {
-            Picker("Mark songs with", selection: Binding(get: { model.usesRatings }, set: { model.setUsesRatings($0) })) {
-                Text("A heart (favourite or not)").tag(false)
-                Text("Stars (1 to 5)").tag(true)
+            if model.offersRatings {
+                Picker("Mark songs with", selection: Binding(get: { model.usesRatings }, set: { model.setUsesRatings($0) })) {
+                    Text("A heart (favourite or not)").tag(false)
+                    Text("Stars (1 to 5)").tag(true)
+                }
+            } else {
+                Text("This server has likes, not star ratings, so songs are marked with a heart.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             if model.usesRatings {
                 Picker("Top rated means", selection: Binding(get: { model.topRatedMinimum }, set: { model.setTopRatedMinimum($0) })) {
@@ -770,7 +775,7 @@ private struct NowPlayingActions: View {
                         Button {
                             hearts[track.id] = !starred
                             Task {
-                                try? await model.subsonic?.setStarred(.track(track.id), !starred)
+                                try? await model.library?.setStarred(.track(track.id), !starred)
                                 model.downloads.libraryChanged()
                             }
                         } label: { Image(systemName: starred ? "heart.fill" : "heart") }
@@ -802,7 +807,7 @@ private struct NowPlayingActions: View {
     private func rate(_ track: Track, _ stars: Int) {
         ratings[track.id] = stars
         Task {
-            try? await model.subsonic?.setRating(id: track.id, stars)
+            try? await model.library?.setRating(id: track.id, stars)
             model.notice = stars == 0 ? "Rating removed" : "Rated \(String(repeating: "★", count: stars))"
         }
     }
