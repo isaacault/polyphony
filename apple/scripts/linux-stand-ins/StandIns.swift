@@ -46,6 +46,13 @@ final class AVPlayerEngine: AudioEngine {
     func stop() {}
 }
 
+// Platform/NetworkWatcher.swift
+@MainActor
+final class NetworkWatcher {
+    var onChange: (NetworkState) -> Void = { _ in }
+    func start() {}
+}
+
 // Platform/SleepGuard.swift
 @MainActor
 final class SleepGuard {

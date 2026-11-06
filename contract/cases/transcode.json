@@ -1,0 +1,35 @@
+{
+  "about": "Which profile applies (TranscodeResolver), and when an already-compressed file stays as it is (LossySourceRule). policy fields left out take their defaults.",
+  "resolver": [
+    {"about": "Wi-Fi with no Wi-Fi rule: the default", "network": {"kind": "WIFI", "metered": false}, "profile": "builtin.original", "reason": "DEFAULT", "capped": false},
+    {"about": "a Wi-Fi rule", "policy": {"wifi": "builtin.high"}, "network": {"kind": "WIFI", "metered": false}, "profile": "builtin.high", "reason": "WIFI_RULE", "capped": false},
+    {"about": "Ethernet counts as Wi-Fi", "policy": {"wifi": "builtin.high"}, "network": {"kind": "ETHERNET", "metered": false}, "profile": "builtin.high", "reason": "WIFI_RULE", "capped": false},
+    {"about": "mobile data", "network": {"kind": "CELLULAR", "metered": true}, "profile": "builtin.balanced", "reason": "CELLULAR_RULE", "capped": false},
+    {"about": "metered Wi-Fi counts as mobile data", "network": {"kind": "WIFI", "metered": true}, "profile": "builtin.balanced", "reason": "CELLULAR_RULE", "capped": false},
+    {"about": "unless told not to", "policy": {"meteredAsCellular": false}, "network": {"kind": "WIFI", "metered": true}, "profile": "builtin.original", "reason": "DEFAULT", "capped": false},
+    {"about": "Wi-Fi away from home counts as mobile data", "network": {"kind": "WIFI", "metered": false}, "atHome": false, "profile": "builtin.balanced", "reason": "AWAY_RULE", "capped": false},
+    {"about": "at home it doesn't", "policy": {"wifi": "builtin.high"}, "network": {"kind": "WIFI", "metered": false}, "atHome": true, "profile": "builtin.high", "reason": "WIFI_RULE", "capped": false},
+    {"about": "unknown keeps the Wi-Fi rule", "policy": {"wifi": "builtin.high"}, "network": {"kind": "WIFI", "metered": false}, "profile": "builtin.high", "reason": "WIFI_RULE", "capped": false},
+    {"about": "away, with the switch off", "policy": {"awayAsCellular": false}, "network": {"kind": "WIFI", "metered": false}, "atHome": false, "profile": "builtin.original", "reason": "DEFAULT", "capped": false},
+    {"about": "no mobile data rule: the default", "policy": {"cellular": null}, "network": {"kind": "CELLULAR", "metered": true}, "profile": "builtin.original", "reason": "DEFAULT", "capped": false},
+    {"about": "a device's own profile wins on it", "policy": {"castDefault": "builtin.saver"}, "network": {"kind": "WIFI", "metered": false}, "remote": true, "deviceProfile": "builtin.castsafe", "profile": "builtin.castsafe", "reason": "DEVICE_OVERRIDE", "capped": false},
+    {"about": "then the default for remote outputs", "policy": {"castDefault": "builtin.saver"}, "network": {"kind": "WIFI", "metered": false}, "remote": true, "profile": "builtin.saver", "reason": "CAST_DEFAULT", "capped": false},
+    {"about": "then the network rule", "network": {"kind": "CELLULAR", "metered": true}, "remote": true, "profile": "builtin.balanced", "reason": "CELLULAR_RULE", "capped": false},
+    {"about": "a device profile means nothing locally", "network": {"kind": "WIFI", "metered": false}, "deviceProfile": "builtin.saver", "profile": "builtin.original", "reason": "DEFAULT", "capped": false},
+    {"about": "a struggling connection caps the quality", "network": {"kind": "WIFI", "metered": false}, "latencyDegraded": true, "profile": "builtin.balanced", "reason": "DEFAULT", "capped": true},
+    {"about": "but never raises it", "policy": {"default": "builtin.saver"}, "network": {"kind": "WIFI", "metered": false}, "latencyDegraded": true, "profile": "builtin.saver", "reason": "DEFAULT", "capped": false},
+    {"about": "the cap can be left off remote outputs", "policy": {"capRemote": false}, "network": {"kind": "WIFI", "metered": false}, "remote": true, "latencyDegraded": true, "profile": "builtin.original", "reason": "DEFAULT", "capped": false},
+    {"about": "or off entirely", "policy": {"capEnabled": false}, "network": {"kind": "WIFI", "metered": false}, "latencyDegraded": true, "profile": "builtin.original", "reason": "DEFAULT", "capped": false},
+    {"about": "offline: the default", "network": {"kind": "NONE", "metered": false}, "profile": "builtin.original", "reason": "DEFAULT", "capped": false}
+  ],
+  "lossySource": [
+    {"about": "an MP3 stays an MP3", "profile": "builtin.balanced", "container": "mp3", "lossless": false, "keeps": true},
+    {"about": "as does Ogg", "profile": "builtin.high", "container": "ogg", "lossless": false, "keeps": true},
+    {"about": "lossless is transcoded", "profile": "builtin.balanced", "container": "flac", "lossless": true, "keeps": false},
+    {"about": "a capped decision wants the smaller stream", "profile": "builtin.balanced", "container": "mp3", "lossless": false, "capped": true, "keeps": false},
+    {"about": "a lossless profile isn't lossy", "profile": "builtin.lossless48", "container": "mp3", "lossless": false, "keeps": false},
+    {"about": "the original needs no rule", "profile": "builtin.original", "container": "mp3", "lossless": false, "keeps": false},
+    {"about": "an unknown format is transcoded", "profile": "builtin.balanced", "container": "wma", "lossless": false, "keeps": false},
+    {"about": "no format known", "profile": "builtin.balanced", "lossless": false, "keeps": false}
+  ]
+}

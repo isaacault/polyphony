@@ -39,6 +39,7 @@ final class AVPlayerEngine: AudioEngine {
     private var currentSource: AudioSource?
     /// The item whose end means "the song ended" (the queue player may have moved on by itself).
     private var playingItem: AVPlayerItem?
+    private var reopening: Task<Void, Never>?
 
     init() {
         player.automaticallyWaitsToMinimizeStalling = true
@@ -63,6 +64,7 @@ final class AVPlayerEngine: AudioEngine {
     }
 
     func load(_ source: AudioSource, startAt: TimeInterval, autoplay: Bool) {
+        reopening?.cancel()
         // The queue player already moved on to the preloaded song: keep it playing.
         if advancedByItself, source == currentSource, player.currentItem != nil, startAt == 0 {
             advancedByItself = false
@@ -115,10 +117,55 @@ final class AVPlayerEngine: AudioEngine {
     func pause() { player.pause() }
 
     func seek(to time: TimeInterval) {
-        player.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        guard let item = player.currentItem, needsReopening(item, toSeek: time) else {
+            reopening?.cancel()
+            player.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+            return
+        }
+        reopen(at: time)
+    }
+
+    /// A transcode the server is still producing has no length, so nothing can be sought in it. Once
+    /// it has finished, the server serves it with a length and byte ranges.
+    private func needsReopening(_ item: AVPlayerItem, toSeek time: TimeInterval) -> Bool {
+        guard currentSource?.url.isFileURL == false else { return false }
+        let target = CMTime(seconds: time, preferredTimescale: 600)
+        return !item.seekableTimeRanges.contains { $0.timeRangeValue.containsTime(target) }
+    }
+
+    /// The song opened again at the place asked for, tried for up to 8 seconds while the server
+    /// finishes the transcode (the Android app's scrubbing in transcoded songs). A later seek replaces it.
+    private func reopen(at time: TimeInterval) {
+        reopening?.cancel()
+        guard let source = currentSource else { return }
+        let wasPlaying = player.rate != 0
+        reopening = Task { [weak self] in
+            for _ in 0..<8 {
+                guard let self, !Task.isCancelled else { return }
+                let item = Self.item(for: source)
+                let asset = item.asset
+                let seekable = (try? await asset.load(.duration))?.isNumeric == true
+                guard !Task.isCancelled, self.currentSource == source else { return }
+                if seekable {
+                    let next = self.preloaded
+                    self.player.removeAllItems()
+                    self.player.insert(item, after: nil)
+                    self.playingItem = item
+                    self.watchFailures(of: item)
+                    self.player.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+                    if let next, self.player.canInsert(next.item, after: item) { self.player.insert(next.item, after: item) }
+                    if wasPlaying { self.player.play() }
+                    DiagnosticLog.shared.log("engine", "reopened the song to seek in it")
+                    return
+                }
+                try? await Task.sleep(for: .seconds(1))
+            }
+            DiagnosticLog.shared.log("engine", "couldn't seek: the song is still being transcoded")
+        }
     }
 
     func stop() {
+        reopening?.cancel()
         player.pause()
         player.removeAllItems()
         itemWatches = [:]

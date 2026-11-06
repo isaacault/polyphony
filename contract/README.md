@@ -14,3 +14,5 @@ continuo lives in its own repo, so what the clients may rely on is written down 
     `shared/domain` (ContractCasesTest) and `apple/PolyphonyKit` (ContractCasesTests).
   - `quality.json`: quality badges, album badges and track chips (HI-RES, FLAC, 16-BIT). Tested by
     `android/app` (ContractCasesTest) and `apple/PolyphonyKit` (ContractCasesTests).
+  - `transcode.json`: which quality profile applies, and when an already-compressed file stays as it
+    is. Tested by `shared/domain` (TranscodeContractTest) and `apple/PolyphonyKit` (ContractCasesTests).

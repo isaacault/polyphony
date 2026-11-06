@@ -336,6 +336,8 @@ struct SettingsView: View {
                 .tabItem { Label("Servers", systemImage: "server.rack") }
             Form { playback }.formStyle(.grouped)
                 .tabItem { Label("Playback", systemImage: "play.circle") }
+            StreamingSettingsView()
+                .tabItem { Label("Streaming", systemImage: "dot.radiowaves.left.and.right") }
             Form { general }.formStyle(.grouped)
                 .tabItem { Label("General", systemImage: "gearshape") }
         }
@@ -383,17 +385,25 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var playback: some View {
-        Section("Streaming") {
-            Picker("Streaming quality", selection: Binding(get: { model.streamingBitrate }, set: { model.setStreamingBitrate($0) })) {
-                Text("Original (as the file is)").tag(0)
-                Text("High (MP3 320 kbps)").tag(320)
-                Text("Normal (MP3 192 kbps)").tag(192)
-                Text("Data saver (MP3 128 kbps)").tag(128)
-            }
-            Text("Applies from the next song. Transcoding is done by the server.")
-                .font(.caption).foregroundStyle(.secondary)
+        Section("Offline") {
             Toggle("Offline mode", isOn: Binding(get: { model.offlineMode }, set: { model.setOfflineMode($0) }))
             Text("Only what's downloaded plays; nothing is streamed (as on a plane).")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        Section("Streaming cache") {
+            Picker("Stream cache size", selection: Binding(get: { model.streamCache.limitMB }, set: { model.streamCache.limitMB = $0 })) {
+                Text("256 MB").tag(256)
+                Text("512 MB").tag(512)
+                Text("1 GB").tag(1024)
+                Text("2 GB").tag(2048)
+                Text("4 GB").tag(4096)
+            }
+            Toggle("Preload next track", isOn: Binding(get: { model.preloadNext }, set: { model.setPreloadNext($0) }))
+            Toggle("Download ahead in the queue", isOn: Binding(get: { model.prefetchQueue }, set: { model.setPrefetchQueue($0) }))
+            if model.prefetchQueue {
+                Toggle("Also on metered connections", isOn: Binding(get: { model.prefetchOnMetered }, set: { model.setPrefetchOnMetered($0) }))
+            }
+            Text("The next songs are kept on this Mac, so a dropped connection doesn't stop the music at the next one.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         Section("Volume levelling") {

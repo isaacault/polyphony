@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 PolyphonyKit/scripts/ci.sh >/dev/null || PolyphonyKit/scripts/ci.sh >/dev/null || { echo "typecheck-app: PolyphonyKit's ci.sh failed (run it to see why)" >&2; exit 1; }
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/typecheck-app.XXXXXX")
 trap 'rm -rf "$TMP"' EXIT
-FILES=(Polyphony/App/AppModel.swift Polyphony/Platform/Downloads.swift)
+FILES=(Polyphony/App/AppModel.swift Polyphony/Platform/Downloads.swift Polyphony/Platform/StreamCache.swift)
 for f in "${FILES[@]}"; do sed '/^import SwiftUI$/d; /^import AppKit$/d' "$f" > "$TMP/$(basename "$f")"; done
 cp scripts/linux-stand-ins/StandIns.swift "$TMP/"
 docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src:ro" -v "$TMP:/check:ro" -w /src swift:6.2-noble \

@@ -210,7 +210,9 @@ public struct Renderer: Sendable, Hashable, Identifiable {
     public var model: String?
     public var avTransport: URL
     public var renderingControl: URL?
+    public var connectionManager: URL?
 
+    public static let connectionManagerType = "urn:schemas-upnp-org:service:ConnectionManager:1"
     public static let avTransportType = "urn:schemas-upnp-org:service:AVTransport:1"
     public static let renderingControlType = "urn:schemas-upnp-org:service:RenderingControl:1"
 
@@ -227,6 +229,7 @@ public struct Renderer: Sendable, Hashable, Identifiable {
         guard let av = control(avTransportType) else { return nil }
         return Renderer(udn: device.value("UDN") ?? location.absoluteString, name: device.value("friendlyName") ?? "Speaker",
                         manufacturer: device.value("manufacturer"), model: device.value("modelName"),
-                        avTransport: av, renderingControl: control(renderingControlType))
+                        avTransport: av, renderingControl: control(renderingControlType),
+                        connectionManager: control(connectionManagerType))
     }
 }
