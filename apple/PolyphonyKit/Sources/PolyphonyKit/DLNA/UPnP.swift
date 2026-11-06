@@ -159,6 +159,20 @@ public enum DIDL {
     }
 }
 
+extension DIDL {
+    /// The `item id` in a TrackMetaData value, however it's quoted: most speakers send plain XML,
+    /// the Yamaha RX-V483 `id=&quot;175&quot;` (its quotes escaped twice).
+    public static func itemID(_ metadata: String?) -> String? {
+        guard let metadata else { return nil }
+        let pattern = #"<item\b[^>]*?\bid\s*=\s*(?:"|'|&quot;)([^"'&<>]+)(?:"|'|&quot;)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: metadata, range: NSRange(metadata.startIndex..., in: metadata)),
+              let range = Range(match.range(at: 1), in: metadata) else { return nil }
+        let id = metadata[range].trimmingCharacters(in: .whitespaces)
+        return id.isEmpty ? nil : id
+    }
+}
+
 public enum SSDP {
     public static let address = "239.255.255.250"
     public static let port: UInt16 = 1900

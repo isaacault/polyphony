@@ -42,6 +42,9 @@ public enum AudioEvent: Sendable, Equatable {
     case position(TimeInterval, duration: TimeInterval?)
     /// The current source played to its end.
     case ended
+    /// The current source and the one queued after it both played to their end, unnoticed (a speaker
+    /// that hid the hand-off): the queue moves past both.
+    case endedPastNext
     case failed(String)
 }
 
@@ -458,6 +461,10 @@ public final class PlayerController {
                 // The collection was played to its end: Continue listening starts it over.
                 if let context = queue.context { history(context, nil, 0, 0) }
             }
+        case .endedPastNext:
+            _ = queue.advanceOnEnd()
+            handle(.ended)
+            return
         case let .failed(message):
             DiagnosticLog.shared.log("playback", "\(current?.title ?? "?"): \(message)")
             error = message

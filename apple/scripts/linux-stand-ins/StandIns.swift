@@ -46,6 +46,13 @@ final class AVPlayerEngine: AudioEngine {
     func stop() {}
 }
 
+// Platform/SleepGuard.swift
+@MainActor
+final class SleepGuard {
+    init() {}
+    func hold(_ active: Bool) {}
+}
+
 // Platform/NowPlayingCenter.swift
 @MainActor
 final class NowPlayingCenter: NowPlayingPublisher {

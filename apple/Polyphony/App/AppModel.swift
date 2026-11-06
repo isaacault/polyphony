@@ -116,6 +116,25 @@ final class AppModel {
     private(set) var speaker: Renderer?
     @ObservationIgnored private let macEngine: AVPlayerEngine
     @ObservationIgnored private var speakerEngine: DLNAEngine?
+    /// Held while a speaker plays: a Mac asleep can't follow the songs.
+    @ObservationIgnored private let keepAwake = SleepGuard()
+    @ObservationIgnored private var playNowLinks = PlayNowLinkCache()
+
+    /// The link a speaker plays a Play now song from; the same one each time it's asked for, so a
+    /// queued song is recognised when it starts.
+    private func playNowLink(_ id: String) async -> URL? {
+        if let link = playNowLinks.fresh(id) { return link }
+        guard let continuo, !playNowLinks.recentlyFailed(id) else { return nil }
+        do {
+            let link = try await continuo.playNowReceiverURL(id: id)
+            playNowLinks.put(id, link)
+            return link
+        } catch {
+            DiagnosticLog.shared.log("output", "no speaker link for Play now \(id): \(ErrorText.of(error))")
+            playNowLinks.failed(id)
+            return nil
+        }
+    }
 
     /// The address speakers are given instead of the server's, per server: they fetch the audio
     /// themselves and many can't do HTTPS (for continuo: http://192.168.0.101, its LAN door).
@@ -135,12 +154,14 @@ final class AppModel {
         speakerEngine?.detach()
         if let renderer {
             let engine = DLNAEngine(control: DLNAControl(renderer: renderer))
+            engine.onPlayingChanged = { [weak self] in self?.keepAwake.hold($0) }
             speakerEngine = engine
             speaker = renderer
             player.switchOutput(to: engine)
         } else {
             speakerEngine = nil
             speaker = nil
+            keepAwake.hold(false)
             player.switchOutput(to: macEngine)
         }
     }
@@ -537,7 +558,14 @@ final class AppModel {
             return AudioSource(url: forSpeaker(url), info: .init(title: t.title, artist: t.artistName, album: t.albumName, artworkURL: art,
                                                                 mimeType: bitrate > 0 ? "audio/mpeg" : Self.mime(for: t.container),
                                                                 durationMs: Int(t.duration * 1000)))
-        case let .playNow(stream, _):
+        case let .playNow(stream, song):
+            if speaker != nil {
+                // A speaker sends no token: continuo signs it a link, on the LAN door, to the file as it is.
+                guard let link = await playNowLink(stream.id) else { return nil }
+                return AudioSource(url: link, info: .init(title: song.title, artist: song.artist, album: song.albumTitle,
+                                                          mimeType: Self.mime(for: stream.format),
+                                                          durationMs: stream.durationMs ?? song.durationMs))
+            }
             guard let continuo, let token = try? await continuo.account.accessToken() else { return nil }
             return AudioSource(url: continuo.playNowAudioURL(id: stream.id), headers: ["Authorization": "Bearer \(token)"])
         case let .catalog(song):
