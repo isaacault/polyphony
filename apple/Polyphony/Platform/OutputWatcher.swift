@@ -7,6 +7,7 @@ import Foundation
 @MainActor
 final class OutputWatcher {
     var onHeadphonesGone: () -> Void = {}
+    var onHeadphonesBack: () -> Void = {}
 
     private var wasHeadphones = false
     private var deviceListener: AudioObjectPropertyListenerBlock?
@@ -35,6 +36,7 @@ final class OutputWatcher {
     private func changed() {
         let now = Self.isHeadphones(Self.defaultOutput())
         if wasHeadphones && !now { onHeadphonesGone() }
+        if !wasHeadphones && now { onHeadphonesBack() }
         wasHeadphones = now
         watchDataSource()
     }

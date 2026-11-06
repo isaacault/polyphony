@@ -53,6 +53,11 @@ final class NetworkWatcher {
     func start() {}
 }
 
+// Platform/PowerSource.swift
+enum PowerSource {
+    static var onMains: Bool { true }
+}
+
 // Platform/SleepGuard.swift
 @MainActor
 final class SleepGuard {
@@ -85,6 +90,7 @@ final class ArrivalNotifier {
 @MainActor
 final class OutputWatcher {
     var onHeadphonesGone: () -> Void = {}
+    var onHeadphonesBack: () -> Void = {}
     func start() {}
 }
 

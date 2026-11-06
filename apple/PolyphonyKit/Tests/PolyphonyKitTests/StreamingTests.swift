@@ -357,3 +357,158 @@ struct PlayerStreamingTests {
         #expect(engine.preloads.allSatisfy { $0 == nil })
     }
 }
+
+struct LibraryFilterTests {
+    private let album = Album(id: "a", name: "A", year: 1999, genre: "Ambient", starred: true, rating: 4)
+
+    @Test func nothingSetFiltersNothing() {
+        #expect(LibraryFilter().matches(album, downloaded: false) && !LibraryFilter().isActive)
+        #expect(LibraryFilter().matches(Album(id: "b", name: "B"), downloaded: false))
+    }
+
+    @Test func everyFieldIsAnAnd() {
+        var f = LibraryFilter()
+        f.favouritesOnly = true
+        f.minRating = 4
+        f.genre = "ambient"
+        f.yearFrom = 1990
+        f.yearTo = 1999
+        #expect(f.matches(album, downloaded: false))
+        f.minRating = 5
+        #expect(!f.matches(album, downloaded: false))
+    }
+
+    @Test func aYearFilterLeavesOutWhatHasNoYear() {
+        var f = LibraryFilter()
+        f.yearFrom = 2000
+        #expect(!f.matches(album, downloaded: false))
+        #expect(!f.matches(Album(id: "b", name: "B"), downloaded: false))
+    }
+
+    @Test func downloadedAndSongsAndArtists() {
+        var f = LibraryFilter()
+        f.downloadedOnly = true
+        #expect(!f.matches(album, downloaded: false) && f.matches(album, downloaded: true))
+        var g = LibraryFilter()
+        g.genre = "Rock"
+        var t = Track(id: "t", title: "T")
+        t.details = .init(year: 1990, genre: "Rock")
+        #expect(g.matches(t, downloaded: false))
+        var fav = LibraryFilter()
+        fav.favouritesOnly = true
+        #expect(!fav.matches(Artist(id: "x", name: "X")) && fav.matches(Artist(id: "x", name: "X", starred: true)))
+    }
+
+    @Test func itKeepsInUserDefaults() {
+        var f = LibraryFilter()
+        f.yearTo = 2001
+        #expect(LibraryFilter(stored: f.stored) == f)
+        #expect(LibraryFilter(stored: "") == LibraryFilter())
+    }
+}
+
+struct AppBackupTests {
+    private func server(_ kind: SavedServer.Kind, host: String, session: ContinuoSession? = nil) -> SavedServer {
+        SavedServer(kind: kind, address: URL(string: "https://\(host)")!, subsonicUsername: "isaac", subsonicPassword: "secret", salt: "abc", session: session)
+    }
+
+    private var session: ContinuoSession {
+        try! JSONDecoder().decode(ContinuoSession.self, from: Data(#"{"accessToken":"a","expiresIn":3600,"refreshToken":"r","user":{"id":1,"username":"isaac","role":"admin"},"device":{"id":"d","name":"Mac"},"library":{"type":"subsonic","baseUrl":"https://lib","username":"u","password":"p"}}"#.utf8))
+    }
+
+    @Test func aContinuoDeviceSessionNeverGoesIntoTheFile() throws {
+        let backup = AppBackup(settings: [:], servers: [server(.continuo, host: "c"), server(.subsonic, host: "n")])
+        let text = String(decoding: try backup.encoded(), as: UTF8.self)
+        #expect(backup.servers[0].subsonicPassword.isEmpty && backup.servers[0].session == nil)
+        #expect(backup.servers[1].subsonicPassword == "secret", "a plain server's restore is complete")
+        #expect(AppBackup.needsSignIn(backup.servers[0]) && !AppBackup.needsSignIn(backup.servers[1]))
+        #expect(text.contains("polyphony-mac"))
+    }
+
+    @Test func onlySettingsGoIn() throws {
+        let backup = AppBackup(settings: ["playback.scrobbles": .bool(false), "queue.snapshot.x": .string("no"), "history.y": .int(1)], servers: [])
+        #expect(backup.settings.keys.sorted() == ["playback.scrobbles"])
+    }
+
+    @Test func itComesBackWhole() throws {
+        let settings: [String: AppBackup.Value] = ["playback.a": .bool(true), "playback.b": .int(3), "playback.c": .double(0.5),
+                                                   "playback.d": .string("x"), "streaming.rules": .data(Data([1, 2, 3]))]
+        let backup = AppBackup(settings: settings, servers: [server(.subsonic, host: "n")])
+        #expect(try AppBackup.decoded(try backup.encoded()) == backup)
+    }
+
+    @Test func aDefaultsValueBecomesTheRightKind() {
+        #expect(AppBackup.value(true as NSNumber) == .bool(true))
+        #expect(AppBackup.value(3 as NSNumber) == .int(3))
+        #expect(AppBackup.value(0.5 as NSNumber) == .double(0.5))
+        #expect(AppBackup.value("x") == .string("x"))
+        #expect(AppBackup.value(Data([9])) == .data(Data([9])))
+        #expect(AppBackup.value(["list"]) == nil)
+    }
+
+    @Test func anotherFileIsRefusedPlainly() {
+        #expect(throws: AppBackup.RestoreError.self) { try AppBackup.decoded(Data("nonsense".utf8)) }
+        do {
+            _ = try AppBackup.decoded(Data(#"{"version":1,"settings":{},"servers":[]}"#.utf8))
+            Issue.record("a phone's backup was taken")
+        } catch {
+            #expect("\(error)".contains("Android"))
+        }
+    }
+
+    @Test func restoringAddsWithoutSwitchingAndKeepsThisMacsSession() {
+        let here = server(.continuo, host: "c", session: session)
+        var list = ServerList()
+        list.add(here)
+        let backup = AppBackup(settings: [:], servers: [server(.continuo, host: "c"), server(.subsonic, host: "n"), server(.continuo, host: "other")])
+        let (restored, needSignIn) = backup.restored(into: list)
+        #expect(restored.activeKey == here.key, "still showing what it was")
+        #expect(restored.server(here.key)?.session != nil, "this Mac's own session stays")
+        #expect(restored.servers.count == 2)
+        #expect(needSignIn.map { $0.address.host } == ["other"])
+    }
+}
+
+@MainActor
+struct ScrobbleSettingsTests {
+    private final class Engine: AudioEngine {
+        var onEvent: ((AudioEvent) -> Void)?
+        var volume: Float = 1
+        func load(_ source: AudioSource, startAt: TimeInterval, autoplay: Bool) {}
+        func preload(_ next: AudioSource?) {}
+        func play() {}
+        func pause() {}
+        func seek(to time: TimeInterval) {}
+        func stop() {}
+    }
+
+    private func settle() async { for _ in 0..<50 { await Task.yield() } }
+
+    @Test func offMeansNothingIsReported() async {
+        let engine = Engine()
+        let player = PlayerController(engine: engine)
+        player.resolve = { _ in AudioSource(url: URL(string: "http://h/a")!) }
+        player.scrobbles = false
+        var told = 0
+        player.scrobble = { _, _ in told += 1 }
+        player.play([Track(id: "t", title: "T", duration: 40)])
+        await settle()
+        for t in stride(from: 1.0, through: 30, by: 1) { engine.onEvent?(.position(t, duration: 40)) }
+        #expect(told == 0)
+    }
+
+    @Test func theThresholdIsTheUsers() async {
+        let engine = Engine()
+        let player = PlayerController(engine: engine)
+        player.resolve = { _ in AudioSource(url: URL(string: "http://h/a")!) }
+        player.scrobbleThreshold = 0.9
+        var counted = 0
+        player.scrobble = { _, submission in if submission { counted += 1 } }
+        player.play([Track(id: "t", title: "T", duration: 100)])
+        await settle()
+        for t in stride(from: 1.0, through: 80, by: 1) { engine.onEvent?(.position(t, duration: 100)) }
+        #expect(counted == 0)
+        for t in stride(from: 81.0, through: 91, by: 1) { engine.onEvent?(.position(t, duration: 100)) }
+        #expect(counted == 1)
+    }
+}

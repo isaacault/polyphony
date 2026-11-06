@@ -22,6 +22,82 @@ final class Downloads {
 
     private var limitBytes: Int64 { Int64(limitGB) * 1_000_000_000 }
 
+    /// Settings > Downloads.
+    private(set) var unmeteredOnly = UserDefaults.standard.bool(forKey: "downloads.unmeteredOnly")
+    private(set) var onlyWhileCharging = UserDefaults.standard.bool(forKey: "downloads.onlyWhileCharging")
+    private(set) var parallel = max(UserDefaults.standard.integer(forKey: "downloads.parallel"), 1)
+    /// A profile's id: what songs are downloaded as. Nil: the original files.
+    private(set) var qualityProfileID = UserDefaults.standard.string(forKey: "downloads.qualityProfile")
+    private(set) var removeUnmatched = UserDefaults.standard.object(forKey: "downloads.removeUnmatched") as? Bool ?? true
+    private(set) var evictLeastPlayed = UserDefaults.standard.object(forKey: "downloads.evictLeastPlayed") as? Bool ?? true
+    /// How often rules are looked at again, in hours.
+    private(set) var checkEveryHours = max(UserDefaults.standard.integer(forKey: "downloads.checkEveryHours"), 1)
+    /// Downloaded copies play instead of streams; off, they're only used when offline.
+    private(set) var preferDownloaded = UserDefaults.standard.object(forKey: "downloads.preferDownloaded") as? Bool ?? true
+    /// Whether fetching may go on right now (the connection, the power, offline).
+    @ObservationIgnored var mayFetch: () -> Bool = { true }
+
+    func setUnmeteredOnly(_ on: Bool) {
+        unmeteredOnly = on
+        UserDefaults.standard.set(on, forKey: "downloads.unmeteredOnly")
+        conditionsChanged()
+    }
+
+    func setOnlyWhileCharging(_ on: Bool) {
+        onlyWhileCharging = on
+        UserDefaults.standard.set(on, forKey: "downloads.onlyWhileCharging")
+        conditionsChanged()
+    }
+
+    func setParallel(_ count: Int) {
+        parallel = max(count, 1)
+        UserDefaults.standard.set(parallel, forKey: "downloads.parallel")
+        conditionsChanged()
+    }
+
+    func setQualityProfile(_ id: String?) {
+        qualityProfileID = id
+        UserDefaults.standard.set(id, forKey: "downloads.qualityProfile")
+    }
+
+    func setRemoveUnmatched(_ on: Bool) {
+        removeUnmatched = on
+        UserDefaults.standard.set(on, forKey: "downloads.removeUnmatched")
+    }
+
+    func setEvictLeastPlayed(_ on: Bool) {
+        evictLeastPlayed = on
+        UserDefaults.standard.set(on, forKey: "downloads.evictLeastPlayed")
+    }
+
+    func setCheckEveryHours(_ hours: Int) {
+        checkEveryHours = max(hours, 1)
+        UserDefaults.standard.set(checkEveryHours, forKey: "downloads.checkEveryHours")
+        startChecking()
+    }
+
+    func setPreferDownloaded(_ on: Bool) {
+        preferDownloaded = on
+        UserDefaults.standard.set(on, forKey: "downloads.preferDownloaded")
+    }
+
+    /// The connection or the power changed: fetching may be able to go on.
+    func conditionsChanged() {
+        if !queue.isEmpty && !running { Task { await run() } }
+    }
+
+    private func startChecking() {
+        hourly?.cancel()
+        hourly = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.checkRules()
+                // Waiting on the power or the connection is looked at again on each round too.
+                self?.conditionsChanged()
+                try? await Task.sleep(for: .seconds(3600 * (self?.checkEveryHours ?? 1)))
+            }
+        }
+    }
+
     func setLimit(gb: Int) {
         limitGB = gb
         UserDefaults.standard.set(gb, forKey: "downloads.limitGB")
@@ -37,6 +113,7 @@ final class Downloads {
     }
 
     private func enforceLimit() {
+        guard evictLeastPlayed else { return }
         let evict = index.evictions(limitBytes: limitBytes)
         if !evict.isEmpty { remove(evict) }
     }
@@ -67,13 +144,7 @@ final class Downloads {
             .flatMap { try? JSONDecoder().decode(DownloadIndex.self, from: $0) } ?? DownloadIndex()
         rules = (try? Data(contentsOf: dir.appendingPathComponent("rules.json")))
             .flatMap { try? JSONDecoder().decode([DownloadRule].self, from: $0) } ?? []
-        hourly?.cancel()
-        hourly = Task { [weak self] in
-            while !Task.isCancelled {
-                await self?.checkRules()
-                try? await Task.sleep(for: .seconds(3600))
-            }
-        }
+        startChecking()
     }
 
     func detach() {
@@ -181,7 +252,7 @@ final class Downloads {
         }
         for (trackID, ruleID) in plan.retag { index.setRule(trackID, ruleID) }
         if !plan.retag.isEmpty { save() }
-        if !plan.remove.isEmpty { remove(plan.remove) }
+        if removeUnmatched, !plan.remove.isEmpty { remove(plan.remove) }
         enqueue(plan.fetch.map { ($0.track, $0.ruleID) })
         rulesCheckedAt = Date()
     }
@@ -199,32 +270,42 @@ final class Downloads {
         if !running { Task { await run() } }
     }
 
-    /// One at a time: a library's worth queued shouldn't swamp the server or the network.
+    /// A few at a time at most (Settings > Downloads): a library's worth queued shouldn't swamp the
+    /// server or the network. Waits, with the queue kept, while the connection or power says not now.
     private func run() async {
+        guard !running else { return }
         running = true
         defer { running = false }
-        while !queue.isEmpty {
-            let (track, ruleID) = queue.removeFirst()
-            guard let folder, let fetch = source?(track) else { break }
-            let (url, format) = fetch
-            do {
-                let (tmp, response) = try await URLSession.shared.download(from: url)
-                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                    throw URLError(.badServerResponse)
+        while !queue.isEmpty, mayFetch() {
+            let batch = Array(queue.prefix(parallel))
+            queue.removeFirst(batch.count)
+            await withTaskGroup(of: Void.self) { group in
+                for (track, ruleID) in batch {
+                    group.addTask { @MainActor [weak self] in await self?.fetch(track, ruleID: ruleID) }
                 }
-                let file = DownloadIndex.fileName(for: track, format: format)
-                let target = folder.appendingPathComponent(file)
-                try? FileManager.default.removeItem(at: target)
-                try FileManager.default.moveItem(at: tmp, to: target)
-                let size = try? FileManager.default.attributesOfItem(atPath: target.path)[.size] as? NSNumber
-                index.add(track, file: file, bytes: size?.int64Value ?? 0, ruleID: ruleID)
-                save()
-                if ruleID != nil { enforceLimit() }
-            } catch {
-                DiagnosticLog.shared.log("downloads", "\(track.title) (\(track.id)): \(error)")
-                failed.insert(track.id)
             }
-            active[track.id] = nil
+        }
+    }
+
+    private func fetch(_ track: Track, ruleID: String?) async {
+        defer { active[track.id] = nil }
+        guard let folder, let (url, format) = source?(track) else { return }
+        do {
+            let (tmp, response) = try await URLSession.shared.download(from: url)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+            let file = DownloadIndex.fileName(for: track, format: format)
+            let target = folder.appendingPathComponent(file)
+            try? FileManager.default.removeItem(at: target)
+            try FileManager.default.moveItem(at: tmp, to: target)
+            let size = try? FileManager.default.attributesOfItem(atPath: target.path)[.size] as? NSNumber
+            index.add(track, file: file, bytes: size?.int64Value ?? 0, ruleID: ruleID)
+            save()
+            if ruleID != nil { enforceLimit() }
+        } catch {
+            DiagnosticLog.shared.log("downloads", "\(track.title) (\(track.id)): \(error)")
+            failed.insert(track.id)
         }
     }
 

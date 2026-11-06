@@ -128,7 +128,8 @@ struct HomeView: View {
         recentlyPlayed = (try? await played) ?? []
         mostPlayed = (try? await most) ?? []
         random = (try? await picks) ?? []
-        favourites = (try? await liked) ?? []
+        let liking = (try? await liked) ?? []
+        favourites = model.usesRatings ? liking.filter { ($0.rating ?? 0) >= model.topRatedMinimum } : liking
     }
 }
 

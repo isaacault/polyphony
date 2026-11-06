@@ -90,6 +90,7 @@ struct DownloadsView: View {
                         ForEach([5, 10, 25, 50, 100, 250], id: \.self) { Text("\($0) GB").tag($0) }
                     }
                     .fixedSize()
+                    DownloadOptions(downloads: downloads)
                     if downloads.limitGB > 0 {
                         Text("Over the limit, the songs rules keep that were played least recently go first. Downloads by hand stay.")
                     }
