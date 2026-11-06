@@ -142,6 +142,17 @@ public struct ContinuoService: Sendable {
         client.baseURL.appendingPathComponent("v1/play-now/\(id)/audio")
     }
 
+    /// A link to the song's audio that a speaker can fetch by itself, without a token, on continuo's
+    /// LAN door (continuo#98). The file as it is; good for 12 hours.
+    public func playNowReceiverURL(id: String) async throws -> URL {
+        struct Link: Decodable { let url: String }
+        let link: Link = try await get("v1/play-now/\(id)/receiver")
+        guard let url = URL(string: link.url) else {
+            throw ContinuoError(status: 502, code: "bad_link", message: "continuo sent an unreadable speaker link.", retryable: false)
+        }
+        return url
+    }
+
     // MARK: Library extras
 
     /// A song's lyrics from LRCLIB (for songs whose files have none); nil when none are known.

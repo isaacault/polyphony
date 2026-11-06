@@ -25,6 +25,13 @@ private func service(_ fake: FakeTransport) async throws -> ContinuoService {
 private func json(_ status: Int, _ body: String) -> HTTPResponse { HTTPResponse(status: status, body: Data(body.utf8)) }
 
 struct ContinuoServiceTests {
+    @Test func aPlayNowSongsSpeakerLinkIsSigned() async throws {
+        let fake = FakeTransport { _ in json(200, #"{"url":"http://192.168.0.101/v1/play-now/s1/audio?sig=abc","expiresAt":1800000000}"#) }
+        let link = try await service(fake).playNowReceiverURL(id: "s1")
+        #expect(link.absoluteString == "http://192.168.0.101/v1/play-now/s1/audio?sig=abc")
+        #expect(fake.calls.last?.url.path == "/v1/play-now/s1/receiver")
+    }
+
     @Test func searchKeepsContinuosRankingAndLead() async throws {
         let fake = FakeTransport { _ in HTTPResponse(status: 200, body: fixture("search")) }
         let r = try await service(fake).search("alaskan tapes", quick: true)
