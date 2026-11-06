@@ -46,6 +46,26 @@ final class AVPlayerEngine: AudioEngine {
     func stop() {}
 }
 
+// Platform/CastDiscovery.swift
+@MainActor
+@Observable
+final class CastDiscovery {
+    private(set) var devices: [CastDevice] = []
+    func start() {}
+    func endpoint(of device: CastDevice) -> String? { nil }
+}
+
+@MainActor
+final class NetworkCastSocket: CastSocket {
+    var onConnected: (() -> Void)?
+    var onBytes: ((Data) -> Void)?
+    var onClosed: ((String?) -> Void)?
+    init(endpoint: String) {}
+    func connect() {}
+    func send(_ data: Data) {}
+    func close() {}
+}
+
 // Platform/NetworkWatcher.swift
 @MainActor
 final class NetworkWatcher {

@@ -30,7 +30,8 @@ targets:
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: "GPL-3.0"
         # Finding DLNA speakers (SSDP multicast) needs Local Network access, which macOS asks for once.
-        NSLocalNetworkUsageDescription: "Polyphony looks for speakers on your network (DLNA) so it can play to them."
+        NSLocalNetworkUsageDescription: "Polyphony looks for speakers and Cast devices on your network so it can play to them."
+        NSBonjourServices: [_googlecast._tcp]
         # Songs dragged inside the app (onto the queue, a playlist) travel as this type.
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: app.polyphony.tracks

@@ -114,7 +114,40 @@ final class AppModel {
     let speakers = SpeakerDiscovery()
     /// Where the music plays: this Mac, or a DLNA speaker.
     private(set) var speaker: Renderer?
+    /// Or a Cast device.
+    private(set) var castDevice: CastDevice?
+    let castDevices = CastDiscovery()
+    @ObservationIgnored private var castEngine: CastEngine?
     @ObservationIgnored private let macEngine: AVPlayerEngine
+
+    var isLocalOutput: Bool { speaker == nil && castDevice == nil }
+    /// The name of what's playing the music, when it isn't this Mac.
+    var outputName: String? { speaker?.name ?? castDevice?.name }
+
+    /// Plays on a Cast device, carrying on from where the song is.
+    func play(onCast device: CastDevice) {
+        guard let endpoint = castDevices.endpoint(of: device) else { return }
+        DiagnosticLog.shared.log("output", "to \(device.name) (\(device.model ?? "?")), Cast" + (receiverAddress.isEmpty ? ", no receiver address" : ", receiver \(receiverAddress)"))
+        speakerEngine?.detach()
+        speakerEngine = nil
+        speaker = nil
+        // After switchOutput, which stops the old engine.
+        let leavingCast = castEngine
+        defer { leavingCast?.detach() }
+        let engine = CastEngine(device: device, socket: NetworkCastSocket(endpoint: endpoint))
+        engine.onPlayingChanged = { [weak self] in self?.keepAwake.hold($0) }
+        castEngine = engine
+        castDevice = device
+        streaming.remember(.cast(deviceID: device.id, name: device.name))
+        player.switchOutput(to: engine)
+    }
+
+    /// Where the music plays now, for the quality rules.
+    private var outputTarget: OutputTarget {
+        if let speaker { return .dlna(udn: speaker.udn, name: speaker.name) }
+        if let castDevice { return .cast(deviceID: castDevice.id, name: castDevice.name) }
+        return .local
+    }
     @ObservationIgnored private var speakerEngine: DLNAEngine?
     /// What the speaker playing now says it can play.
     @ObservationIgnored private var speakerFormats = RendererFormats.unknownFormats
@@ -155,6 +188,11 @@ final class AppModel {
         let to = renderer.map { "to \($0.name) (\($0.model ?? "?"), \($0.avTransport.host ?? "?"))" } ?? "to this Mac"
         DiagnosticLog.shared.log("output", to + (receiverAddress.isEmpty ? ", no receiver address" : ", receiver \(receiverAddress)"))
         speakerEngine?.detach()
+        // switchOutput stops the old engine, so a Cast device is let go after it.
+        let leavingCast = castEngine
+        castEngine = nil
+        castDevice = nil
+        defer { leavingCast?.detach() }
         if let renderer {
             let engine = DLNAEngine(control: DLNAControl(renderer: renderer))
             engine.onPlayingChanged = { [weak self] in self?.keepAwake.hold($0) }
@@ -267,7 +305,7 @@ final class AppModel {
         player.scrobbles = defaults.object(forKey: "playback.scrobbles") as? Bool ?? true
         player.scrobbleThreshold = defaults.object(forKey: "playback.scrobbleThreshold") as? Double ?? 0.5
         outputs.onHeadphonesBack = { [weak self] in
-            guard let self, self.resumeOnConnect, self.speaker == nil, !self.player.isPlaying, self.player.current != nil else { return }
+            guard let self, self.resumeOnConnect, self.isLocalOutput, !self.player.isPlaying, self.player.current != nil else { return }
             DiagnosticLog.shared.log("output", "headphones back: playing")
             self.player.resume()
         }
@@ -279,7 +317,7 @@ final class AppModel {
             let d = self.streaming.decision()
             DiagnosticLog.shared.log("streaming", "now \(d.profile.name): \(d.explanation)")
             self.planFetchAhead()
-            if self.streaming.policy.reloadCurrentTrackOnChange, self.speaker == nil, self.player.isPlaying,
+            if self.streaming.policy.reloadCurrentTrackOnChange, self.isLocalOutput, self.player.isPlaying,
                self.player.current?.libraryTrack.map({ !self.downloads.isDownloaded($0.id) }) == true {
                 self.player.reloadCurrent()
             }
@@ -304,7 +342,7 @@ final class AppModel {
             }
         }
         outputs.onHeadphonesGone = { [weak self] in
-            guard let self, self.pauseOnDisconnect, self.speaker == nil, self.player.isPlaying else { return }
+            guard let self, self.pauseOnDisconnect, self.isLocalOutput, self.player.isPlaying else { return }
             DiagnosticLog.shared.log("output", "headphones gone: paused")
             self.player.pause()
         }
@@ -427,7 +465,7 @@ final class AppModel {
     /// one. On this Mac's own player only: a speaker fetches for itself.
     private func planFetchAhead() {
         fetchAhead?.cancel()
-        let budget = PrefetchPlan.budget(streaming.network, enabled: prefetchQueue && !offline && speaker == nil,
+        let budget = PrefetchPlan.budget(streaming.network, enabled: prefetchQueue && !offline && isLocalOutput,
                                          onMetered: prefetchOnMetered)
         let upcoming = player.queue.upNext.map { item -> PrefetchPlan.Upcoming in
             let track = item.entry.libraryTrack
@@ -526,7 +564,7 @@ final class AppModel {
 
     /// Lets go of the server showing (its playback, downloads, caches), signed in or not.
     private func detach(to next: State = .signedOut) {
-        if speaker != nil { play(on: nil) }
+        if !isLocalOutput { play(on: nil) }
         detaching = true
         player.stop()
         detaching = false
@@ -729,7 +767,8 @@ final class AppModel {
             ("Network", "\(streaming.network.kind.rawValue.lowercased())\(streaming.network.isMetered ? ", metered" : ""), home=\(streaming.atHome.map(String.init) ?? "unknown")"),
             ("Volume levelling", "\(replayGain.mode.rawValue), pre-amp \(replayGain.preampDb) dB, prevent clipping \(replayGain.preventClipping)"),
             ("Mark songs with", usesRatings ? "stars" : "hearts"),
-            ("Output", speaker.map { "\($0.name) (\($0.model ?? "?"))" } ?? "this Mac"),
+            ("Output", speaker.map { "\($0.name) (\($0.model ?? "?"))" } ?? castDevice.map { "\($0.name) (\($0.model ?? "?"), Cast)" } ?? "this Mac"),
+            ("Cast devices found", castDevices.devices.map(\.name).joined(separator: ", ")),
             ("Speakers found", speakers.renderers.map { "\($0.name) (\($0.avTransport.host ?? "?"))" }.joined(separator: ", ")),
             ("Downloads", "\(downloads.index.entries.count) songs, \(ByteCountFormatter.string(fromByteCount: downloads.usedBytes, countStyle: .file)), limit \(downloads.limitGB == 0 ? "none" : "\(downloads.limitGB) GB"), \(downloads.active.count) queued, \(downloads.failed.count) failed"),
             ("Playing", player.current.map { "\($0.title), \(player.isPlaying ? "playing" : "paused") at \(Int(player.position)) s" } ?? "nothing"),
@@ -759,7 +798,7 @@ final class AppModel {
     private func source(for entry: QueueEntry) async -> AudioSource? {
         switch entry {
         case let .track(t):
-            if speaker == nil {
+            if isLocalOutput {
                 // A downloaded copy plays from disk: no network, original quality.
                 if downloads.preferDownloaded || offline, let local = downloads.localURL(t.id) {
                     downloads.played(t.id)
@@ -772,17 +811,19 @@ final class AppModel {
             }
             // A speaker fetches the audio itself, from an address it can reach, and shows the song: as
             // the rules say, in a format it says it plays.
-            guard let library, let renderer = speaker else { return nil }
-            let target = OutputTarget.dlna(udn: renderer.udn, name: renderer.name)
+            guard let library else { return nil }
+            let target = outputTarget
             let wanted = streaming.decision(for: target).profile
-            let (profile, mime, substituted) = RendererCodecFallback.choose(wanted, container: t.container, formats: speakerFormats)
-            if substituted { DiagnosticLog.shared.log("output", "\(renderer.name) doesn't take \(wanted.name): using \(profile.name)") }
+            // A Cast device plays what the Default Media Receiver plays; a speaker says what it does.
+            let formats = speaker == nil ? RendererFormats.unknownFormats : speakerFormats
+            let (profile, mime, substituted) = RendererCodecFallback.choose(wanted, container: t.container, formats: formats)
+            if substituted { DiagnosticLog.shared.log("output", "\(target.displayName) doesn't take \(wanted.name): using \(profile.name)") }
             let url = streamURL(t, .forRenderer(profile), library)
             let art = coverURL(t.coverArtID ?? t.albumID, size: 1200).map(forSpeaker)
             return AudioSource(url: forSpeaker(url), info: .init(title: t.title, artist: t.artistName, album: t.albumName, artworkURL: art,
                                                                 mimeType: mime, durationMs: Int(t.duration * 1000)))
         case let .playNow(stream, song):
-            if speaker != nil {
+            if !isLocalOutput {
                 // A speaker sends no token: continuo signs it a link, on the LAN door, to the file as it is.
                 guard let link = await playNowLink(stream.id) else { return nil }
                 return AudioSource(url: link, info: .init(title: song.title, artist: song.artist, album: song.albumTitle,

@@ -689,20 +689,27 @@ private struct DevicesSection: View {
     }
 }
 
-/// Where the music plays: this Mac, or a DLNA speaker on the network (the Yamaha, …).
+/// Where the music plays: this Mac, a DLNA speaker on the network (the Yamaha, …) or a Cast device.
 struct SpeakerMenu: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         Menu {
             Button { model.play(on: nil) } label: {
-                Label("This Mac", systemImage: model.speaker == nil ? "checkmark" : "laptopcomputer")
+                Label("This Mac", systemImage: model.isLocalOutput ? "checkmark" : "laptopcomputer")
             }
             if !model.speakers.renderers.isEmpty { Divider() }
             ForEach(model.speakers.renderers) { renderer in
                 Button { model.play(on: renderer) } label: {
                     Label([renderer.name, renderer.model].compactMap { $0 }.joined(separator: " · "),
                           systemImage: model.speaker?.udn == renderer.udn ? "checkmark" : "hifispeaker")
+                }
+            }
+            if !model.castDevices.devices.isEmpty { Divider() }
+            ForEach(model.castDevices.devices) { device in
+                Button { model.play(onCast: device) } label: {
+                    Label([device.name, device.model].compactMap { $0 }.joined(separator: " · "),
+                          systemImage: model.castDevice?.id == device.id ? "checkmark" : "tv")
                 }
             }
             Divider()
@@ -712,14 +719,17 @@ struct SpeakerMenu: View {
                 Text("Set a receiver address in Settings if a speaker can't play")
             }
         } label: {
-            Image(systemName: model.speaker == nil ? "hifispeaker" : "hifispeaker.fill")
-                .foregroundStyle(model.speaker == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
+            Image(systemName: model.isLocalOutput ? "hifispeaker" : "hifispeaker.fill")
+                .foregroundStyle(model.isLocalOutput ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help(model.speaker.map { "Playing on \($0.name)" } ?? "Play on a speaker")
-        .onAppear { if model.speakers.renderers.isEmpty { model.speakers.search() } }
+        .help(model.outputName.map { "Playing on \($0)" } ?? "Play on a speaker")
+        .onAppear {
+            if model.speakers.renderers.isEmpty { model.speakers.search() }
+            model.castDevices.start()
+        }
     }
 }
 
@@ -742,8 +752,8 @@ private struct NowPlayingActions: View {
                 .buttonStyle(.link)
                 .disabled(context.kind == .genre || context.kind == .favourites)
             }
-            if let speaker = model.speaker {
-                Label("Playing on \(speaker.name)", systemImage: "hifispeaker.fill").foregroundStyle(.tint)
+            if let output = model.outputName {
+                Label("Playing on \(output)", systemImage: "hifispeaker.fill").foregroundStyle(.tint)
             }
             HStack(spacing: 14) {
                 if let track = entry.libraryTrack {
