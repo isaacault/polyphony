@@ -66,6 +66,12 @@ enum InspectorPane: String { case queue, lyrics }
 
 struct MainWindow: View {
     @Environment(AppModel.self) private var model
+    /// Settings > General > Sidebar: what the sidebar leaves out, by raw value, comma-separated.
+    @AppStorage("sidebar.hidden") private var hidden = ""
+
+    private func shows(_ item: SidebarItem) -> Bool {
+        !hidden.split(separator: ",").contains(Substring(item.rawValue))
+    }
     @State private var inspector: InspectorPane?
     @State private var keyMonitor: Any?
 
@@ -76,10 +82,10 @@ struct MainWindow: View {
                 Section {
                     row(.home)
                     row(.search)
-                    if model.isContinuo { row(.explore) }
+                    if model.isContinuo, shows(.explore) { row(.explore) }
                 }
                 Section("Library") {
-                    ForEach([SidebarItem.artists, .albums, .songs, .playlists, .genres, .favourites, .downloads]) { row($0) }
+                    ForEach([SidebarItem.artists, .albums, .songs, .playlists, .genres, .favourites, .downloads].filter(shows)) { row($0) }
                 }
                 if model.isContinuo {
                     Section("Server") {
@@ -95,6 +101,7 @@ struct MainWindow: View {
                 detail(for: model.sidebar ?? .home)
                     .navigationDestination(for: Route.self) { route in destination(route) }
             }
+            .modifier(PureBlackBackground())
         }
         .onChange(of: model.sidebar) { model.path = NavigationPath() }
         .safeAreaInset(edge: .bottom, spacing: 0) {

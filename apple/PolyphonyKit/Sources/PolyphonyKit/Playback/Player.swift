@@ -145,6 +145,10 @@ public final class PlayerController {
     /// The queue or the current song changed: the app fetches what's coming.
     @ObservationIgnored public var onUpcomingChanged: @MainActor () -> Void = {}
 
+    /// Settings > Playback > Scrobbling: report plays at all, and how much of a song counts as one.
+    public var scrobbles = true
+    public var scrobbleThreshold = 0.5
+
     /// Previous restarts the song instead of going back once this far in.
     public static let restartThreshold: TimeInterval = 3
 
@@ -435,8 +439,8 @@ public final class PlayerController {
             // A newer choice (next pressed again) wins over a slow resolve.
             guard generation == loadGeneration else { return }
             engine.load(source, startAt: startAt, autoplay: autoplay)
-            if let track = item.entry.libraryTrack { scrobble(track, false) }
-            if case let .playNow(stream, _) = item.entry { playNowScrobble(stream.id, nil) }
+            if scrobbles, let track = item.entry.libraryTrack { scrobble(track, false) }
+            if scrobbles, case let .playNow(stream, _) = item.entry { playNowScrobble(stream.id, nil) }
             preloadNext()
         }
     }
@@ -491,7 +495,8 @@ public final class PlayerController {
             if abs(time - lastPersisted) >= 30 { save() }
             sleepIfDue()
             if let total, total > 0 { duration = total }
-            if !scrobbled, let entry = current, ScrobbleRule.counts(played: playedOfCurrent, duration: duration) {
+            if scrobbles, !scrobbled, let entry = current,
+               ScrobbleRule.counts(played: playedOfCurrent, duration: duration, threshold: scrobbleThreshold) {
                 scrobbled = true
                 if let track = entry.libraryTrack { scrobble(track, true) }
                 if case let .playNow(stream, _) = entry { playNowScrobble(stream.id, startedAt) }

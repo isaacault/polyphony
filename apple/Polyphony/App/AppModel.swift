@@ -19,7 +19,7 @@ final class AppModel {
     var notice: String?
     /// Where the window is: the sidebar's choice and the pages opened from it. Here rather than in the
     /// view so menu commands (⌘F, ⌘L) can move it.
-    var sidebar: SidebarItem? = .home
+    var sidebar: SidebarItem? = UserDefaults.standard.string(forKey: "sidebar.opensOn").flatMap(SidebarItem.init(rawValue:)) ?? .home
     var path = NavigationPath()
     /// The full-window Now Playing view (big artwork and lyrics).
     var nowPlayingExpanded = false
@@ -207,6 +207,42 @@ final class AppModel {
         UserDefaults.standard.set(on, forKey: "playback.pauseOnDisconnect")
     }
 
+    /// Settings > Playback: carry on when headphones come back (off by default).
+    private(set) var resumeOnConnect = UserDefaults.standard.bool(forKey: "playback.resumeOnConnect")
+
+    func setResumeOnConnect(_ on: Bool) {
+        resumeOnConnect = on
+        UserDefaults.standard.set(on, forKey: "playback.resumeOnConnect")
+    }
+
+    /// Settings > Playback: the queue comes back at the next launch (on by default).
+    private(set) var rememberQueue = UserDefaults.standard.object(forKey: "playback.rememberQueue") as? Bool ?? true
+
+    func setRememberQueue(_ on: Bool) {
+        rememberQueue = on
+        UserDefaults.standard.set(on, forKey: "playback.rememberQueue")
+        if !on { UserDefaults.standard.removeObject(forKey: queueKey) }
+    }
+
+    /// Settings > Playback > Scrobbling.
+    func setScrobbles(_ on: Bool) {
+        player.scrobbles = on
+        UserDefaults.standard.set(on, forKey: "playback.scrobbles")
+    }
+
+    func setScrobbleThreshold(_ fraction: Double) {
+        player.scrobbleThreshold = fraction
+        UserDefaults.standard.set(fraction, forKey: "playback.scrobbleThreshold")
+    }
+
+    /// In ratings mode, what Top Rated means: this many stars and up.
+    private(set) var topRatedMinimum = UserDefaults.standard.object(forKey: "library.topRatedMinimum") as? Int ?? 4
+
+    func setTopRatedMinimum(_ stars: Int) {
+        topRatedMinimum = min(max(stars, 1), 5)
+        UserDefaults.standard.set(topRatedMinimum, forKey: "library.topRatedMinimum")
+    }
+
     init() {
         // Every stored property is set before `self` is used.
         let center = NowPlayingCenter()
@@ -228,6 +264,13 @@ final class AppModel {
         }
         center.attach(player)
         player.preloadsNext = preloadNext
+        player.scrobbles = defaults.object(forKey: "playback.scrobbles") as? Bool ?? true
+        player.scrobbleThreshold = defaults.object(forKey: "playback.scrobbleThreshold") as? Double ?? 0.5
+        outputs.onHeadphonesBack = { [weak self] in
+            guard let self, self.resumeOnConnect, self.speaker == nil, !self.player.isPlaying, self.player.current != nil else { return }
+            DiagnosticLog.shared.log("output", "headphones back: playing")
+            self.player.resume()
+        }
         streaming.persist = { stored in
             if let data = try? JSONEncoder().encode(stored) { UserDefaults.standard.set(data, forKey: "streaming.rules") }
         }
@@ -251,6 +294,7 @@ final class AppModel {
             DiagnosticLog.shared.log("streaming", "network: \(state.kind.rawValue.lowercased())\(state.isMetered ? ", metered" : "")")
             self.streaming.setNetwork(state)
             self.checkHome()
+            self.downloads.conditionsChanged()
         }
         network.start()
         Task { [weak self] in
@@ -281,7 +325,7 @@ final class AppModel {
             self.saveHistory()
         }
         player.persist = { [weak self] snapshot in
-            guard let self, self.server != nil else { return }
+            guard let self, self.server != nil, self.rememberQueue else { return }
             let defaults = UserDefaults.standard
             if let snapshot, let data = try? JSONEncoder().encode(snapshot) {
                 defaults.set(data, forKey: self.queueKey)
@@ -504,12 +548,20 @@ final class AppModel {
         server = saved
         let client = SubsonicClient(credentials: saved.subsonic)
         subsonic = client
-        downloads.attach(server: saved, library: client) { track in
-            // The original file, unless this Mac can't play it: then MP3 at 320 kbps.
-            AppleFormats.plays(track.container)
-                ? (client.downloadURL(trackID: track.id), track.container)
-                : (client.streamURL(trackID: track.id, maxBitRateKbps: AppleFormats.fallbackBitrateKbps, format: AppleFormats.fallbackFormat),
-                   AppleFormats.fallbackFormat)
+        downloads.attach(server: saved, library: client) { [weak self] track in
+            // The quality chosen for downloads: the original file by default, unless this Mac can't
+            // play it (then MP3 at 320 kbps).
+            let profile = self?.streaming.profile(self?.downloads.qualityProfileID) ?? .original
+            let choice = StreamChoice.forMac(profile, container: track.container)
+            if choice.isOriginal { return (client.downloadURL(trackID: track.id), track.container) }
+            return (client.streamURL(trackID: track.id, maxBitRateKbps: choice.maxBitRateKbps, format: choice.format),
+                    choice.container(source: track.container))
+        }
+        downloads.mayFetch = { [weak self] in
+            guard let self else { return false }
+            if self.downloads.unmeteredOnly, self.streaming.network.isMetered || self.streaming.network.kind == .cellular { return false }
+            if self.downloads.onlyWhileCharging, !PowerSource.onMains { return false }
+            return !self.offline
         }
         if saved.kind == .continuo {
             let account = ContinuoAccount(client: ContinuoClient(baseURL: saved.address),
@@ -539,7 +591,7 @@ final class AppModel {
         state = .signedIn
         checkHome()
         // Where last session left off, paused: Play carries on.
-        if player.current == nil, let data = UserDefaults.standard.data(forKey: queueKey),
+        if rememberQueue, player.current == nil, let data = UserDefaults.standard.data(forKey: queueKey),
            let snapshot = try? JSONDecoder().decode(PlayQueue.Snapshot.self, from: data) {
             player.restore(snapshot)
         }
@@ -617,6 +669,41 @@ final class AppModel {
         }
     }
 
+    // MARK: Backup
+
+    /// Settings > General > Backup: the settings and servers, as a file's bytes.
+    func backup() async throws -> Data {
+        let defaults = UserDefaults.standard.dictionaryRepresentation()
+        let settings = defaults.compactMapValues { AppBackup.value($0) }
+        return try AppBackup(settings: settings, servers: await store.load().servers).encoded()
+    }
+
+    /// Applies a backup. The servers come in without switching away from the one showing. What it
+    /// says goes in `notice`; most settings are read at launch, so they take effect at the next one.
+    func restore(_ data: Data) async throws {
+        let backup = try AppBackup.decoded(data)
+        let defaults = UserDefaults.standard
+        for (key, value) in backup.settings {
+            switch value {
+            case let .bool(v): defaults.set(v, forKey: key)
+            case let .int(v): defaults.set(v, forKey: key)
+            case let .double(v): defaults.set(v, forKey: key)
+            case let .string(v): defaults.set(v, forKey: key)
+            case let .data(v): defaults.set(v, forKey: key)
+            }
+        }
+        let (list, needSignIn) = backup.restored(into: await store.load())
+        await store.save(list)
+        servers = list.servers
+        DiagnosticLog.shared.log("backup", "restored \(backup.settings.count) settings, \(backup.servers.count) servers")
+        var message = "Restored. Quit and reopen Polyphony to apply the settings."
+        if !needSignIn.isEmpty {
+            let names = needSignIn.map { $0.address.host ?? $0.address.absoluteString }.joined(separator: ", ")
+            message += " Sign in to \(names) again (Settings > Servers > Add Server)."
+        }
+        notice = message
+    }
+
     // MARK: Diagnostics
 
     /// Help > Save Diagnostics: what's set up and what went on lately, with no passwords or tokens.
@@ -668,7 +755,7 @@ final class AppModel {
         case let .track(t):
             if speaker == nil {
                 // A downloaded copy plays from disk: no network, original quality.
-                if let local = downloads.localURL(t.id) {
+                if downloads.preferDownloaded || offline, let local = downloads.localURL(t.id) {
                     downloads.played(t.id)
                     return AudioSource(url: local)
                 }

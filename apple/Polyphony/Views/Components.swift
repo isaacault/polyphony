@@ -97,11 +97,18 @@ struct AvailabilityBadge: View {
 }
 
 /// A grid of albums that open their page.
+/// Settings > General: a set number of columns, or as many as fit.
+func libraryGridColumns(_ count: Int) -> [GridItem] {
+    count > 0 ? Array(repeating: GridItem(.flexible(), spacing: 18), count: count)
+              : [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 18)]
+}
+
 struct AlbumGrid: View {
     let albums: [Album]
+    @AppStorage("appearance.gridColumns") private var gridColumns = 0
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 18)], alignment: .leading, spacing: 22) {
+        LazyVGrid(columns: libraryGridColumns(gridColumns), alignment: .leading, spacing: 22) {
             ForEach(albums) { album in
                 NavigationLink(value: Route.album(album.id)) { AlbumTile(album: album) }
                     .buttonStyle(.plain)

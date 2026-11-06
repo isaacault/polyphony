@@ -422,24 +422,41 @@ struct SettingsView: View {
             Text("ReplayGain tags from the files: songs too loud are turned down to match (never up past full volume).")
                 .font(.caption).foregroundStyle(.secondary)
         }
-        Section("Output") {
+        Section("Behaviour") {
             Toggle("Pause when headphones disconnect",
                    isOn: Binding(get: { model.pauseOnDisconnect }, set: { model.setPauseOnDisconnect($0) }))
+            Toggle("Resume when headphones connect",
+                   isOn: Binding(get: { model.resumeOnConnect }, set: { model.setResumeOnConnect($0) }))
+            Toggle("Remember queue", isOn: Binding(get: { model.rememberQueue }, set: { model.setRememberQueue($0) }))
+        }
+        Section("Scrobbling") {
+            Toggle("Report plays to the server", isOn: Binding(get: { model.player.scrobbles }, set: { model.setScrobbles($0) }))
+            if model.player.scrobbles {
+                Picker("Count as played after", selection: Binding(get: { model.player.scrobbleThreshold }, set: { model.setScrobbleThreshold($0) })) {
+                    Text("30% of a song").tag(0.3)
+                    Text("50% of a song").tag(0.5)
+                    Text("75% of a song").tag(0.75)
+                    Text("90% of a song").tag(0.9)
+                }
+            }
         }
     }
 
     @ViewBuilder
     private var general: some View {
-        Section("Appearance") {
-            Toggle("Artwork colours in Now Playing",
-                   isOn: Binding(get: { model.artworkColours }, set: { model.setArtworkColours($0) }))
-        }
+        AppearanceSettings()
         Section("Favourites") {
             Picker("Mark songs with", selection: Binding(get: { model.usesRatings }, set: { model.setUsesRatings($0) })) {
                 Text("A heart (favourite or not)").tag(false)
                 Text("Stars (1 to 5)").tag(true)
             }
+            if model.usesRatings {
+                Picker("Top rated means", selection: Binding(get: { model.topRatedMinimum }, set: { model.setTopRatedMinimum($0) })) {
+                    ForEach(1...5, id: \.self) { Text("\($0)★ and up").tag($0) }
+                }
+            }
         }
+        BackupSettings()
         Section("About") {
             LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–")
             Link("Polyphony on GitHub", destination: URL(string: "https://github.com/isaacault/polyphony")!)
@@ -558,18 +575,22 @@ private struct ScrobblingSection: View {
 /// artwork in the bar closes it.
 struct NowPlayingView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage("appearance.blurredBackground") private var blurredBackground = true
+    @AppStorage("appearance.artworkShape") private var artworkShape: ArtworkShape = .rounded
     @State private var palette: ArtworkPalette?
 
     var body: some View {
         if let entry = model.player.current {
             ZStack {
                 // The cover, blurred, behind everything.
-                Artwork(url: model.artworkURL(for: entry, size: 600), cornerRadius: 0)
-                    .scaledToFill()
-                    .blur(radius: 60)
-                    .opacity(0.45)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
+                if blurredBackground {
+                    Artwork(url: model.artworkURL(for: entry, size: 600), cornerRadius: 0)
+                        .scaledToFill()
+                        .blur(radius: 60)
+                        .opacity(0.45)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                }
                 // Its colours over it (Settings > General).
                 if model.artworkColours, let palette {
                     LinearGradient(colors: [Color(palette.vibrant).opacity(0.55), Color(palette.darkMuted).opacity(0.75)],
@@ -579,7 +600,7 @@ struct NowPlayingView: View {
                 Rectangle().fill(.ultraThinMaterial)
                 HStack(spacing: 48) {
                     VStack(alignment: .leading, spacing: 14) {
-                        Artwork(url: model.artworkURL(for: entry, size: 1200), cornerRadius: 12)
+                        Artwork(url: model.artworkURL(for: entry, size: 1200), cornerRadius: artworkShape.cornerRadius)
                             .frame(maxWidth: 460, maxHeight: 460)
                             .shadow(radius: 24, y: 10)
                         Text(entry.title).font(.title.weight(.bold)).lineLimit(2)

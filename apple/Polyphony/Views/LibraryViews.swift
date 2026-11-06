@@ -16,6 +16,8 @@ struct AlbumsView: View {
     @State private var filter = ""
     /// Grid of covers or a list (the Android app's "Show as list"), remembered.
     @AppStorage("albums.asList") private var asList = false
+    @AppStorage("albums.filter") private var filters = ""
+    @State private var genres: [String] = []
 
     /// Full albums by default; albums where you have just one song are under "Single songs".
     private var shown: [Album] {
@@ -29,8 +31,17 @@ struct AlbumsView: View {
             case .all: true
             }
         }
-        guard !filter.isEmpty else { return picked }
-        return picked.filter { $0.name.localizedCaseInsensitiveContains(filter) || ($0.artistName ?? "").localizedCaseInsensitiveContains(filter) }
+        let narrowing = LibraryFilter(stored: filters)
+        let narrowed: [Album]
+        if narrowing.isActive {
+            // An album counts as downloaded when it holds at least one downloaded song.
+            let downloadedAlbums = Set(model.downloads.index.entries.values.compactMap(\.track.albumID))
+            narrowed = picked.filter { narrowing.matches($0, downloaded: downloadedAlbums.contains($0.id)) }
+        } else {
+            narrowed = picked
+        }
+        guard !filter.isEmpty else { return narrowed }
+        return narrowed.filter { $0.name.localizedCaseInsensitiveContains(filter) || ($0.artistName ?? "").localizedCaseInsensitiveContains(filter) }
     }
 
     var body: some View {
@@ -59,6 +70,7 @@ struct AlbumsView: View {
                 }
                 .help("Complete albums, ones you only have some songs of, single songs, or everything")
             }
+            FilterMenu(stored: $filters, genres: genres)
             Picker("View", selection: $asList) {
                 Label("Grid", systemImage: "square.grid.2x2").tag(false)
                 Label("List", systemImage: "list.bullet").tag(true)
@@ -75,6 +87,7 @@ struct AlbumsView: View {
             }
         }
         .task(id: sort) { await load() }
+        .task { genres = (try? await model.subsonic?.genres().map(\.name)) ?? [] }
         // continuo counts albums' songs in the background: which are partial grows for a while.
         .task { await model.refreshSingles() }
     }
@@ -276,6 +289,8 @@ struct TrackList: View {
 
 private struct TrackRow: View {
     @Environment(AppModel.self) private var model
+    @AppStorage("appearance.trackNumbers") private var showNumbers = true
+    @AppStorage("appearance.ratingStyle") private var ratingStyle: RatingStyle = .compact
     let track: Track
     let index: Int
     let numbered: Bool
@@ -309,7 +324,9 @@ private struct TrackRow: View {
                     } else if hovering {
                         Button { model.player.play([track]) } label: { Image(systemName: "play.fill") }.buttonStyle(.plain)
                     } else {
-                        Text(numbered ? "\(track.trackNumber ?? index + 1)" : "\(index + 1)").foregroundStyle(.secondary)
+                        if showNumbers {
+                            Text(numbered ? "\(track.trackNumber ?? index + 1)" : "\(index + 1)").foregroundStyle(.secondary)
+                        }
                     }
                 }
                 .frame(width: 26, alignment: .trailing)
@@ -326,7 +343,7 @@ private struct TrackRow: View {
             }
             Spacer()
             if model.usesRatings, let rating = track.rating {
-                Text(String(repeating: "★", count: rating)).font(.caption).foregroundStyle(.secondary)
+                Text(ratingStyle.text(rating)).font(.caption).foregroundStyle(.secondary)
             } else if !model.usesRatings, track.starred {
                 Image(systemName: "heart.fill").font(.caption).foregroundStyle(.secondary)
             }
@@ -413,30 +430,68 @@ struct ArtistsView: View {
     @State private var artists: [Artist] = []
     @State private var filter = ""
     @State private var loading = true
+    @AppStorage("artists.asList") private var asList = true
+    @AppStorage("artists.filter") private var filters = ""
+    @AppStorage("appearance.gridColumns") private var gridColumns = 0
 
     private var shown: [Artist] {
-        filter.isEmpty ? artists : artists.filter { $0.name.localizedCaseInsensitiveContains(filter) }
+        let narrowing = LibraryFilter(stored: filters)
+        let narrowed = artists.filter { narrowing.matches($0) }
+        return filter.isEmpty ? narrowed : narrowed.filter { $0.name.localizedCaseInsensitiveContains(filter) }
     }
 
-    var body: some View {
-        List(shown) { artist in
-            NavigationLink(value: Route.artist(artist.id)) {
-                HStack(spacing: 10) {
-                    Artwork(url: model.coverURL(artist.coverArtID ?? artist.id, size: 100), cornerRadius: 20, symbol: "music.mic")
-                        .frame(width: 40, height: 40)
-                    VStack(alignment: .leading) {
-                        HStack(spacing: 6) {
-                            Text(artist.name)
-                            if let original = model.originalName(of: artist.name) { Text(original).foregroundStyle(.secondary) }
+    @ViewBuilder
+    private var content: some View {
+        if asList {
+            List(shown) { artist in
+                NavigationLink(value: Route.artist(artist.id)) {
+                    HStack(spacing: 10) {
+                        Artwork(url: model.coverURL(artist.coverArtID ?? artist.id, size: 100), cornerRadius: 20, symbol: "music.mic")
+                            .frame(width: 40, height: 40)
+                        VStack(alignment: .leading) {
+                            HStack(spacing: 6) {
+                                Text(artist.name)
+                                if let original = model.originalName(of: artist.name) { Text(original).foregroundStyle(.secondary) }
+                            }
+                            Text(artist.albumCount == 1 ? "1 album" : "\(artist.albumCount) albums").font(.caption).foregroundStyle(.secondary)
                         }
-                        Text(artist.albumCount == 1 ? "1 album" : "\(artist.albumCount) albums").font(.caption).foregroundStyle(.secondary)
                     }
                 }
             }
+        } else {
+            ScrollView {
+                LazyVGrid(columns: libraryGridColumns(gridColumns), alignment: .leading, spacing: 22) {
+                    ForEach(shown) { artist in
+                        NavigationLink(value: Route.artist(artist.id)) {
+                            VStack(spacing: 6) {
+                                Artwork(url: model.coverURL(artist.coverArtID ?? artist.id, size: 400), cornerRadius: 1000, symbol: "music.mic")
+                                Text(artist.name).font(.callout.weight(.medium)).lineLimit(1)
+                                Text(artist.albumCount == 1 ? "1 album" : "\(artist.albumCount) albums").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(20)
+            }
         }
+    }
+
+    var body: some View {
+        content
         .overlay { if loading && artists.isEmpty { ProgressView() } }
         .navigationTitle("Artists")
         .searchable(text: $filter, placement: .toolbar, prompt: "Filter artists")
+        .toolbar {
+            FilterMenu(stored: $filters, offersDownloaded: false, offersYear: false, offersRating: false)
+            Picker("View", selection: $asList) {
+                Label("Grid", systemImage: "square.grid.2x2").tag(false)
+                Label("List", systemImage: "list.bullet").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelStyle(.iconOnly)
+            .help("Show as grid or list")
+        }
         .task {
             if let cached = model.artistList { artists = cached }
             defer { loading = false }
@@ -619,10 +674,19 @@ func stripHTML(_ text: String) -> String {
 
 struct SongsView: View {
     @Environment(AppModel.self) private var model
-    @State private var tracks: [Track] = []
+    @State private var allTracks: [Track] = []
     @State private var exhausted = false
     @State private var selection = Set<Track.ID>()
     @State private var sortOrder = [KeyPathComparator(\Track.title, comparator: .localizedStandard)]
+    @AppStorage("songs.filter") private var filters = ""
+    @State private var genres: [String] = []
+
+    /// As filtered: what shows, and what Play and Shuffle play.
+    private var tracks: [Track] {
+        let narrowing = LibraryFilter(stored: filters)
+        guard narrowing.isActive else { return allTracks }
+        return allTracks.filter { narrowing.matches($0, downloaded: model.downloads.isDownloaded($0.id)) }
+    }
 
     var body: some View {
         Table(tracks, selection: $selection, sortOrder: $sortOrder) {
@@ -658,14 +722,16 @@ struct SongsView: View {
             guard let first = tracks.firstIndex(where: { ids.contains($0.id) }) else { return }
             model.player.play(tracks, startAt: first, title: "Songs")
         }
-        .onChange(of: sortOrder) { tracks.sort(using: sortOrder) }
+        .onChange(of: sortOrder) { allTracks.sort(using: sortOrder) }
         .navigationTitle("Songs")
         .navigationSubtitle(exhausted ? "\(tracks.count) songs" : "\(tracks.count) songs, loading…")
         .toolbar {
+            FilterMenu(stored: $filters, genres: genres)
             Button { model.player.play(tracks, shuffle: true, title: "Songs") } label: { Label("Shuffle All", systemImage: "shuffle") }
                 .disabled(tracks.isEmpty)
         }
-        .task { if tracks.isEmpty { await loadAll() } }
+        .task { if allTracks.isEmpty { await loadAll() } }
+        .task { genres = (try? await model.subsonic?.genres().map(\.name)) ?? [] }
     }
 
     private func play(_ picked: [Track]) {
@@ -681,7 +747,7 @@ struct SongsView: View {
             do {
                 let page = try await subsonic.search("", artists: 0, albums: 0, tracks: 500, trackOffset: loaded.count).tracks
                 loaded += page
-                tracks = loaded.sorted(using: sortOrder)
+                allTracks = loaded.sorted(using: sortOrder)
                 if page.count < 500 { break }
             } catch {
                 model.handle(error)
@@ -705,19 +771,45 @@ struct PlaylistsView: View {
     @State private var naming = false
     @State private var newName = ""
     @State private var renaming: Playlist?
+    @AppStorage("playlists.asList") private var asList = true
+    @AppStorage("appearance.gridColumns") private var gridColumns = 0
 
-    var body: some View {
-        List(playlists) { playlist in
-            NavigationLink(value: Route.playlist(playlist.id)) {
-                HStack(spacing: 10) {
-                    Artwork(url: model.coverURL(playlist.coverArtID, size: 100), cornerRadius: 4, symbol: "music.note.list")
-                        .frame(width: 40, height: 40)
-                    VStack(alignment: .leading) {
-                        Text(playlist.name)
-                        Text("\(playlist.songCount) songs · \(formatLong(playlist.duration))").font(.caption).foregroundStyle(.secondary)
+    @ViewBuilder
+    private var content: some View {
+        if asList {
+            List(playlists) { playlist in
+                actions(playlist, NavigationLink(value: Route.playlist(playlist.id)) {
+                    HStack(spacing: 10) {
+                        Artwork(url: model.coverURL(playlist.coverArtID, size: 100), cornerRadius: 4, symbol: "music.note.list")
+                            .frame(width: 40, height: 40)
+                        VStack(alignment: .leading) {
+                            Text(playlist.name)
+                            Text("\(playlist.songCount) songs · \(formatLong(playlist.duration))").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                })
+            }
+        } else {
+            ScrollView {
+                LazyVGrid(columns: libraryGridColumns(gridColumns), alignment: .leading, spacing: 22) {
+                    ForEach(playlists) { playlist in
+                        actions(playlist, NavigationLink(value: Route.playlist(playlist.id)) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Artwork(url: model.coverURL(playlist.coverArtID, size: 400), symbol: "music.note.list")
+                                Text(playlist.name).font(.callout.weight(.medium)).lineLimit(1)
+                                Text("\(playlist.songCount) songs").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }.buttonStyle(.plain))
                     }
                 }
+                .padding(20)
             }
+        }
+    }
+
+    /// What a playlist's row or tile takes: songs dragged on, and its menu.
+    private func actions(_ playlist: Playlist, _ link: some View) -> some View {
+        link
             .dropDestination(for: DraggedTracks.self) { drops, _ in
                 let ids = drops.flatMap(\.tracks).map(\.id)
                 Task {
@@ -746,9 +838,19 @@ struct PlaylistsView: View {
                     }
                 }
             }
-        }
+    }
+
+    var body: some View {
+        content
         .navigationTitle("Playlists")
         .toolbar {
+            Picker("View", selection: $asList) {
+                Label("Grid", systemImage: "square.grid.2x2").tag(false)
+                Label("List", systemImage: "list.bullet").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelStyle(.iconOnly)
+            .help("Show as grid or list")
             Button { naming = true } label: { Label("New Playlist", systemImage: "plus") }
         }
         .alert("New Playlist", isPresented: $naming) {

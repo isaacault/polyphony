@@ -13,6 +13,7 @@ struct PolyphonyApp: App {
         Window("Polyphony", id: "main") {
             RootView()
                 .environment(model)
+                .modifier(AppAppearance())
                 .frame(minWidth: 900, minHeight: 560)
                 .task {
                     AppDelegate.player = model.player
@@ -37,6 +38,7 @@ struct PolyphonyApp: App {
         Settings {
             SettingsView()
                 .environment(model)
+                .modifier(AppAppearance())
         }
 
         // A mini player in the menu bar, for when the window is out of the way.
