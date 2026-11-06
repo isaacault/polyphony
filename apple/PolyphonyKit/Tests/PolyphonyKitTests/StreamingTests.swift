@@ -512,3 +512,39 @@ struct ScrobbleSettingsTests {
         #expect(counted == 1)
     }
 }
+
+struct ReceiverCheckTests {
+    private let library = SubsonicClient(credentials: credentials, transport: FakeTransport { _ in
+        HTTPResponse(status: 200, body: Data(#"{"subsonic-response":{"status":"ok","version":"1.16.1","randomSongs":{"song":[{"id":"s1","title":"T","isDir":false}]}}}"#.utf8))
+    })
+
+    @Test func audioAtTheAddressIsReachable() async {
+        let fake = FakeTransport { _ in HTTPResponse(status: 206, headers: ["Content-Type": "audio/flac"], body: Data([1, 2])) }
+        let outcome = await ReceiverCheck.run(address: "http://192.168.0.101", library: library, baseURL: credentials.baseURL, transport: fake)
+        guard case .audioServed(status: 206, _) = outcome else {
+            Issue.record("\(outcome)")
+            return
+        }
+        let call = fake.calls.first
+        #expect(call?.url.host == "192.168.0.101" && call?.url.path == "/rest/stream" && call?.headers["Range"] == "bytes=0-1")
+    }
+
+    @Test func aPageOrAnErrorDocumentIsntAudio() async {
+        let router = FakeTransport { _ in HTTPResponse(status: 200, headers: ["content-type": "text/html"]) }
+        #expect(await ReceiverCheck.run(address: "http://192.168.0.1", library: library, baseURL: credentials.baseURL, transport: router) == .hostAnswered(status: 200))
+        let missing = FakeTransport { _ in HTTPResponse(status: 404) }
+        #expect(await ReceiverCheck.run(address: "http://192.168.0.1", library: library, baseURL: credentials.baseURL, transport: missing) == .hostAnswered(status: 404))
+    }
+
+    @Test func nothingThereSaysSo() async {
+        struct Down: HTTPTransport {
+            func send(_ request: HTTPRequest) async throws -> HTTPResponse { throw TransportError(underlying: "no route", unreachable: true) }
+        }
+        let outcome = await ReceiverCheck.run(address: "http://10.0.0.9", library: library, baseURL: credentials.baseURL, transport: Down())
+        guard case .unreachable = outcome else {
+            Issue.record("\(outcome)")
+            return
+        }
+        #expect(outcome.message.hasPrefix("Not reachable"))
+    }
+}

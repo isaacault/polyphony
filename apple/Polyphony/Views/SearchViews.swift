@@ -10,6 +10,11 @@ struct SearchView: View {
     @State private var results = CatalogResults()
     @State private var library = SearchResults()
     @State private var searching = false
+    /// Where it looks (the Android app's source chip): everything, the library, or what's on this Mac.
+    @AppStorage("search.scope") private var scope: Scope = .all
+
+    enum Scope: String { case all, library, downloaded }
+
     @State private var recent = RecentSearches(UserDefaults.standard.stringArray(forKey: "search.recent") ?? [])
 
     var body: some View {
@@ -42,19 +47,19 @@ struct SearchView: View {
                                 message: model.isContinuo ? "Your library and everything else, ranked by what people listen to."
                                                          : "Search your library.")
                         .padding(.top, 60)
-                } else if model.offline {
-                    // No server: what's on this Mac.
+                } else if model.offline || scope == .downloaded {
+                    // No server, or asked for: what's on this Mac.
                     let found = model.downloads.index.search(query)
                     if found.isEmpty {
                         Placeholder(title: "Nothing downloaded matches", symbol: "wifi.slash",
-                                    message: "You're offline: search looks through your downloads only.")
+                                    message: model.offline ? "You're offline: search looks through your downloads only." : nil)
                             .padding(.top, 60)
                     } else {
                         Section { TrackList(tracks: found, showArtwork: true) } header: {
-                            SectionTitle("Downloaded", subtitle: "You're offline: these are on this Mac")
+                            SectionTitle("Downloaded", subtitle: model.offline ? "You're offline: these are on this Mac" : "These are on this Mac")
                         }
                     }
-                } else if model.isContinuo {
+                } else if model.isContinuo && scope == .all {
                     catalogResults
                 } else {
                     libraryResults
@@ -65,7 +70,15 @@ struct SearchView: View {
         .navigationTitle("Search")
         .searchable(text: $query, placement: .toolbar, prompt: model.isContinuo ? "Artists, albums, songs" : "Your library")
         .onSubmit(of: .search) { remember { $0.add(query) } }
-        .task(id: query) { await search() }
+        .task(id: "\(query)|\(scope.rawValue)") { await search() }
+        .toolbar {
+            Picker("Search in", selection: $scope) {
+                Text(model.isContinuo ? "Everything" : "Library").tag(Scope.all)
+                if model.isContinuo { Text("Library").tag(Scope.library) }
+                Text("Downloaded").tag(Scope.downloaded)
+            }
+            .help("Where to look")
+        }
         .overlay(alignment: .topTrailing) { if searching { ProgressView().controlSize(.small).padding() } }
     }
 
@@ -137,11 +150,11 @@ struct SearchView: View {
         }
         // Debounce typing: a newer keystroke cancels this task before it asks.
         try? await Task.sleep(for: .milliseconds(250))
-        guard !Task.isCancelled, !model.offline else { return }
+        guard !Task.isCancelled, !model.offline, scope != .downloaded else { return }
         searching = true
         defer { searching = false }
         do {
-            if let continuo = model.continuo {
+            if let continuo = model.continuo, scope == .all {
                 // A quick answer first, then the full ranking.
                 let quick = try await continuo.search(text, limit: 10, quick: true)
                 guard !Task.isCancelled else { return }

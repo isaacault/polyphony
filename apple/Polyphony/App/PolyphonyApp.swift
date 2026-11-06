@@ -84,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = self
+        ArtworkCache.apply()
     }
 
     // "Ready to play" shows while the app is in front too (macOS hides notifications from the frontmost

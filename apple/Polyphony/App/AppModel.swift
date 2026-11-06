@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Network)
+import Network
+#endif
 import Observation
 import PolyphonyKit
 import SwiftUI
@@ -710,6 +713,26 @@ final class AppModel {
                     return
                 }
             }
+        }
+    }
+
+    // MARK: Checks
+
+    /// Settings > Servers: does a song's link serve audio at the receiver address?
+    func testReceiverAddress() async -> String {
+        guard let library, let server else { return "Not signed in." }
+        let outcome = await ReceiverCheck.run(address: receiverAddress, library: library, baseURL: server.libraryBaseURL,
+                                              transport: ShortTimeoutTransport())
+        return outcome.message
+    }
+
+    func testConnection() async -> String {
+        guard let library, let server else { return "Not signed in." }
+        do {
+            try await library.ping()
+            return "Connected to \(server.address.host ?? server.address.absoluteString)."
+        } catch {
+            return ErrorText.of(error)
         }
     }
 

@@ -23,7 +23,11 @@ android/                      the Android app, and the modules still tied to And
   downloads                   Offline downloads: own Room DB, WorkManager download queue, rules engine
                               (favourites / playlists / albums / artists / genres / recently added / most
                               played) with storage-cap eviction, DownloadRepository impl
-apple/                        (to come) one Xcode project: macOS, iOS, tvOS in SwiftUI over shared/
+apple/                        the Mac app in SwiftUI (iOS and tvOS to follow on the same code)
+  PolyphonyKit                What isn't UI, in Swift until shared/ produces an Apple framework:
+                              MusicLibrary (Subsonic, Jellyfin), continuo, the player controller, the
+                              DLNA and Cast engines, streaming rules, downloads. Tested on Linux
+  Polyphony                   Views, and what only a Mac has: AVFoundation, Network, Keychain
 desktop/                      (to come) Windows + Linux, Compose Multiplatform
 contract/                     continuo's OpenAPI schema and the test cases every client must pass
 ```
