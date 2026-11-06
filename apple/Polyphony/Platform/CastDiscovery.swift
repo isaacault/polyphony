@@ -2,6 +2,7 @@ import Foundation
 import Network
 import Observation
 import PolyphonyKit
+import Security
 
 /// Finds Cast devices on the LAN by Bonjour (_googlecast._tcp), which Local Network access covers.
 @MainActor
@@ -34,8 +35,9 @@ final class CastDiscovery {
     /// TXT record: id, fn (its name), md (its model).
     private nonisolated static func device(from result: NWBrowser.Result) -> (CastDevice, NWEndpoint)? {
         guard case let .bonjour(txt) = result.metadata else { return nil }
-        let id = txt["id"] ?? { if case let .service(name, _, _, _) = result.endpoint { return name } else { return nil } }()
-        guard let id else { return nil }
+        var found = txt["id"]
+        if found == nil, case let .service(name, _, _, _) = result.endpoint { found = name }
+        guard let id = found else { return nil }
         return (CastDevice(id: id, name: txt["fn"] ?? "Cast device", model: txt["md"]), result.endpoint)
     }
 }

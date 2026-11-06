@@ -56,16 +56,40 @@ extension Color {
     }
 }
 
+/// Covers come through URLSession's shared cache (AsyncImage): how large it may grow, and clearing it.
+enum ArtworkCache {
+    static var limitMB: Int {
+        let saved = UserDefaults.standard.integer(forKey: "library.artworkCacheMB")
+        return saved > 0 ? saved : 512
+    }
+
+    static func apply() {
+        URLCache.shared.diskCapacity = limitMB * 1_000_000
+        URLCache.shared.memoryCapacity = 64_000_000
+    }
+
+    static func set(limitMB: Int) {
+        UserDefaults.standard.set(limitMB, forKey: "library.artworkCacheMB")
+        apply()
+    }
+
+    static func clear() {
+        URLCache.shared.removeAllCachedResponses()
+    }
+}
+
 /// The theme and accent, on each window.
 struct AppAppearance: ViewModifier {
     @AppStorage("appearance.theme") private var theme: ThemeMode = .system
     @AppStorage("appearance.customAccent") private var customAccent = false
     @AppStorage("appearance.accent") private var accent = 0x6750A4
 
+    private var accentColor: Color? { customAccent ? Color(rgb: accent) : nil }
+
     func body(content: Content) -> some View {
         content
             .preferredColorScheme(theme.scheme)
-            .tint(customAccent ? Color(rgb: accent) : nil)
+            .tint(accentColor)
     }
 }
 

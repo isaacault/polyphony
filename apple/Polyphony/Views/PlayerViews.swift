@@ -328,6 +328,9 @@ struct LyricsView: View {
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @State private var checkingReceiver = false
+    @State private var receiverResult: String?
+    @State private var connectionResult: String?
 
     var body: some View {
         // Tabs, as Mac settings windows have them; each scrolls on its own.
@@ -374,8 +377,26 @@ struct SettingsView: View {
         Section("Speakers") {
             TextField("Receiver address", text: Binding(get: { model.receiverAddress }, set: { model.setReceiverAddress($0) }),
                       prompt: Text("http://192.168.0.101"))
-            Text("What DLNA speakers are given instead of the server's address: they fetch the music themselves, and many can't do HTTPS. For continuo, its LAN address (http://192.168.0.101).")
+            Text("What DLNA speakers and Cast devices are given instead of the server's address: they fetch the music themselves, and many can't do HTTPS. For continuo, its LAN address (http://192.168.0.101).")
                 .font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Button(checkingReceiver ? "Testing…" : "Test Receiver Address") {
+                    checkingReceiver = true
+                    receiverResult = nil
+                    Task {
+                        receiverResult = await model.testReceiverAddress()
+                        checkingReceiver = false
+                    }
+                }
+                .disabled(checkingReceiver || model.receiverAddress.isEmpty)
+                Button("Test Connection") {
+                    Task {
+                        connectionResult = await model.testConnection()
+                    }
+                }
+            }
+            if let receiverResult { Text(receiverResult).font(.caption) }
+            if let connectionResult { Text(connectionResult).font(.caption) }
         }
         if model.isContinuo {
             ScrobblingSection()

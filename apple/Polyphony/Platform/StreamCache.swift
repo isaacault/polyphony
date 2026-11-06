@@ -106,6 +106,7 @@ struct ShortTimeoutTransport: HTTPTransport {
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         var r = URLRequest(url: request.url, timeoutInterval: 2)
         r.httpMethod = request.method
+        for (name, value) in request.headers { r.setValue(value, forHTTPHeaderField: name) }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 2
         configuration.timeoutIntervalForResource = 3
@@ -116,7 +117,11 @@ struct ShortTimeoutTransport: HTTPTransport {
                 if let error {
                     continuation.resume(throwing: error)
                 } else {
-                    continuation.resume(returning: HTTPResponse(status: (response as? HTTPURLResponse)?.statusCode ?? 0, body: data ?? Data()))
+                    let http = response as? HTTPURLResponse
+                    let headers = (http?.allHeaderFields ?? [:]).reduce(into: [String: String]()) { out, field in
+                        if let name = field.key as? String, let value = field.value as? String { out[name] = value }
+                    }
+                    continuation.resume(returning: HTTPResponse(status: http?.statusCode ?? 0, headers: headers, body: data ?? Data()))
                 }
             }.resume()
         }

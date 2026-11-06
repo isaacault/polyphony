@@ -17,6 +17,7 @@ struct AppearanceSettings: View {
     @AppStorage("appearance.ratingStyle") private var ratingStyle: RatingStyle = .compact
     @AppStorage("sidebar.hidden") private var hidden = ""
     @AppStorage("sidebar.opensOn") private var opensOn = SidebarItem.home.rawValue
+    @State private var artworkCacheMB = ArtworkCache.limitMB
 
     private static let optional: [SidebarItem] = [.explore, .artists, .albums, .songs, .playlists, .genres, .favourites, .downloads]
 
@@ -63,6 +64,18 @@ struct AppearanceSettings: View {
                 ForEach(Self.optional) { item in
                     Toggle(item.title, isOn: sidebarBinding(item))
                 }
+            }
+        }
+        Section("Artwork") {
+            Picker("Artwork cache size", selection: Binding(get: { artworkCacheMB }, set: {
+                artworkCacheMB = $0
+                ArtworkCache.set(limitMB: $0)
+            })) {
+                ForEach([128, 256, 512, 1024, 2048], id: \.self) { Text($0 >= 1024 ? "\($0 / 1024) GB" : "\($0) MB").tag($0) }
+            }
+            Button("Clear Artwork Cache") {
+                ArtworkCache.clear()
+                model.notice = "Artwork cache cleared"
             }
         }
     }
