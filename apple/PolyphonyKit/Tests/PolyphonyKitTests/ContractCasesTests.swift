@@ -17,6 +17,43 @@ private func int(_ value: Any?) -> Int? { (value as? NSNumber)?.intValue }
 private func double(_ value: Any?) -> Double? { (value as? NSNumber)?.doubleValue }
 
 struct ContractCasesTests {
+    @Test func whichQualityProfileApplies() throws {
+        let cases = try #require(try contract("transcode")["resolver"] as? [[String: Any]])
+        #expect(!cases.isEmpty)
+        for c in cases {
+            let p = c["policy"] as? [String: Any] ?? [:]
+            var policy = TranscodePolicy()
+            if let v = p["default"] as? String { policy.defaultProfileID = v }
+            if let v = p["wifi"] as? String { policy.wifiProfileID = v }
+            if p.keys.contains("cellular") { policy.cellularProfileID = p["cellular"] as? String }
+            if let v = p["castDefault"] as? String { policy.castDefaultProfileID = v }
+            if let v = p["meteredAsCellular"] as? Bool { policy.meteredWifiAsCellular = v }
+            if let v = p["awayAsCellular"] as? Bool { policy.awayWifiAsCellular = v }
+            if let v = p["capRemote"] as? Bool { policy.adaptiveLatency.applyToRemoteOutputs = v }
+            if let v = p["capEnabled"] as? Bool { policy.adaptiveLatency.enabled = v }
+            let n = try #require(c["network"] as? [String: Any])
+            let kind = try #require(NetworkKind(rawValue: string(n["kind"]) ?? ""))
+            let network = NetworkState(kind: kind, isMetered: (n["metered"] as? Bool) ?? false)
+            let context = TranscodeContext(network: network,
+                                           target: (c["remote"] as? Bool) == true ? .dlna(udn: "u", name: "n") : .local,
+                                           latencyDegraded: (c["latencyDegraded"] as? Bool) ?? false,
+                                           deviceProfileID: c["deviceProfile"] as? String, atHome: c["atHome"] as? Bool)
+            let d = TranscodeResolver.resolve(policy, profiles: [], context)
+            #expect(d.profile.id == string(c["profile"]) && d.reason.rawValue == string(c["reason"]) && d.cappedByLatency == (c["capped"] as? Bool),
+                    "\(c["about"] ?? "?"): \(d)")
+        }
+    }
+
+    @Test func anAlreadyCompressedFileStaysAsItIs() throws {
+        let cases = try #require(try contract("transcode")["lossySource"] as? [[String: Any]])
+        for c in cases {
+            let profile = try #require(TranscodeProfile.builtIn(string(c["profile"]) ?? ""))
+            let d = TranscodeDecision(profile: profile, reason: .default, cappedByLatency: (c["capped"] as? Bool) ?? false)
+            #expect(LossySourceRule.keepsOriginal(d, container: c["container"] as? String, lossless: (c["lossless"] as? Bool) ?? false) == (c["keeps"] as? Bool),
+                    "\(c["about"] ?? "?")")
+        }
+    }
+
     @Test func artistNames() throws {
         let cases = try #require(try contract("artist-credits")["names"] as? [[String: Any]])
         #expect(!cases.isEmpty)

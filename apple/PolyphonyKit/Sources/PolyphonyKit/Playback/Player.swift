@@ -134,6 +134,16 @@ public final class PlayerController {
     @ObservationIgnored private var lastPosition: TimeInterval = 0
     @ObservationIgnored private var scrobbled = false
     @ObservationIgnored private var loadGeneration = 0
+    /// The next song's source as it was preloaded: the same one plays when it's reached, whatever
+    /// changed meanwhile, so the engine recognises the song it has queued (or a speaker has armed).
+    @ObservationIgnored private var resolvedNext: (id: UUID, entry: QueueEntry, source: AudioSource)?
+    /// A rebuffer while music was playing started (true) or ended, for the quality rules. Loading a
+    /// song and seeking aren't stalls.
+    @ObservationIgnored public var onStall: @MainActor (Bool) -> Void = { _ in }
+    @ObservationIgnored private var stalled = false
+    @ObservationIgnored private var ignoreStallsUntil = Date.distantPast
+    /// The queue or the current song changed: the app fetches what's coming.
+    @ObservationIgnored public var onUpcomingChanged: @MainActor () -> Void = {}
 
     /// Previous restarts the song instead of going back once this far in.
     public static let restartThreshold: TimeInterval = 3
@@ -282,6 +292,7 @@ public final class PlayerController {
 
     public func seek(to time: TimeInterval) {
         let t = max(0, duration > 0 ? min(time, duration) : time)
+        expectBuffering()
         engine.seek(to: t)
         position = t
         lastPosition = t
@@ -371,11 +382,27 @@ public final class PlayerController {
         engine.setGain(ReplayGain.volume(for: track, replayGain, sameAlbumAsNeighbour: ReplayGain.sameAlbum(track, neighbour)))
     }
 
+    /// The quality changed: the current song starts again at its place, as the new quality.
+    public func reloadCurrent() {
+        guard queue.current != nil else { return }
+        resolvedNext = nil
+        loadCurrent(autoplay: isPlaying, startAt: position)
+    }
+
+    private func expectBuffering() {
+        ignoreStallsUntil = now().addingTimeInterval(3)
+        if stalled {
+            stalled = false
+            onStall(false)
+        }
+    }
+
     private func loadCurrent(autoplay: Bool, startAt: TimeInterval = 0) {
         guard let item = queue.current else {
             stop()
             return
         }
+        expectBuffering()
         startedAt = now()
         applyGain()
         loadGeneration += 1
@@ -388,8 +415,12 @@ public final class PlayerController {
         duration = item.entry.duration
         publishNowPlaying()
         save()
+        let pinned = resolvedNext.flatMap { $0.id == item.id && $0.entry == item.entry ? $0.source : nil }
+        resolvedNext = nil
         Task { @MainActor in
-            guard let source = await resolve(item.entry) else {
+            let resolved: AudioSource?
+            if let pinned { resolved = pinned } else { resolved = await resolve(item.entry) }
+            guard let source = resolved else {
                 guard generation == loadGeneration else { return }
                 // A catalogue song that couldn't be fetched is skipped, as the Android app's queue
                 // does: the playlist carries on with the next one.
@@ -410,15 +441,24 @@ public final class PlayerController {
         }
     }
 
+    /// Whether the next song is loaded ahead, for a gapless change (Settings > Playback).
+    public var preloadsNext = true
+
     private func preloadNext() {
-        guard let next = queue.nextOnEnd, next.id != queue.current?.id else {
+        onUpcomingChanged()
+        guard preloadsNext, let next = queue.nextOnEnd, next.id != queue.current?.id else {
+            resolvedNext = nil
             engine.preload(nil)
             return
         }
         let generation = loadGeneration
+        let id = next.id, entry = next.entry
+        if resolvedNext?.id != id || resolvedNext?.entry != entry { resolvedNext = nil }
         Task { @MainActor in
-            let source = await resolve(next.entry)
+            let source: AudioSource?
+            if let pinned = resolvedNext, pinned.id == id { source = pinned.source } else { source = await resolve(entry) }
             guard generation == loadGeneration else { return }
+            if let source { resolvedNext = (id, entry, source) }
             engine.preload(source)
         }
     }
@@ -432,6 +472,15 @@ public final class PlayerController {
             isPlaying = false
             save()
         case let .buffering(on):
+            if on {
+                if isPlaying, !stalled, now() >= ignoreStallsUntil {
+                    stalled = true
+                    onStall(true)
+                }
+            } else if stalled {
+                stalled = false
+                onStall(false)
+            }
             isBuffering = on
         case let .position(time, total):
             // Count only real listening: a seek forward isn't played time.

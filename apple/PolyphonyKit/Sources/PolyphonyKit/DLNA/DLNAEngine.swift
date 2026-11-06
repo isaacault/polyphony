@@ -83,6 +83,17 @@ public struct DLNAControl: Sendable {
         try await call("SetVolume", [("Channel", "Master"), ("DesiredVolume", "\(min(max(percent, 0), 100))")], rendering: true)
     }
 
+    /// What the speaker says it plays; unknown when it won't say.
+    public func formats() async -> RendererFormats {
+        guard let url = renderer.connectionManager else { return .unknownFormats }
+        let type = Renderer.connectionManagerType
+        let body = Data(SOAP.envelope(service: type, action: "GetProtocolInfo", args: []).utf8)
+        guard let response = try? await transport.send(HTTPRequest(method: "POST", url: url, headers: [
+            "Content-Type": "text/xml; charset=\"utf-8\"", "SOAPACTION": "\"\(type)#GetProtocolInfo\"",
+        ], body: body)), let out = try? SOAP.parseResponse(response.body, action: "GetProtocolInfo") else { return .unknownFormats }
+        return RendererFormats.parse(sink: out["Sink"])
+    }
+
     /// The speaker's volume now (0–100), nil when it won't say.
     public func volume() async throws -> Int? {
         (try await call("GetVolume", [("Channel", "Master")], rendering: true)["CurrentVolume"]).flatMap { Int($0) }

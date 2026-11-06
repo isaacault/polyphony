@@ -116,6 +116,8 @@ final class AppModel {
     private(set) var speaker: Renderer?
     @ObservationIgnored private let macEngine: AVPlayerEngine
     @ObservationIgnored private var speakerEngine: DLNAEngine?
+    /// What the speaker playing now says it can play.
+    @ObservationIgnored private var speakerFormats = RendererFormats.unknownFormats
     /// Held while a speaker plays: a Mac asleep can't follow the songs.
     @ObservationIgnored private let keepAwake = SleepGuard()
     @ObservationIgnored private var playNowLinks = PlayNowLinkCache()
@@ -145,6 +147,7 @@ final class AppModel {
     func setReceiverAddress(_ address: String) {
         receiverAddress = address.trimmingCharacters(in: .whitespaces)
         UserDefaults.standard.set(receiverAddress, forKey: receiverKey)
+        checkHome()
     }
 
     /// Plays on [renderer] (nil: this Mac), carrying on from where the song is.
@@ -156,6 +159,14 @@ final class AppModel {
             let engine = DLNAEngine(control: DLNAControl(renderer: renderer))
             engine.onPlayingChanged = { [weak self] in self?.keepAwake.hold($0) }
             speakerEngine = engine
+            speakerFormats = .unknownFormats
+            streaming.remember(.dlna(udn: renderer.udn, name: renderer.name))
+            let control = DLNAControl(renderer: renderer)
+            Task { [weak self] in
+                let formats = await control.formats()
+                guard self?.speaker?.udn == renderer.udn else { return }
+                self?.speakerFormats = formats
+            }
             speaker = renderer
             player.switchOutput(to: engine)
         } else {
@@ -202,12 +213,52 @@ final class AppModel {
         nowPlaying = center
         let engine = AVPlayerEngine()
         macEngine = engine
+        let defaults = UserDefaults.standard
+        let rules: StreamingRules.Stored
+        if let data = defaults.data(forKey: "streaming.rules"), let saved = try? JSONDecoder().decode(StreamingRules.Stored.self, from: data) {
+            rules = saved
+        } else {
+            rules = StreamingRules.migrated(bitrateKbps: defaults.integer(forKey: "streaming.bitrate"))
+        }
+        streaming = StreamingRules(stored: rules)
         player = PlayerController(engine: engine, nowPlaying: center)
         if let data = UserDefaults.standard.data(forKey: "playback.replayGain"),
            let saved = try? JSONDecoder().decode(ReplayGain.Settings.self, from: data) {
             player.replayGain = saved
         }
         center.attach(player)
+        player.preloadsNext = preloadNext
+        streaming.persist = { stored in
+            if let data = try? JSONEncoder().encode(stored) { UserDefaults.standard.set(data, forKey: "streaming.rules") }
+        }
+        streaming.onChange = { [weak self] in
+            guard let self else { return }
+            let d = self.streaming.decision()
+            DiagnosticLog.shared.log("streaming", "now \(d.profile.name): \(d.explanation)")
+            self.planFetchAhead()
+            if self.streaming.policy.reloadCurrentTrackOnChange, self.speaker == nil, self.player.isPlaying,
+               self.player.current?.libraryTrack.map({ !self.downloads.isDownloaded($0.id) }) == true {
+                self.player.reloadCurrent()
+            }
+        }
+        player.onStall = { [weak self] started in
+            let now = Int(Date().timeIntervalSince1970 * 1000)
+            self?.streaming.stall(started: started, nowMs: now)
+        }
+        player.onUpcomingChanged = { [weak self] in self?.planFetchAhead() }
+        network.onChange = { [weak self] state in
+            guard let self else { return }
+            DiagnosticLog.shared.log("streaming", "network: \(state.kind.rawValue.lowercased())\(state.isMetered ? ", metered" : "")")
+            self.streaming.setNetwork(state)
+            self.checkHome()
+        }
+        network.start()
+        Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(20))
+                self?.streaming.tick(nowMs: Int(Date().timeIntervalSince1970 * 1000))
+            }
+        }
         outputs.onHeadphonesGone = { [weak self] in
             guard let self, self.pauseOnDisconnect, self.speaker == nil, self.player.isPlaying else { return }
             DiagnosticLog.shared.log("output", "headphones gone: paused")
@@ -262,8 +313,95 @@ final class AppModel {
         UserDefaults.standard.set(on, forKey: "feedback.ratings")
     }
 
-    /// Streaming quality: 0 for the file as it is, else transcoded to MP3 at this bitrate (kbps).
-    private(set) var streamingBitrate = UserDefaults.standard.integer(forKey: "streaming.bitrate")
+    /// Which quality songs stream at: the rules in Settings > Streaming, and what the Mac knows now.
+    let streaming: StreamingRules
+    @ObservationIgnored let streamCache = StreamCache()
+    @ObservationIgnored private let network = NetworkWatcher()
+    @ObservationIgnored private var homeCheck: Task<Void, Never>?
+    @ObservationIgnored private var fetchAhead: Task<Void, Never>?
+
+    /// Settings > Playback > Streaming cache, kept between launches.
+    private(set) var prefetchQueue = UserDefaults.standard.object(forKey: "playback.prefetchQueue") as? Bool ?? true
+    private(set) var prefetchOnMetered = UserDefaults.standard.object(forKey: "playback.prefetchOnMetered") as? Bool ?? true
+    private(set) var preloadNext = UserDefaults.standard.object(forKey: "playback.preloadNext") as? Bool ?? true
+
+    func setPrefetchQueue(_ on: Bool) {
+        prefetchQueue = on
+        UserDefaults.standard.set(on, forKey: "playback.prefetchQueue")
+        planFetchAhead()
+    }
+
+    func setPrefetchOnMetered(_ on: Bool) {
+        prefetchOnMetered = on
+        UserDefaults.standard.set(on, forKey: "playback.prefetchOnMetered")
+        planFetchAhead()
+    }
+
+    func setPreloadNext(_ on: Bool) {
+        preloadNext = on
+        player.preloadsNext = on
+        UserDefaults.standard.set(on, forKey: "playback.preloadNext")
+    }
+
+    /// Is the server there at its LAN address? Asked on sign-in and on each network change.
+    private func checkHome() {
+        homeCheck?.cancel()
+        guard let server else {
+            streaming.setAtHome(nil)
+            return
+        }
+        let kind = streaming.network.kind
+        let lan = HomeNetwork.lanBase(receiver: receiverAddress, baseURL: server.subsonic.baseURL)
+        homeCheck = Task { [weak self] in
+            let home = await HomeNetwork.check(kind: kind, lan: lan, subsonic: true, transport: ShortTimeoutTransport())
+            guard !Task.isCancelled, let self else { return }
+            if home != self.streaming.atHome {
+                DiagnosticLog.shared.log("streaming", "home network: \(home.map(String.init) ?? "unknown")")
+            }
+            self.streaming.setAtHome(home)
+        }
+    }
+
+    /// The local stream of a song: how it should come, and its name in the stream cache.
+    private func macStream(_ t: Track) -> (choice: StreamChoice, cacheName: String, container: String?) {
+        let decision = streaming.localDecision(container: t.container, lossless: t.isLossless)
+        let choice = StreamChoice.forMac(decision.profile, container: t.container)
+        let container = choice.container(source: t.container)
+        return (choice, "\(t.id)-\(choice.format ?? "raw")-\(choice.maxBitRateKbps ?? 0)", container)
+    }
+
+    private func streamURL(_ t: Track, _ choice: StreamChoice, _ subsonic: SubsonicClient) -> URL {
+        // "raw" is the file as it is, whatever transcoding the server would otherwise apply.
+        subsonic.streamURL(trackID: t.id, maxBitRateKbps: choice.maxBitRateKbps,
+                           format: choice.format ?? (choice.maxBitRateKbps == nil ? "raw" : nil))
+    }
+
+    /// Has the coming songs fetched whole, so a dropped connection doesn't stop the music at the next
+    /// one. On this Mac's own player only: a speaker fetches for itself.
+    private func planFetchAhead() {
+        fetchAhead?.cancel()
+        let budget = PrefetchPlan.budget(streaming.network, enabled: prefetchQueue && !offline && speaker == nil,
+                                         onMetered: prefetchOnMetered)
+        let upcoming = player.queue.upNext.map { item -> PrefetchPlan.Upcoming in
+            let track = item.entry.libraryTrack
+            return .init(trackID: track?.id ?? item.entry.title, durationMs: Int(item.entry.duration * 1000),
+                         onDevice: track.map { downloads.isDownloaded($0.id) } ?? false, fetchable: track != nil)
+        }
+        let wanted = PrefetchPlan.pick(upcoming, budget)
+        guard !wanted.isEmpty, let subsonic else { return }
+        let songs = player.queue.upNext.compactMap(\.entry.libraryTrack)
+        fetchAhead = Task { [weak self] in
+            var fetched: Int64 = 0
+            for id in wanted {
+                guard let self, !Task.isCancelled, let track = songs.first(where: { $0.id == id }),
+                      fetched < self.streamCache.fetchBudgetBytes else { return }
+                let stream = self.macStream(track)
+                guard let bytes = await self.streamCache.fetch(self.streamURL(track, stream.choice, subsonic), name: stream.cacheName,
+                                                               container: stream.container) else { return }
+                fetched += bytes
+            }
+        }
+    }
 
     /// Levelling loudness between songs (ReplayGain), kept between launches.
     var replayGain: ReplayGain.Settings {
@@ -272,11 +410,6 @@ final class AppModel {
             player.replayGain = newValue
             if let data = try? JSONEncoder().encode(newValue) { UserDefaults.standard.set(data, forKey: "playback.replayGain") }
         }
-    }
-
-    func setStreamingBitrate(_ kbps: Int) {
-        streamingBitrate = kbps
-        UserDefaults.standard.set(kbps, forKey: "streaming.bitrate")
     }
 
     var isContinuo: Bool { continuo != nil }
@@ -404,6 +537,7 @@ final class AppModel {
             history = ListeningHistory()
         }
         state = .signedIn
+        checkHome()
         // Where last session left off, paused: Play carries on.
         if player.current == nil, let data = UserDefaults.standard.data(forKey: queueKey),
            let snapshot = try? JSONDecoder().decode(PlayQueue.Snapshot.self, from: data) {
@@ -498,7 +632,8 @@ final class AppModel {
                                libraryHost: s.subsonic.baseURL.host)
         }
         let settings: [(String, String)] = [
-            ("Streaming quality", streamingBitrate == 0 ? "Original" : "MP3 \(streamingBitrate) kbps"),
+            ("Streaming quality", "\(streaming.decision().profile.summary) (\(streaming.decision().explanation))"),
+            ("Network", "\(streaming.network.kind.rawValue.lowercased())\(streaming.network.isMetered ? ", metered" : ""), home=\(streaming.atHome.map(String.init) ?? "unknown")"),
             ("Volume levelling", "\(replayGain.mode.rawValue), pre-amp \(replayGain.preampDb) dB, prevent clipping \(replayGain.preventClipping)"),
             ("Mark songs with", usesRatings ? "stars" : "hearts"),
             ("Output", speaker.map { "\($0.name) (\($0.model ?? "?"))" } ?? "this Mac"),
@@ -528,36 +663,31 @@ final class AppModel {
         }
     }
 
-    /// The stream this Mac can play: as the file is, or MP3 at the chosen quality; a format
-    /// AVFoundation can't play (Ogg, Opus, WMA…) comes as MP3 at 320 kbps at most.
-    private func macStreamURL(_ t: Track, _ subsonic: SubsonicClient, bitrate: Int) -> URL {
-        if bitrate > 0 { return subsonic.streamURL(trackID: t.id, maxBitRateKbps: bitrate, format: "mp3") }
-        if !AppleFormats.plays(t.container) {
-            return subsonic.streamURL(trackID: t.id, maxBitRateKbps: AppleFormats.fallbackBitrateKbps, format: AppleFormats.fallbackFormat)
-        }
-        return subsonic.streamURL(trackID: t.id)
-    }
-
     private func source(for entry: QueueEntry) async -> AudioSource? {
         switch entry {
         case let .track(t):
-            let bitrate = streamingBitrate
             if speaker == nil {
                 // A downloaded copy plays from disk: no network, original quality.
                 if let local = downloads.localURL(t.id) {
                     downloads.played(t.id)
                     return AudioSource(url: local)
                 }
+                let stream = macStream(t)
+                if let cached = streamCache.file(stream.cacheName) { return AudioSource(url: cached) }
                 if offlineMode { return nil }
-                return subsonic.map { AudioSource(url: macStreamURL(t, $0, bitrate: bitrate)) }
+                return subsonic.map { AudioSource(url: streamURL(t, stream.choice, $0)) }
             }
-            // A speaker fetches the audio itself, from an address it can reach, and shows the song.
-            guard let subsonic else { return nil }
-            let url = bitrate > 0 ? subsonic.streamURL(trackID: t.id, maxBitRateKbps: bitrate, format: "mp3") : subsonic.streamURL(trackID: t.id)
-            let art = coverURL(t.coverArtID ?? t.albumID, size: 600).map(forSpeaker)
+            // A speaker fetches the audio itself, from an address it can reach, and shows the song: as
+            // the rules say, in a format it says it plays.
+            guard let subsonic, let renderer = speaker else { return nil }
+            let target = OutputTarget.dlna(udn: renderer.udn, name: renderer.name)
+            let wanted = streaming.decision(for: target).profile
+            let (profile, mime, substituted) = RendererCodecFallback.choose(wanted, container: t.container, formats: speakerFormats)
+            if substituted { DiagnosticLog.shared.log("output", "\(renderer.name) doesn't take \(wanted.name): using \(profile.name)") }
+            let url = streamURL(t, .forRenderer(profile), subsonic)
+            let art = coverURL(t.coverArtID ?? t.albumID, size: 1200).map(forSpeaker)
             return AudioSource(url: forSpeaker(url), info: .init(title: t.title, artist: t.artistName, album: t.albumName, artworkURL: art,
-                                                                mimeType: bitrate > 0 ? "audio/mpeg" : Self.mime(for: t.container),
-                                                                durationMs: Int(t.duration * 1000)))
+                                                                mimeType: mime, durationMs: Int(t.duration * 1000)))
         case let .playNow(stream, song):
             if speaker != nil {
                 // A speaker sends no token: continuo signs it a link, on the LAN door, to the file as it is.
