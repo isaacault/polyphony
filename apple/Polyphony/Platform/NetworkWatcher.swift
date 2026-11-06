@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import PolyphonyKit
 
 /// Says what connection the Mac is on, for the quality rules. A phone's hotspot or a connection set to
 /// Low Data Mode counts as metered.
