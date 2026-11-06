@@ -149,8 +149,8 @@ struct SearchView: View {
                 let full = try await continuo.search(text)
                 guard !Task.isCancelled else { return }
                 results = full
-            } else if let subsonic = model.subsonic {
-                library = try await subsonic.search(text)
+            } else if let client = model.library {
+                library = try await client.search(text)
             }
             // A query left standing a moment (not one on the way to another) is remembered.
             Task {

@@ -216,7 +216,7 @@ private struct AlbumContextMenu: ViewModifier {
             KeepDownloadedButton(target: .album(id: album.id, name: album.name))
             Divider()
             Button(album.starred ? "Remove from Favourites" : "Add to Favourites") {
-                Task { try? await model.subsonic?.setStarred(.album(album.id), !album.starred) }
+                Task { try? await model.library?.setStarred(.album(album.id), !album.starred) }
             }
             if model.isContinuo {
                 Divider()
@@ -243,9 +243,9 @@ private struct AlbumContextMenu: ViewModifier {
     @State private var confirming = false
 
     private func load(_ then: @escaping ([Track]) -> Void) async {
-        guard let subsonic = model.subsonic else { return }
+        guard let client = model.library else { return }
         do {
-            then(try await subsonic.album(id: album.id).tracks)
+            then(try await client.album(id: album.id).tracks)
         } catch {
             model.handle(error)
         }
@@ -278,16 +278,16 @@ private struct TrackContextMenu: ViewModifier {
                 Menu("Rating") {
                     ForEach(1...5, id: \.self) { stars in
                         Button(String(repeating: "★", count: stars) + String(repeating: "☆", count: 5 - stars)) {
-                            Task { try? await model.subsonic?.setRating(id: track.id, stars) }
+                            Task { try? await model.library?.setRating(id: track.id, stars) }
                         }
                     }
                     Divider()
-                    Button("No Rating") { Task { try? await model.subsonic?.setRating(id: track.id, 0) } }
+                    Button("No Rating") { Task { try? await model.library?.setRating(id: track.id, 0) } }
                 }
             } else {
                 Button(track.starred ? "Remove from Favourites" : "Add to Favourites") {
                     Task {
-                        try? await model.subsonic?.setStarred(.track(track.id), !track.starred)
+                        try? await model.library?.setStarred(.track(track.id), !track.starred)
                         model.downloads.libraryChanged()
                     }
                 }
@@ -312,12 +312,12 @@ struct AddToPlaylistMenu: View {
                 Button(playlist.name) {
                     Task {
                         // Songs already there aren't added twice.
-                        let existing = (try? await model.subsonic?.playlist(id: playlist.id).tracks.map(\.id)) ?? []
+                        let existing = (try? await model.library?.playlist(id: playlist.id).tracks.map(\.id)) ?? []
                         let fresh = trackIDs.filter { !Set(existing).contains($0) }
                         if fresh.isEmpty {
                             model.notice = "Already in \(playlist.name)"
                         } else {
-                            try? await model.subsonic?.updatePlaylist(id: playlist.id, adding: fresh)
+                            try? await model.library?.updatePlaylist(id: playlist.id, adding: fresh)
                             model.downloads.libraryChanged()
                             model.notice = "Added to \(playlist.name)"
                             await model.refreshPlaylists()

@@ -123,14 +123,14 @@ final class Downloads {
     @ObservationIgnored private var running = false
     /// Where to fetch a song from, and the format it comes in (its own, or a transcode).
     @ObservationIgnored private var source: ((Track) -> (URL, String?))?
-    @ObservationIgnored private var library: SubsonicClient?
+    @ObservationIgnored private var library: (any MusicLibrary)?
     @ObservationIgnored private var hourly: Task<Void, Never>?
     @ObservationIgnored private var soon: Task<Void, Never>?
     /// Bumped on every sign-in and sign-out, so a rules check that outlives its server is dropped.
     @ObservationIgnored private var generation = 0
 
     /// Called on sign-in: this server's downloads and rules, and where to fetch new ones from.
-    func attach(server: SavedServer, library: SubsonicClient, fetchURL: @escaping (Track) -> (URL, String?)) {
+    func attach(server: SavedServer, library: any MusicLibrary, fetchURL: @escaping (Track) -> (URL, String?)) {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Polyphony/Downloads", isDirectory: true)
         let name = (server.address.host ?? "server") + "-" + server.subsonicUsername
