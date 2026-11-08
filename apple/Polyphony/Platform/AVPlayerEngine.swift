@@ -152,7 +152,7 @@ final class AVPlayerEngine: AudioEngine {
                     self.player.insert(item, after: nil)
                     self.playingItem = item
                     self.watchFailures(of: item)
-                    self.player.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+                    self.player.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { _ in }
                     if let next, self.player.canInsert(next.item, after: item) { self.player.insert(next.item, after: item) }
                     if wasPlaying { self.player.play() }
                     DiagnosticLog.shared.log("engine", "reopened the song to seek in it")
