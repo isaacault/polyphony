@@ -51,6 +51,7 @@ import app.polyphony.navigation.PolyphonyNavHost
 import app.polyphony.navigation.PolyphonyNavigator
 import app.polyphony.navigation.Route
 import app.polyphony.ui.common.PlayNowEvent
+import app.polyphony.ui.common.Radio
 import app.polyphony.ui.common.RemovalEvent
 import app.polyphony.ui.common.TrackSwipeScope
 import app.polyphony.ui.player.PlayerViewModel
@@ -173,6 +174,20 @@ fun PolyphonyShell(
                         )
                         if (result == SnackbarResult.ActionPerformed && track != null) shellViewModel.requestInstead(track)
                     }
+                }
+            }
+        }
+    }
+    // Radio (polyphony#173): finding similar songs takes a moment; nothing found says so.
+    LaunchedEffect(shellViewModel) {
+        shellViewModel.radioEvents.collect { event ->
+            snackbarHostState.currentSnackbarData?.dismiss()
+            linkScope.launch {
+                when (event) {
+                    is Radio.Event.Finding -> snackbarHostState.showSnackbar(
+                        context.getString(R.string.radio_finding, event.seed), duration = SnackbarDuration.Indefinite)
+                    is Radio.Event.Started -> Unit
+                    is Radio.Event.NothingSimilar -> snackbarHostState.showSnackbar(context.getString(R.string.radio_nothing, event.seed))
                 }
             }
         }

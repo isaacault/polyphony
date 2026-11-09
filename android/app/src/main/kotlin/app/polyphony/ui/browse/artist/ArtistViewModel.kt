@@ -1,5 +1,6 @@
 package app.polyphony.ui.browse.artist
 
+import app.polyphony.ui.common.Radio
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -90,6 +91,7 @@ class ArtistViewModel @Inject constructor(
     private val servers: ServerRepository,
     private val requests: RequestRepository,
     artistNames: ArtistNames,
+    private val radio: Radio,
 ) : ViewModel() {
 
 
@@ -206,6 +208,11 @@ class ArtistViewModel @Inject constructor(
     fun rate(stars: Int) {
         val artist = state.value.artist ?: return
         viewModelScope.launch { runCatching { library.setRating(artist.id, ItemKind.ARTIST, stars) } }
+    }
+
+    /** Radio from this artist: their songs and similar artists', endlessly (polyphony#173). */
+    fun startRadio() {
+        state.value.artist?.let(radio::fromArtist)
     }
 
     fun toggleFavorite() {

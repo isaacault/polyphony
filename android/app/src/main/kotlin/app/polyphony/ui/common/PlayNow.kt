@@ -156,8 +156,8 @@ class PlayNow @Inject constructor(
         return asTrack(server, stream, track)
     }
 
-    /** A song of a queue, fetched in its turn; null when continuo wouldn't take it. */
-    private suspend fun queued(server: Server, track: CatalogTrack): Track? {
+    /** A song of a queue, fetched in its turn; null when continuo wouldn't take it. Radio's too. */
+    suspend fun queued(server: Server, track: CatalogTrack): Track? {
         val recording = track.recordingId ?: return null
         return try {
             asTrack(server, requests.startPlayNow(server, recording, track.albumReleaseGroupId, track.title,

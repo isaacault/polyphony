@@ -17,6 +17,7 @@ import app.polyphony.inbox.InboxBadges
 import app.polyphony.navigation.DeepLink
 import app.polyphony.ui.common.LibraryRemoval
 import app.polyphony.ui.common.PlayNow
+import app.polyphony.ui.common.Radio
 import app.polyphony.ui.common.PlayNowEvent
 import app.polyphony.ui.common.RemovalEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -43,7 +44,11 @@ class ShellViewModel @Inject constructor(
     private val libraryRemoval: LibraryRemoval,
     private val playNow: PlayNow,
     private val history: ListeningHistoryRepository,
+    radio: Radio,
 ) : ViewModel() {
+
+    /** Radio's progress, wherever it was started (polyphony#173). */
+    val radioEvents: SharedFlow<Radio.Event> = radio.events
 
     /** Play now outcomes (continuo#12), wherever the song was tapped. */
     val playNowEvents: SharedFlow<PlayNowEvent> = playNow.events

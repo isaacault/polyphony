@@ -32,6 +32,7 @@ class TrackActionsViewModel @Inject constructor(
     private val playback: PlaybackController,
     private val library: LibraryRepository,
     feedbackRepository: FeedbackRepository,
+    private val radio: Radio,
 ) : ViewModel() {
 
     /** Which of favourite / rating the sheets offer. */
@@ -43,6 +44,7 @@ class TrackActionsViewModel @Inject constructor(
 
     fun playNext(tracks: List<Track>) = playback.playNext(tracks)
     fun addToQueue(tracks: List<Track>) = playback.addToQueue(tracks)
+    fun startRadio(track: Track) = radio.fromTrack(track)
     fun play(tracks: List<Track>, startIndex: Int = 0, shuffle: Boolean = false, title: String? = null, context: PlayContext? = null) =
         playback.playTracks(tracks, startIndex, shuffle, title, context)
 
