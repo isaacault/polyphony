@@ -35,9 +35,19 @@ final class XMLNode: @unchecked Sendable {
 
     func value(_ name: String) -> String? { first(name)?.text }
 
+    /// An `&` that doesn't start an entity, made `&amp;`. The Yamaha RX-V483 puts stream URLs into
+    /// TrackURI, CurrentURI and NextURI without escaping their `&`s, so a strict parser rejects its
+    /// GetPositionInfo and GetMediaInfo answers whole. Well-formed XML has no such `&`.
+    static func escapeBareAmpersands(_ xml: String) -> String {
+        xml.replacingOccurrences(of: #"&(?!(?:[A-Za-z][A-Za-z0-9._-]*|#[0-9]+|#x[0-9A-Fa-f]+);)"#, with: "&amp;",
+                                 options: .regularExpression)
+    }
+
     static func parse(_ data: Data) -> XMLNode? {
+        let text = String(decoding: data, as: UTF8.self)
+        let cleaned = text.contains("&") ? Data(escapeBareAmpersands(text).utf8) : data
         let delegate = Builder()
-        let parser = XMLParser(data: data)
+        let parser = XMLParser(data: cleaned)
         parser.delegate = delegate
         parser.shouldProcessNamespaces = false
         return parser.parse() ? delegate.root.children.first : nil
