@@ -58,6 +58,20 @@ struct JellyfinTests {
         #expect(saved.library() is JellyfinClient)
     }
 
+    @Test func aUserWithNoPasswordSignsIn() async throws {
+        let fake = FakeTransport { request in
+            switch request.url.path {
+            case "/System/Info/Public": json(#"{"ProductName":"Jellyfin Server"}"#)
+            case "/Users/AuthenticateByName": json(#"{"AccessToken":"tok","User":{"Id":"u1","Name":"Isaac"}}"#)
+            default: json("", status: 404)
+            }
+        }
+        let saved = try await Connector.connect(address: "jf.example.com", username: "isaac", password: "", deviceName: "M", transport: fake)
+        #expect(saved.kind == .jellyfin && saved.jellyfin?.accessToken == "tok")
+        let auth = try #require(fake.calls.first { $0.url.path == "/Users/AuthenticateByName" })
+        #expect(String(decoding: auth.body ?? Data(), as: UTF8.self).contains(#""Pw":"""#))
+    }
+
     @Test func aSongCarriesWhatTheAppShows() async throws {
         let fake = FakeTransport { _ in json("{\"Items\":[\(trackJSON)]}") }
         let t = try await client(fake).songs(.random, size: 1)[0]
