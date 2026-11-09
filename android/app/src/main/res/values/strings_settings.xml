@@ -146,7 +146,7 @@
     <string name="settings_playback_resume_on_connect">Resume when headphones connect</string>
     <string name="settings_playback_resume_on_connect_summary">Continue the paused queue automatically</string>
     <string name="settings_playback_duck">Lower volume for notifications</string>
-    <string name="settings_playback_duck_summary">Duck instead of pausing during short interruptions</string>
+    <string name="settings_playback_duck_summary">Navigation prompts and notifications turn the music down; off, they pause it until they\'re done</string>
     <string name="settings_playback_remember_queue">Remember queue</string>
     <string name="settings_playback_remember_queue_summary">Restore the queue and position after restarting</string>
     <string name="settings_playback_haptics">Haptic feedback</string>
