@@ -203,6 +203,13 @@ private final class SimSpeaker: @unchecked Sendable {
     var metadataFollows = false
     var answersMediaInfo = false
     var doubleEscapeMetadata = false
+    /// The Yamaha as recorded on 2026-11-09: names the armed next song this long before the end (URI,
+    /// item id, duration) with the old song's clock, NextURI emptied; echoes URLs with ":80"; and
+    /// doesn't escape the `&`s in the URIs it reports.
+    var namesNextEarlyMs = 0
+    var addsDefaultPort = false
+    var rawAmpersands = false
+    private var namedNext: (uri: String, id: String?)?
 
     private(set) var calls: [String] = []
     private(set) var state = "NO_MEDIA_PRESENT"
@@ -214,9 +221,29 @@ private final class SimSpeaker: @unchecked Sendable {
     private var since = 0
     private var frozen: (position: Int, duration: Int, uri: String?, id: String?)?
 
+    private func echo(_ uri: String) -> String {
+        addsDefaultPort ? uri.replacingOccurrences(of: #"^(http://[^/:]+)/"#, with: "$1:80/", options: .regularExpression) : uri
+    }
+
     private func settle() {
+        if namesNextEarlyMs > 0, namedNext == nil, state == "PLAYING", let next = nextURI, let uri = currentURI, let d = durations[uri] {
+            let p = base + (now - since)
+            if p >= d - namesNextEarlyMs && p < d {
+                namedNext = (next, nextID)
+                nextURI = nil
+                nextID = nil
+            }
+        }
         while state == "PLAYING", let uri = currentURI, let d = durations[uri], base + (now - since) >= d {
             let endedAt = since + (d - base)
+            if let named = namedNext {
+                namedNext = nil
+                currentURI = named.uri
+                currentID = named.id
+                base = 0
+                since = endedAt
+                continue
+            }
             if frozen == nil, freezeAtHandoff, nextURI != nil { frozen = (d, d, uri, currentID) }
             if let next = nextURI {
                 currentURI = next
@@ -280,12 +307,16 @@ private final class SimSpeaker: @unchecked Sendable {
         case "GetTransportInfo":
             out = "<CurrentTransportState>\(state)</CurrentTransportState>"
         case "GetPositionInfo":
-            if let f = frozen {
+            if let named = namedNext {
+                let p = base + (now - since)
+                out = "<RelTime>\(UPnPTime.format(ms: p))</RelTime><TrackDuration>\(UPnPTime.format(ms: durations[named.uri] ?? 0))</TrackDuration><TrackURI>\(reported(named.uri))</TrackURI>"
+                if metadataFollows, let id = named.id { out += metadata(id) }
+            } else if let f = frozen {
                 out = "<RelTime>\(UPnPTime.format(ms: f.position))</RelTime><TrackDuration>\(UPnPTime.format(ms: f.duration))</TrackDuration><TrackURI>\(f.uri ?? "")</TrackURI>"
                 if metadataFollows, let currentID { out += metadata(currentID) }
             } else {
                 let p = state == "PLAYING" ? base + (now - since) : base
-                out = "<RelTime>\(UPnPTime.format(ms: p))</RelTime><TrackDuration>\(UPnPTime.format(ms: currentURI.flatMap { durations[$0] } ?? 0))</TrackDuration><TrackURI>\(currentURI ?? "")</TrackURI>"
+                out = "<RelTime>\(UPnPTime.format(ms: p))</RelTime><TrackDuration>\(UPnPTime.format(ms: currentURI.flatMap { durations[$0] } ?? 0))</TrackDuration><TrackURI>\(currentURI.map(reported) ?? "")</TrackURI>"
                 if metadataFollows, let currentID { out += metadata(currentID) }
             }
         case "GetMediaInfo":
@@ -295,6 +326,12 @@ private final class SimSpeaker: @unchecked Sendable {
             break
         }
         return HTTPResponse(status: 200, body: Data("<s:Envelope xmlns:s=\"x\"><s:Body><u:\(action)Response>\(out)</u:\(action)Response></s:Body></s:Envelope>".utf8))
+    }
+
+    /// A URI as the speaker reports it: ":80" added, and its `&`s left raw or escaped.
+    private func reported(_ uri: String) -> String {
+        let shown = echo(uri)
+        return rawAmpersands ? shown : XMLEscape.escape(shown)
     }
 
     private func metadata(_ id: String) -> String {
@@ -516,5 +553,42 @@ struct PlayNowLinkCacheTests {
         cache.failed("s2", now: t)
         cache.put("s2", url, now: t)
         #expect(!cache.recentlyFailed("s2", now: t), "a link clears it")
+    }
+}
+
+@MainActor
+struct YamahaRecordedTests {
+    @Test func itsRealAnswerWithUnescapedAmpersandsReads() throws {
+        // Its GetPositionInfo answer on 2026-11-09, the library credential replaced.
+        let url = try #require(Bundle.module.url(forResource: "yamaha-rx-v483-position-info", withExtension: "xml", subdirectory: "Fixtures"))
+        let out = try SOAP.parseResponse(try Data(contentsOf: url), action: "GetPositionInfo")
+        #expect(out["TrackURI"]?.hasPrefix("http://192.168.0.101:80/rest/stream?u=REDACTED&t=REDACTED") == true)
+        #expect(out["TrackURI"]?.contains("&id=5oP93ok4kxrhX4D8BWEzqy&format=raw") == true)
+        #expect(out["TrackDuration"] == "0:04:30")
+        #expect(DIDL.itemID(out["TrackMetaData"]) == "10")
+    }
+
+    @Test func escapingLeavesRealEntitiesAlone() {
+        #expect(XMLNode.escapeBareAmpersands("a&b &lt; &#38; &#x26; &c") == "a&amp;b &lt; &#38; &#x26; &amp;c")
+    }
+
+    @Test func namingTheNextSongEarlyWithItsOldClockAndAPortIsFollowedFrom0() async {
+        let rig = Rig([("a", 30_000), ("b", 40_000), ("c", 30_000)]) {
+            $0.namesNextEarlyMs = 3_000
+            $0.addsDefaultPort = true
+            $0.rawAmpersands = true
+            $0.metadataFollows = true
+        }
+        await rig.start()
+        await rig.run(5_000)
+        #expect(rig.count("setNext:b") == 1)
+        await rig.run(23_000) // a's clock at 28 s: the speaker names b already
+        #expect(rig.currentTitle == "b", "followed the poll it was named")
+        #expect(rig.player.position < 4, "from 0, not a's 28 s: \(rig.player.position)")
+        await rig.run(2_000)
+        #expect(rig.count("setNext:c") == 1, "c armed straight after")
+        await rig.run(10_000)
+        #expect(rig.player.position > 7 && rig.player.position < 14, "b's clock from its real start: \(rig.player.position)")
+        #expect(rig.count("setUri:b") == 0 && rig.count("setUri:c") == 0)
     }
 }

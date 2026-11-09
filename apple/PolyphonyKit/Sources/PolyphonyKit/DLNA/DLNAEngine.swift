@@ -208,6 +208,12 @@ public final class DLNAEngine: AudioEngine {
     private var reportUnchangedSince = 0
     /// The frozen position a speaker keeps reporting after a hand-off: ignored until it changes.
     private var staleReportedMs: Int?
+    /// Until then, a reported position past the first seconds is the previous song's: the Yamaha names
+    /// the next song a few seconds early, its clock still counting the old one, then starts it from 0.
+    private var handoffPositionUntil = 0
+    private var lastReportError: String?
+    private static let handoffPositionGraceMs = 8_000
+    private static let handoffFreshMs = 5_000
 
     private static let maxPollFailures = 5
     private static let settleMs = 1_800
@@ -223,6 +229,8 @@ public final class DLNAEngine: AudioEngine {
     /// GetMediaInfo is asked only this close to a song's end, while a next song is armed.
     private static let mediaInfoWindowMs = 5_000
     private static let unknownDurationMinPlayMs = 5_000
+    /// A poll this late means the Mac wasn't running the loop (asleep, napped): worth a log line.
+    private static let latePollMs = 5_000
     private static let reasonFrozen = "position frozen at the end"
     private static let reasonClock = "clock past the end"
 
@@ -491,7 +499,16 @@ public final class DLNAEngine: AudioEngine {
     func pollOnce() async {
         guard let current = loaded, commandsPending == 0 else { return }
         let state = try? await control.transportState()
-        let report = try? await control.report()
+        let report: DLNAReport?
+        do {
+            report = try await control.report()
+            lastReportError = nil
+        } catch {
+            report = nil
+            let why = ErrorText.of(error)
+            if why != lastReportError { DiagnosticLog.shared.log("dlna", "\(control.renderer.name): position report unreadable: \(why)") }
+            lastReportError = why
+        }
         guard loaded?.uid == current.uid, commandsPending == 0 else { return }
         if state == nil && report == nil {
             pollFailures += 1
@@ -502,6 +519,10 @@ public final class DLNAEngine: AudioEngine {
         let now = clock()
         let sinceCommand = now - lastCommandAt
         let playing = state == "PLAYING"
+        if lastPollAt > 0, now - lastPollAt > Self.latePollMs {
+            DiagnosticLog.shared.log("dlna", "poll came \(now - lastPollAt) ms after the last (the Mac slept?)")
+        }
+        if let report { logReport(state, report, current) }
         if playing && lastPollAt > 0 {
             let gap = max(now - lastPollAt, 0)
             // PLAYING at both ends: it played the whole gap, however late this poll came (a Mac that
@@ -530,7 +551,8 @@ public final class DLNAEngine: AudioEngine {
                 // While a hand-off may be under way, a STOPPED or TRANSITIONING sample mustn't
                 // overwrite the duration and position it's checked against.
                 if let d = p.durationMs, d > 0 { durationMs = d }
-                if let position = p.positionMs, sinceCommand > Self.settleMs {
+                let oldSongsClock = now < handoffPositionUntil && (p.positionMs ?? 0) > Self.handoffFreshMs
+                if let position = p.positionMs, sinceCommand > Self.settleMs, !oldSongsClock {
                     positionMs = position
                     sampledAt = now
                 }
@@ -609,6 +631,7 @@ public final class DLNAEngine: AudioEngine {
             armed = Song(uid: uid, url: url, durationMs: next.info?.durationMs ?? 0, source: next)
             armedAt = clock()
             setNextSupported = true
+            DiagnosticLog.shared.log("dlna", "\(control.renderer.name): armed \(next.info?.title ?? "the next song") (item \(uid))")
         } catch {
             // It doesn't do SetNextAVTransportURI: each song starts when the last one stops.
             DiagnosticLog.shared.log("dlna", "\(control.renderer.name) refused SetNext: no gapless on it")
@@ -684,8 +707,14 @@ public final class DLNAEngine: AudioEngine {
 
     private func advance(to next: Song, _ p: DLNAReport, _ now: Int, _ reason: String, _ stale: Bool) {
         let frozen = reason == Self.reasonFrozen
+        // Named by URI or item id while the clock still counts the old song's end: it starts from 0.
+        let earlyName = (reason == "uri" || reason == "track metadata") && durationMs > 0
+            && (p.positionMs ?? 0) >= durationMs - Self.nearEndWindowMs
+        if earlyName { handoffPositionUntil = now + Self.handoffPositionGraceMs }
         let position: Int
-        if frozen {
+        if earlyName {
+            position = 0
+        } else if frozen {
             // The report stopped moving when the last song ended; the next one has played since.
             position = now - reportUnchangedSince
         } else if stale {
@@ -725,12 +754,44 @@ public final class DLNAEngine: AudioEngine {
         return playedMs >= currentDuration + armed.durationMs / 2
     }
 
+    private var lastReportLine: String?
+    private var lastReportPosition: Int?
+
+    /// One line whenever the speaker's report changes in a way that matters (state, which song by URI
+    /// or item id, the duration, the position going backwards), so diagnostics show what it said around
+    /// a hand-off. Never the URL, which carries the library credential.
+    private func logReport(_ state: String?, _ p: DLNAReport, _ current: Song) {
+        let which: String
+        if let uri = p.trackURI {
+            which = Self.sameURL(uri, current.url) ? " (current)" : armed.map { Self.sameURL(uri, $0.url) } == true ? " (armed)" : " (other)"
+        } else {
+            which = ""
+        }
+        let line = "\(state ?? "?") uri=\(p.trackURI.map(Self.songID) ?? "none")\(which) item=\(p.itemID ?? "none") dur=\(p.durationMs.map(String.init) ?? "?")"
+        let jumpedBack = lastReportPosition.flatMap { last in p.positionMs.map { $0 + Self.regressionMs < last } } ?? false
+        let previous = lastReportPosition
+        lastReportPosition = p.positionMs
+        guard line != lastReportLine || jumpedBack else { return }
+        lastReportLine = line
+        DiagnosticLog.shared.log("dlna", "\(control.renderer.name): \(line) pos=\(p.positionMs.map(String.init) ?? "?")"
+            + (jumpedBack ? " (was \(previous ?? 0))" : "") + " [current item \(current.uid), armed \(armed.map { String($0.uid) } ?? "none")]")
+    }
+
+    /// A stream's song by its id parameter, never the whole URL.
+    private static func songID(_ url: String) -> String {
+        guard let r = url.range(of: #"[?&]id=[^&]+"#, options: .regularExpression) else { return String(url.prefix(24)) }
+        return String(url[r].drop { $0 != "=" }.dropFirst().prefix(12))
+    }
+
     private static func sameURL(_ a: String, _ b: String) -> Bool {
+        // However the speaker echoes it: decoded, case aside, and without a default port (the Yamaha adds ":80").
         func norm(_ u: String) -> String {
             let t = u.trimmingCharacters(in: .whitespacesAndNewlines)
             var d = t.removingPercentEncoding ?? t
             while d.hasSuffix("/") { d.removeLast() }
-            return d.lowercased()
+            d = d.lowercased()
+            d = d.replacingOccurrences(of: #"^(http://[^/:?#]+):80(?=[/?#]|$)"#, with: "$1", options: .regularExpression)
+            return d.replacingOccurrences(of: #"^(https://[^/:?#]+):443(?=[/?#]|$)"#, with: "$1", options: .regularExpression)
         }
         return norm(a) == norm(b)
     }
