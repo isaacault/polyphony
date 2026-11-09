@@ -119,10 +119,10 @@
 
     <!-- Playback -->
     <string name="settings_playback_audio">Audio</string>
-    <string name="settings_playback_gapless">Gapless playback</string>
-    <string name="settings_playback_gapless_summary">No silence between consecutive tracks</string>
+    <string name="settings_playback_gapless">Keep albums gapless</string>
+    <string name="settings_playback_gapless_summary">An album played in order runs from one track into the next without a crossfade</string>
     <string name="settings_playback_crossfade">Crossfade</string>
-    <string name="settings_playback_crossfade_summary">Applies to local playback only</string>
+    <string name="settings_playback_crossfade_summary">Each song fades into the next on this phone; Cast and DLNA speakers play them back to back</string>
     <string name="settings_playback_skip_silence">Skip silence</string>
     <string name="settings_playback_skip_silence_summary">Trim silent passages while playing</string>
     <string name="settings_playback_speed">Playback speed</string>

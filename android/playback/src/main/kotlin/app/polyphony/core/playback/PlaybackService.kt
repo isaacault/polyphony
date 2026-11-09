@@ -78,6 +78,9 @@ import app.polyphony.core.playback.stream.StreamResolver
 import app.polyphony.core.playback.timer.SleepTimer
 import app.polyphony.core.playback.audio.OutputVolume
 import app.polyphony.core.playback.audio.PausingAudioFocus
+import app.polyphony.core.playback.crossfade.CrossfadePlan
+import app.polyphony.core.playback.crossfade.Crossfader
+import androidx.media3.exoplayer.source.MediaSource
 import com.google.common.util.concurrent.MoreExecutors
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -138,7 +141,10 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var sleepTimer: SleepTimer
     /** The local player's volume: ReplayGain, the sleep timer and crossfade each set their share. */
     private lateinit var localVolume: OutputVolume
+    private lateinit var crossfader: Crossfader
     private lateinit var pausingFocus: PausingAudioFocus
+    /** How the local player opens songs; the crossfade's second player opens them the same way. */
+    private lateinit var mediaSourceFactory: MediaSource.Factory
     private val audioAttributes: AudioAttributes = AudioAttributes.Builder()
         .setUsage(C.USAGE_MEDIA)
         .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -182,6 +188,7 @@ class PlaybackService : MediaLibraryService() {
 
         localPlayer = buildLocalPlayer(initial.playback)
         localVolume = OutputVolume { localPlayer.volume = it }
+        crossfader = Crossfader(scope, localPlayer, localVolume, ::buildCrossfadePlayer, ::crossfadePlan)
         pausingFocus = PausingAudioFocus(this, localPlayer).also { it.enabled = !initial.playback.duckOnTransientFocusLoss }
         prefetcher = QueuePrefetcher(scope, streamResolver, streamCache, streamingUpstream)
         val players = PlayerFactory.create(this, localPlayer, castManager.isSupported, converter)
@@ -192,7 +199,10 @@ class PlaybackService : MediaLibraryService() {
         sleepTimer = SleepTimer(
             scope,
             pause = { player.pause() },
-            setVolume = { level -> localVolume.sleep = level },
+            setVolume = { level ->
+                localVolume.sleep = level
+                crossfader.setSleep(level)
+            },
             remainingInTrackMs = {
                 val duration = player.duration
                 if (duration == C.TIME_UNSET || duration <= 0 || !player.isPlaying) null else duration - player.currentPosition
@@ -230,6 +240,7 @@ class PlaybackService : MediaLibraryService() {
         startCollectors()
         openAudioEffectSession()
         restoreQueueOnStart(initial.playback.rememberQueue)
+        crossfader.start()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
@@ -255,6 +266,7 @@ class PlaybackService : MediaLibraryService() {
             dlnaManager.disconnect()
         }
         closeAudioEffectSession()
+        crossfader.release()
         pausingFocus.release()
         prefetcher.stop()
         headset.setEnabled(false)
@@ -289,12 +301,13 @@ class PlaybackService : MediaLibraryService() {
         // FileDataSource, so downloaded tracks bypass the stream cache entirely.
         val local = DefaultDataSource.Factory(this, cached)
         val resolving = ResolvingDataSource.Factory(local, streamResolver)
+        mediaSourceFactory = DefaultMediaSourceFactory(resolving)
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(30_000, 120_000, 2_500, 5_000)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
         val exo = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(resolving))
+            .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
             // Media3 ducks for a notification; with ducking off, PausingAudioFocus pauses instead.
             .setAudioAttributes(audioAttributes, playback.duckOnTransientFocusLoss)
@@ -314,6 +327,36 @@ class PlaybackService : MediaLibraryService() {
         // Shuffle mixes the list you pressed play on, never the songs you queued (UserQueue).
         exo.setShuffleOrder(QueueShuffleOrder())
         return exo
+    }
+
+    /**
+     * The crossfade's second player: opens songs as the local player does, in the same audio session
+     * (so an equaliser applies to both), and never takes the audio focus, which stays the local player's.
+     */
+    private fun buildCrossfadePlayer(): ExoPlayer =
+        ExoPlayer.Builder(this)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .setAudioAttributes(audioAttributes, false)
+            .setSkipSilenceEnabled(settings.skipSilence)
+            .setName("Polyphony crossfade")
+            .build()
+            .also { if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) it.setAudioSessionId(audioSessionId) }
+
+    /**
+     * Crossfade into the next song, or not ([CrossfadePlan]): only on this phone's own player, not
+     * with repeat-one (the "next" song is this one) or while the sleep timer waits for the song to end.
+     */
+    private fun crossfadePlan(): Crossfader.Plan? {
+        if (settings.crossfadeMs <= 0 || player !== basePlayer || player.isRemotePlayback()) return null
+        if (sleepTimer.waitingForTrackEnd || localPlayer.repeatMode == Player.REPEAT_MODE_ONE) return null
+        val timeline = localPlayer.currentTimeline
+        if (timeline.isEmpty) return null
+        val next = timeline.getNextWindowIndex(localPlayer.currentMediaItemIndex, localPlayer.repeatMode, localPlayer.shuffleModeEnabled)
+        if (next == C.INDEX_UNSET) return null
+        val current = localPlayer.currentMediaItem?.let(::trackFor)
+        val nextTrack = trackFor(localPlayer.getMediaItemAt(next))
+        val fade = CrossfadePlan.fadeMs(settings.crossfadeMs, settings.gapless, current, nextTrack, localPlayer.duration)
+        return if (fade > 0) Crossfader.Plan(next, fade) else null
     }
 
     private fun applyPreload(exo: ExoPlayer, enabled: Boolean) {
