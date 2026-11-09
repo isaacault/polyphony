@@ -45,7 +45,7 @@ struct SignInView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .keyboardShortcut(.defaultAction)
-            .disabled(busy || address.isEmpty || username.isEmpty || password.isEmpty)
+            .disabled(busy || address.isEmpty || username.isEmpty)
             if adding {
                 Button("Cancel") { model.addingServer = false }.keyboardShortcut(.cancelAction).disabled(busy)
             }
