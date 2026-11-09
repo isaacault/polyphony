@@ -76,6 +76,7 @@ import com.google.common.util.concurrent.SettableFuture
 import app.polyphony.core.playback.stream.StreamCache
 import app.polyphony.core.playback.stream.StreamResolver
 import app.polyphony.core.playback.timer.SleepTimer
+import app.polyphony.core.playback.audio.OutputVolume
 import com.google.common.util.concurrent.MoreExecutors
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -134,6 +135,8 @@ class PlaybackService : MediaLibraryService() {
     private var dlnaPlayer: DlnaPlayer? = null
     private var session: MediaLibrarySession? = null
     private lateinit var sleepTimer: SleepTimer
+    /** The local player's volume: ReplayGain, the sleep timer and crossfade each set their share. */
+    private lateinit var localVolume: OutputVolume
     private lateinit var reporter: PlaybackReporter
     private lateinit var headset: HeadsetMonitor
     private lateinit var latencyListener: LatencyPlayerListener
@@ -172,12 +175,22 @@ class PlaybackService : MediaLibraryService() {
         settings = initial.playback
 
         localPlayer = buildLocalPlayer(initial.playback)
+        localVolume = OutputVolume { localPlayer.volume = it }
         prefetcher = QueuePrefetcher(scope, streamResolver, streamCache, streamingUpstream)
         val players = PlayerFactory.create(this, localPlayer, castManager.isSupported, converter)
         basePlayer = SeekableStreamsPlayer(players.session, ::seekByReload)
         player = basePlayer
 
-        sleepTimer = SleepTimer(scope, pause = { player.pause() }, setVolume = { player.volume = it })
+        // The fade is the local player's: a speaker's own volume isn't touched (it used to be left at 100%).
+        sleepTimer = SleepTimer(
+            scope,
+            pause = { player.pause() },
+            setVolume = { level -> localVolume.sleep = level },
+            remainingInTrackMs = {
+                val duration = player.duration
+                if (duration == C.TIME_UNSET || duration <= 0 || !player.isPlaying) null else duration - player.currentPosition
+            },
+        )
         reporter = PlaybackReporter(scope, serverLookup, libraryRepository) { serverId, streamId, listenedAtMs ->
             val server = serverLookup.providerFor(serverId)?.server ?: return@PlaybackReporter
             if (requestRepository.supports(server)) requestRepository.scrobblePlayNow(server, streamId, listenedAtMs)
@@ -350,7 +363,12 @@ class PlaybackService : MediaLibraryService() {
             networkMonitor.state.map { it.isOnline to it.isMetered }.distinctUntilChanged().collect { refreshPrefetch() }
         }
         scope.launch { latencyMonitor.degraded.collect { publishExtras() } }
-        scope.launch { sleepTimer.endsAtEpochMs.collect { publishExtras() } }
+        scope.launch {
+            sleepTimer.endsAtEpochMs.collect {
+                publishExtras()
+                updateButtons()
+            }
+        }
         scope.launch { feedbackRepository.feedback.collect { updateButtons() } }
         historyJob = scope.launch(Dispatchers.IO) {
             for (entry in historyWrites) runCatching { listeningHistory.record(entry) }.onFailure { Log.w(TAG, "History write failed: ${it.message}") }
@@ -807,7 +825,7 @@ class PlaybackService : MediaLibraryService() {
             player.previousMediaItemIndex != C.INDEX_UNSET -> trackFor(player.getMediaItemAt(player.previousMediaItemIndex))
             else -> null
         }
-        localPlayer.volume = ReplayGain.volumeFor(
+        localVolume.gain = ReplayGain.volumeFor(
             track = track,
             mode = settings.replayGainMode,
             preampDb = settings.replayGainPreampDb,
@@ -944,6 +962,11 @@ class PlaybackService : MediaLibraryService() {
             publishExtras()
         }
 
+        override fun extendSleepTimer() {
+            sleepTimer.extend(SLEEP_EXTEND_MS)
+            publishExtras()
+        }
+
         override fun setQueueTitle(title: String?) {
             queueTitle = title
             publishExtras()
@@ -981,8 +1004,16 @@ class PlaybackService : MediaLibraryService() {
                 .setDisplayName(getString(R.string.action_repeat))
                 .setSessionCommand(CustomCommands.of(CustomCommands.CYCLE_REPEAT))
                 .build()
+            // While the sleep timer runs, ten more minutes in one tap, from the notification or the lock screen.
+            val extend = sleepTimer.endsAtEpochMs.value?.let {
+                CommandButton.Builder(CommandButton.ICON_PLUS_CIRCLE_UNFILLED)
+                    .setDisplayName(getString(R.string.action_sleep_extend))
+                    .setSessionCommand(CustomCommands.of(CustomCommands.EXTEND_SLEEP_TIMER))
+                    .build()
+            }
             // A notification cannot host the 1–5 picker, so Ratings mode leaves the heart out.
-            return if (feedbackRepository.feedback.value.usesRatings) listOf(shuffle, repeat) else listOf(favorite, shuffle, repeat)
+            val base = if (feedbackRepository.feedback.value.usesRatings) listOf(shuffle, repeat) else listOf(favorite, shuffle, repeat)
+            return listOfNotNull(extend) + base
         }
     }
 
@@ -1023,6 +1054,7 @@ class PlaybackService : MediaLibraryService() {
         const val SESSION_ID = "polyphony"
         const val NOTIFICATION_CHANNEL_ID = "polyphony_playback"
         private const val PRELOAD_DURATION_US = 10_000_000L
+        private const val SLEEP_EXTEND_MS = 10 * 60_000L
         /** How long a scrub in a live transcode waits for the server to finish it. */
         private const val SEEK_LENGTH_WAIT_MS = 8_000L
     }

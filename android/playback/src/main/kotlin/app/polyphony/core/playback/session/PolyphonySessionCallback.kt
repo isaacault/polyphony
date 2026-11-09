@@ -33,6 +33,7 @@ interface SessionActions {
     fun restoreQuality()
     fun refreshDecision()
     fun setSleepTimer(endsAtEpochMs: Long?, finishTrack: Boolean)
+    fun extendSleepTimer()
     fun setQueueTitle(title: String?)
     fun setPlayContext(context: PlayContext?)
     fun audioSessionId(): Int
@@ -75,6 +76,7 @@ class PolyphonySessionCallback(
                 args.getLong(CustomCommands.ARG_ENDS_AT, -1L).takeIf { it > 0 },
                 args.getBoolean(CustomCommands.ARG_FINISH_TRACK, false),
             )
+            CustomCommands.EXTEND_SLEEP_TIMER -> actions.extendSleepTimer()
             CustomCommands.SET_QUEUE_TITLE -> actions.setQueueTitle(args.getString(CustomCommands.ARG_TITLE))
             CustomCommands.SET_PLAY_CONTEXT -> actions.setPlayContext(PlayContextCodec.decode(args.getString(CustomCommands.ARG_CONTEXT)))
             CustomCommands.GET_AUDIO_SESSION_ID -> {

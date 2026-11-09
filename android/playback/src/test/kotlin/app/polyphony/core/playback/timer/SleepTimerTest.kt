@@ -77,4 +77,54 @@ class SleepTimerTest {
         f.timer.onTrackChanged()
         assertEquals("pauses on the track change", 1, f.paused)
     }
+
+    @Test
+    fun `finish-track mode fades over the end of the track when its length is known`() = runTest {
+        var remaining: Long? = 60_000L
+        var paused = 0
+        val volumes = mutableListOf<Float>()
+        val timer = SleepTimer(
+            scope = backgroundScope, pause = { paused++ }, setVolume = { volumes += it },
+            clock = { testScheduler.currentTime }, fadeMs = 8_000L, tickMs = 1_000L, remainingInTrackMs = { remaining },
+        )
+        timer.set(endsAtEpochMs = 0L, finishTrack = true)
+        volumes.clear()
+        advanceTimeBy(2_000)
+        assertTrue("no fade with a minute to go", volumes.isEmpty())
+        remaining = 4_000L
+        advanceTimeBy(1_100)
+        assertEquals("halfway down with half the fade left", 0.5f, volumes.last(), 0.01f)
+        timer.onTrackChanged()
+        assertEquals(1, paused)
+        assertEquals("full again once paused", 1f, volumes.last(), 0f)
+    }
+
+    @Test
+    fun `extending moves the end and brings the volume back`() = runTest {
+        val f = Fixture(backgroundScope) { testScheduler.currentTime }
+        f.timer.set(endsAtEpochMs = 10_000L)
+        advanceTimeBy(6_100) // fading
+        assertTrue(f.volumes.last() < 1f)
+        f.timer.extend(600_000L)
+        assertEquals(610_000L, f.timer.endsAtEpochMs.value)
+        assertEquals("back to full", 1f, f.volumes.last(), 0f)
+        advanceTimeBy(10_000)
+        assertEquals("didn't fire at the old time", 0, f.paused)
+    }
+
+    @Test
+    fun `extending a timer already past runs from now`() = runTest {
+        val f = Fixture(backgroundScope) { testScheduler.currentTime }
+        f.timer.set(endsAtEpochMs = 0L, finishTrack = true)
+        advanceTimeBy(5_000)
+        f.timer.extend(60_000L)
+        assertEquals(65_000L, f.timer.endsAtEpochMs.value)
+    }
+
+    @Test
+    fun `nothing to extend without a timer`() = runTest {
+        val f = Fixture(backgroundScope) { testScheduler.currentTime }
+        f.timer.extend(60_000L)
+        assertNull(f.timer.endsAtEpochMs.value)
+    }
 }
