@@ -17,6 +17,15 @@ private func int(_ value: Any?) -> Int? { (value as? NSNumber)?.intValue }
 private func double(_ value: Any?) -> Double? { (value as? NSNumber)?.doubleValue }
 
 struct ContractCasesTests {
+    @Test func releaseTypes() throws {
+        let cases = try #require(try contract("release-type")["cases"] as? [[String: Any]])
+        #expect(!cases.isEmpty)
+        for c in cases {
+            let types = c["types"] as? [String]
+            #expect(ReleaseType.of(types)?.rawValue == string(c["type"]), "\(String(describing: types))")
+        }
+    }
+
     @Test func whichQualityProfileApplies() throws {
         let cases = try #require(try contract("transcode")["resolver"] as? [[String: Any]])
         #expect(!cases.isEmpty)

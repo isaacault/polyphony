@@ -187,7 +187,7 @@ private struct AlbumHeader: View {
                     Text(album.artistName ?? "").font(.title2)
                 }
                 HStack(spacing: 6) {
-                    Text([album.genre, album.year.map(String.init), "\(album.songCount) songs", formatLong(album.duration)]
+                    Text([album.releaseType?.shortLabel, album.genre, album.year.map(String.init), "\(album.songCount) songs", formatLong(album.duration)]
                         .compactMap { $0 }.joined(separator: " · "))
                     if let badge = AudioQuality.albumBadge(album.tracks) { QualityChip(label: badge) }
                 }
@@ -556,10 +556,11 @@ struct ArtistDetailView: View {
                         CatalogTrackList(tracks: Array(top.prefix(10)), playsAsList: true, title: artist?.name)
                     } header: { SectionTitle("Top Songs") }
                 }
-                if !albums.isEmpty {
+                // Albums, then EPs and Singles apart, as the server's tags type them.
+                ForEach(Album.grouped(albums.filter { !model.singleSongAlbumIDs.contains($0.id) }), id: \.type) { group in
                     Section {
-                        AlbumGrid(albums: albums.filter { !model.singleSongAlbumIDs.contains($0.id) })
-                    } header: { SectionTitle("Albums") }
+                        AlbumGrid(albums: group.albums)
+                    } header: { SectionTitle(group.type.sectionTitle) }
                 }
                 if !appearsOn.isEmpty {
                     Section {
