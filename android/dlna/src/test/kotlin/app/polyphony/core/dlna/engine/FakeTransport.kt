@@ -42,6 +42,18 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
     private var frozen: TransportPosition? = null
     /** TrackMetaData follows the track really playing, even while the position report is frozen. */
     var reportsItemId = false
+    /**
+     * The Yamaha RX-V483 as recorded on 2026-11-09: this long before a track's end it already names
+     * the armed next track (URI, item id, duration) while its clock still counts the old track, and
+     * starts the new one from 0 at the real hand-off. It also echoes URLs with an explicit ":80".
+     */
+    var namesNextEarlyMs = 0L
+    var addsDefaultPort = false
+    /** The next track once named early: no longer NextURI (a SetNext now arms the one after it). */
+    private var namedNext: String? = null
+    private fun echo(url: String?): String? =
+        if (addsDefaultPort && url != null) url.replaceFirst(Regex("^(http://[^/:]+)/"), "$1:80/") else url
+
     /** GetMediaInfo answers with the live current and next URIs (null: the action is not supported). */
     var reportsMediaInfo = false
     private val itemIdByUrl = mutableMapOf<String, String?>()
@@ -56,9 +68,24 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
         if (state != TransportState.PLAYING) return
         val d = durationMs ?: return
         val pos = position()
+        if (namesNextEarlyMs > 0 && namedNext == null && nextUri != null && pos >= d - namesNextEarlyMs && pos < d) {
+            namedNext = nextUri
+            nextUri = null
+        }
         if (pos >= d) {
             val overshoot = pos - d
-            val next = nextUri
+            val early = namedNext
+            namedNext = null
+            val next = early ?: nextUri
+            if (early != null) {
+                currentUri = early
+                reportedUri = early
+                durationMs = durations[early]
+                basePositionMs = overshoot.coerceAtMost(durationMs ?: Long.MAX_VALUE)
+                playingSince = clock()
+                tick()
+                return
+            }
             if (next != null) {
                 // The first hand-off of a frozen renderer pins its reported fields at the old end.
                 if (freezeAtHandoff && frozen == null) frozen = TransportPosition(currentUri, d, d)
@@ -110,7 +137,10 @@ class FakeTransport(private val clock: () -> Long) : DlnaTransport {
         guard(); tick()
         val liveItemId = if (reportsItemId) currentUri?.let { itemIdByUrl[it] } else null
         frozen?.let { return it.copy(trackItemId = liveItemId) }
-        val uri = reportedUri ?: currentUri
+        namedNext?.let { named ->
+            return TransportPosition(echo(named), position(), durations[named], if (reportsItemId) itemIdByUrl[named] else null)
+        }
+        val uri = echo(reportedUri ?: currentUri)
         // A stale renderer catches up to the real URI on the following poll.
         if (pendingReportedUri != null) { reportedUri = pendingReportedUri; pendingReportedUri = null }
         return TransportPosition(uri, position(), durationMs, liveItemId)

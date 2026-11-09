@@ -366,4 +366,27 @@ class DlnaPlaybackEngineTest {
         assertEquals(100, t.volume)
         assertEquals(100, e.state.value.volumePercent)
     }
+
+    @Test
+    fun `the Yamaha naming the next track early, with its old clock and a port, is followed gaplessly from 0`() = runTest {
+        val (t, e) = fixture(durations = mapOf("a" to 30_000, "b" to 40_000, "c" to 30_000)) {
+            namesNextEarlyMs = 3_000
+            addsDefaultPort = true
+            reportsItemId = true
+        }
+        e.start("a", "b", "c")
+        advanceTimeBy(5_000)
+        assertTrue("b armed", t.calls.contains("setNext:b"))
+        advanceTimeBy(23_500) // a's clock at 28.5 s: the renderer names b already
+        val onB = e.state.value
+        assertEquals("followed onto b the poll it was named", 1, onB.currentIndex)
+        assertEquals(40_000L, onB.durationMs)
+        assertTrue("b starts from 0, not a's 28 s: ${onB.positionAt(testScheduler.currentTime)}", onB.positionAt(testScheduler.currentTime) < 4_000)
+        advanceTimeBy(2_000)
+        assertTrue("c armed straight after (gapless onward)", t.calls.contains("setNext:c"))
+        advanceTimeBy(10_000)
+        val later = e.state.value.positionAt(testScheduler.currentTime)
+        assertTrue("b's position runs from its real start: $later", later in 8_000L..14_000L)
+        assertEquals("never cued again", 0, t.calls.count { it == "setUri:b" || it == "setUri:c" })
+    }
 }

@@ -14,8 +14,18 @@ internal object UpnpXml {
     /** Why the last [parse] returned null; surfaced in logs and the diagnostics export. */
     @Volatile var lastError: String? = null
 
+    /**
+     * An `&` that doesn't start an entity, made `&amp;`. The Yamaha RX-V483 puts stream URLs into
+     * TrackURI, CurrentURI and NextURI without escaping their `&`s, so its GetPositionInfo and
+     * GetMediaInfo answers aren't well-formed XML and a strict parser rejects them whole. Valid XML
+     * has no such `&`, so this changes nothing in a well-formed answer.
+     */
+    fun escapeBareAmpersands(xml: String): String = BARE_AMPERSAND.replace(xml, "&amp;")
+
+    private val BARE_AMPERSAND = Regex("""&(?!(?:[A-Za-z][A-Za-z0-9._-]*|#[0-9]+|#x[0-9A-Fa-f]+);)""")
+
     fun parse(xml: String): Document? {
-        val cleaned = xml.trimStart('\uFEFF', ' ', '\n', '\r', '\t')
+        val cleaned = escapeBareAmpersands(xml.trimStart('\uFEFF', ' ', '\n', '\r', '\t'))
         if (cleaned.isEmpty()) return null
         return try {
             val factory = DocumentBuilderFactory.newInstance().apply {
