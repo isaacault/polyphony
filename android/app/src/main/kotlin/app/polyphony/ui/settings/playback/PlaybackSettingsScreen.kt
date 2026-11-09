@@ -92,12 +92,6 @@ fun PlaybackSettingsScreen(viewModel: PlaybackSettingsViewModel = hiltViewModel(
         val s = ui.settings
 
         preferenceCategory(key = "audio", titleRes = R.string.settings_playback_audio) {
-            SwitchPreference(
-                title = stringResource(R.string.settings_playback_gapless),
-                summary = stringResource(R.string.settings_playback_gapless_summary),
-                checked = s.gapless,
-                onCheckedChange = { on -> viewModel.update { it.copy(gapless = on) } },
-            )
             SliderPreference(
                 title = stringResource(R.string.settings_playback_crossfade),
                 summary = stringResource(R.string.settings_playback_crossfade_summary),
@@ -109,6 +103,14 @@ fun PlaybackSettingsScreen(viewModel: PlaybackSettingsViewModel = hiltViewModel(
                     if (sec == 0) resources.getString(R.string.settings_off) else resources.getString(R.string.settings_seconds, sec)
                 },
                 onValueChangeFinished = { v -> viewModel.update { it.copy(crossfadeMs = v.roundToInt() * 1000) } },
+            )
+            // Without a crossfade every change of song is gapless; this keeps albums so when there is one.
+            SwitchPreference(
+                title = stringResource(R.string.settings_playback_gapless),
+                summary = stringResource(R.string.settings_playback_gapless_summary),
+                checked = s.gapless,
+                enabled = s.crossfadeMs > 0,
+                onCheckedChange = { on -> viewModel.update { it.copy(gapless = on) } },
             )
             SwitchPreference(
                 title = stringResource(R.string.settings_playback_skip_silence),
