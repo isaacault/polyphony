@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -104,6 +105,9 @@ fun ArtistScreen(viewModel: ArtistViewModel = hiltViewModel()) {
         onBack = { navigator.back() },
         actions = {
             if (artist != null) {
+                OverlayIconButton(onClick = viewModel::startRadio) {
+                    Icon(Icons.Rounded.Radio, contentDescription = stringResource(R.string.browse_action_start_radio), tint = MaterialTheme.colorScheme.onSurface)
+                }
                 CollectionDownloadButton(trackIds = trackIds, tracks = { viewModel.allTracks() })
                 if (feedback.usesRatings) {
                     Box {

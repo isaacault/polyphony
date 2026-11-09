@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.HorizontalDivider
@@ -100,6 +101,9 @@ fun TrackOptionsSheet(
         }
         SheetItem(Icons.AutoMirrored.Rounded.PlaylistAdd, stringResource(R.string.browse_action_add_to_playlist)) {
             showAddToPlaylist = true
+        }
+        SheetItem(Icons.Rounded.Radio, stringResource(R.string.browse_action_start_radio)) {
+            vm.startRadio(track); onDismiss()
         }
         // One system at a time: the other is left as it is on the server.
         if (feedback.usesRatings) {
