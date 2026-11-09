@@ -56,6 +56,8 @@ internal data class AlbumDto(
     val musicBrainzId: String? = null,
     val sortName: String? = null,
     val isCompilation: Boolean? = null,
+    /** OpenSubsonic: the MusicBrainz release types from the files' tags (["Single"]). */
+    val releaseTypes: List<String>? = null,
     val displayArtist: String? = null,
     val artists: List<ArtistRefDto>? = null,
     val genres: List<GenreRefDto>? = null,

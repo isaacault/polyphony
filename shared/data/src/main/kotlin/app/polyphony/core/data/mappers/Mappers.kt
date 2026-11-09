@@ -9,6 +9,7 @@ import app.polyphony.core.data.db.entity.ServerEntity
 import app.polyphony.core.data.db.entity.TrackEntity
 import app.polyphony.core.data.db.entity.TranscodeProfileEntity
 import app.polyphony.core.domain.model.Album
+import app.polyphony.core.domain.model.ReleaseType
 import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.Genre
 import app.polyphony.core.domain.model.Playlist
@@ -80,6 +81,7 @@ fun AlbumEntity.toDomain(): Album = Album(
     year = year, genre = genre, trackCount = trackCount, durationMs = durationMs, artworkId = artworkId,
     artworkUrl = artworkUrl, starred = starred, rating = rating, playCount = playCount, createdAt = createdAt,
     lastPlayedAt = lastPlayedAt, isCompilation = isCompilation, musicBrainzId = musicBrainzId,
+    releaseType = releaseType?.let { name -> ReleaseType.entries.firstOrNull { it.name == name } },
 )
 
 fun Album.toEntity(generation: Long): AlbumEntity = AlbumEntity(
@@ -87,7 +89,7 @@ fun Album.toEntity(generation: Long): AlbumEntity = AlbumEntity(
     year = year, genre = genre, trackCount = trackCount, durationMs = durationMs, artworkId = artworkId,
     artworkUrl = artworkUrl, starred = starred, rating = rating, playCount = playCount, createdAt = createdAt,
     lastPlayedAt = lastPlayedAt, isCompilation = isCompilation, musicBrainzId = musicBrainzId,
-    syncGeneration = generation,
+    syncGeneration = generation, releaseType = releaseType?.name,
 )
 
 // ---- Track ----

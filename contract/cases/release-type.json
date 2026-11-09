@@ -1,0 +1,19 @@
+{
+  "about": "An album's release type from a server's releaseTypes (OpenSubsonic, from MusicBrainz tags): the first primary type decides (album, ep, single; broadcast and other are OTHER), any case; secondary types don't count; none at all is null, shown as an album.",
+  "cases": [
+    {"types": ["Single"], "type": "SINGLE", "about": "By Any Means, Jorja Smith"},
+    {"types": ["single"], "type": "SINGLE"},
+    {"types": ["Album"], "type": "ALBUM"},
+    {"types": ["album", "compilation"], "type": "ALBUM"},
+    {"types": ["compilation", "album"], "type": "ALBUM", "about": "a secondary type first"},
+    {"types": ["EP"], "type": "EP"},
+    {"types": ["ep", "live"], "type": "EP"},
+    {"types": ["Single", "Remix"], "type": "SINGLE"},
+    {"types": ["remix"], "type": null, "about": "only a secondary type"},
+    {"types": ["Broadcast"], "type": "OTHER"},
+    {"types": ["Other"], "type": "OTHER"},
+    {"types": [" Single "], "type": "SINGLE"},
+    {"types": [], "type": null},
+    {"types": null, "type": null, "about": "a server without releaseTypes"}
+  ]
+}

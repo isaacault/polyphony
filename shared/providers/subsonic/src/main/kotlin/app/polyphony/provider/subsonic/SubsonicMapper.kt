@@ -1,6 +1,7 @@
 package app.polyphony.provider.subsonic
 
 import app.polyphony.core.domain.model.Album
+import app.polyphony.core.domain.model.ReleaseType
 import app.polyphony.core.domain.model.AlbumListType
 import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.Genre
@@ -63,6 +64,7 @@ internal class SubsonicMapper(
         lastPlayedAt = parseIsoMillis(dto.played),
         isCompilation = dto.isCompilation ?: false,
         musicBrainzId = MusicBrainzIds.first(dto.musicBrainzId),
+        releaseType = ReleaseType.of(dto.releaseTypes),
     )
 
     fun track(dto: ChildDto): Track {

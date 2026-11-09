@@ -77,6 +77,8 @@ data class AlbumEntity(
     val isCompilation: Boolean,
     val musicBrainzId: String?,
     val syncGeneration: Long,
+    /** ReleaseType's name (SINGLE, EP…), or null when the server doesn't say. */
+    val releaseType: String? = null,
     /** [sortKey] of the name and of the artist name: what the A–Z sorts order by. Derived. */
     @ColumnInfo(collate = ColumnInfo.NOCASE, defaultValue = "''")
     val nameSortKey: String = sortKey(name, sortName),

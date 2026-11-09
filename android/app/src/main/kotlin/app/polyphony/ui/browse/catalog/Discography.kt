@@ -3,11 +3,9 @@ package app.polyphony.ui.browse.catalog
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
+import app.polyphony.core.domain.model.ReleaseType
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
-
-/** The release types an artist's discography is grouped by, in page order. */
-enum class ReleaseType { ALBUM, EP, SINGLE, OTHER }
 
 data class DiscographyGroup(val type: ReleaseType, val albums: ImmutableList<CatalogAlbum>)
 
@@ -62,7 +60,7 @@ object Discography {
      * without a catalogue, so the page keeps its library-only grid.
      */
     fun merged(library: List<Album>, catalog: List<CatalogAlbum>, requested: Map<String, Availability>): List<MergedGroup> {
-        if (catalog.isEmpty()) return emptyList()
+        if (catalog.isEmpty()) return libraryOnly(library)
         val byId = library.associateBy { it.id }
         val placed = mutableSetOf<String>()
         val entries = mutableListOf<Pair<ReleaseType, DiscographyEntry>>()
@@ -79,9 +77,21 @@ object Discography {
                 )
             }
         }
-        library.filter { it.id !in placed }.forEach { entries += ReleaseType.ALBUM to DiscographyEntry.Owned(it) }
+        library.filter { it.id !in placed }.forEach { entries += (it.releaseType ?: ReleaseType.ALBUM) to DiscographyEntry.Owned(it) }
         return entries.groupBy({ it.first }, { it.second }).toSortedMap().map { (type, list) ->
             MergedGroup(type, list.sortedWith(compareByDescending<DiscographyEntry> { it.year ?: 0 }.thenBy { it !is DiscographyEntry.Owned }).toImmutableList())
+        }
+    }
+
+    /**
+     * Without a catalogue: the library's albums grouped the same way by the release type the server
+     * tags them with, when any is a single or an EP; empty when they're all albums (the page keeps
+     * its plain grid).
+     */
+    fun libraryOnly(library: List<Album>): List<MergedGroup> {
+        if (library.none { it.isShortRelease }) return emptyList()
+        return library.groupBy { it.releaseType ?: ReleaseType.ALBUM }.toSortedMap().map { (type, list) ->
+            MergedGroup(type, list.sortedByDescending { it.year ?: 0 }.map { DiscographyEntry.Owned(it) }.toImmutableList<DiscographyEntry>())
         }
     }
 
