@@ -1,11 +1,11 @@
 [versions]
-agp = "9.5.0"
+agp = "9.5.1"
 kotlin = "2.4.21"
 ksp = "2.3.12"
 hilt = "2.60.1"
 hiltNavigationCompose = "1.4.0"
 composeBom = "2026.09.00"
-material3 = "1.5.0-beta02"
+material3 = "1.5.0-rc01"
 activityCompose = "1.13.0"
 navigationCompose = "2.10.2"
 lifecycle = "2.11.0"
