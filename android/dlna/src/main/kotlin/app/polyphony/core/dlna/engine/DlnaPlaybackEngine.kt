@@ -73,12 +73,24 @@ class DlnaPlaybackEngine<T : Any>(
     private var reportUnchangedSinceMs = 0L
 
     /**
+     * Until then, a reported position past the first few seconds is the previous track's: the Yamaha
+     * RX-V483 names the next track a few seconds before the hand-off, its clock still counting the
+     * old one, then starts it from 0.
+     */
+    private var handoffPositionUntil = 0L
+    /** The last reason a renderer's report couldn't be read, logged once each. */
+    private var lastReportError: String? = null
+
+    /**
      * The frozen position a renderer kept reporting after a gapless hand-off (the Yamaha RX-V483
      * does this). Reports of it are ignored, and the engine's own clock is used, until it changes.
      */
     private var staleReportedPositionMs: Long? = null
 
     private data class LoadedTrack(val index: Int, val uid: Long, val url: String)
+
+    /** What the renderer said last, for logging only when it changes (see [logReport]). */
+    private var lastReportLine: String? = null
 
     // ---- public commands -------------------------------------------------------------------------
 
@@ -502,9 +514,44 @@ class DlnaPlaybackEngine<T : Any>(
         val armed = armedNext ?: return
         val wanted = _state.value.autoAdvanceIndex()
         val wantedUid = wanted?.let { _state.value.items.getOrNull(it)?.uid }
-        if (wantedUid != armed.uid) armedNext = null
-        else if (wanted != armed.index) armedNext = armed.copy(index = wanted)
+        if (wantedUid != armed.uid) {
+            // The renderer still holds it as NextURI: it plays it unless another is armed first.
+            log("disarmed item ${armed.uid}: the queue now wants ${wanted ?: "nothing"} next")
+            armedNext = null
+        } else if (wanted != armed.index) {
+            armedNext = armed.copy(index = wanted)
+        }
     }
+
+    /**
+     * One line whenever the renderer's report changes in a way that matters (state, which song by
+     * URI or item id, the duration, or the position going backwards), so diagnostics show what it
+     * said around a hand-off. Never the URL, which carries the library credential: the song's id.
+     */
+    private fun logReport(state: TransportState?, p: TransportPosition, current: LoadedTrack) {
+        val uri = p.trackUri?.let(::streamId) ?: "none"
+        val which = when {
+            p.trackUri == null -> ""
+            sameUrl(p.trackUri, current.url) -> " (current)"
+            armedNext?.let { sameUrl(p.trackUri, it.url) } == true -> " (armed)"
+            else -> " (other)"
+        }
+        val line = "$state uri=$uri$which item=${p.trackItemId ?: "none"} dur=${p.durationMs ?: "?"}"
+        val previous = lastReportedLinePosition
+        lastReportedLinePosition = p.positionMs
+        val jumpedBack = previous != null && p.positionMs != null && p.positionMs + REGRESSION_MS < previous
+        if (line != lastReportLine || jumpedBack) {
+            log("renderer: $line pos=${p.positionMs ?: "?"}" + (if (jumpedBack) " (was $previous)" else "") +
+                " [current item ${current.uid}, armed ${armedNext?.uid ?: "none"}]")
+            lastReportLine = line
+        }
+    }
+
+    private var lastReportedLinePosition: Long? = null
+
+    /** The song a stream URL is for, by its id parameter (never the whole URL: it has the credential). */
+    private fun streamId(url: String): String =
+        Regex("""[?&]id=([^&]+)""").find(url)?.groupValues?.get(1)?.take(12) ?: url.substringBefore('?').substringAfterLast('/').take(24)
 
     private fun shuffleOrderFor(
         size: Int,
@@ -572,6 +619,13 @@ class DlnaPlaybackEngine<T : Any>(
         val s0 = _state.value
         val transportNow = transportResult.getOrNull()
         val playingNow = transportNow == TransportState.PLAYING
+        if (lastPollAt > 0 && now - lastPollAt > LATE_POLL_MS) log("poll came ${now - lastPollAt} ms after the last (the phone dozed?)")
+        positionResult.getOrNull()?.let { logReport(transportNow, it, current) }
+        positionResult.exceptionOrNull()?.let { e ->
+            val why = "${e.javaClass.simpleName}: ${e.message}"
+            if (why != lastReportError) log("position report unreadable: $why")
+            lastReportError = why
+        } ?: run { lastReportError = null }
         if (playingNow && lastPollAt > 0) {
             val gap = (now - lastPollAt).coerceAtLeast(0)
             // PLAYING at both ends: the renderer played the whole gap, however late this poll came
@@ -601,7 +655,8 @@ class DlnaPlaybackEngine<T : Any>(
                 if (p.durationMs != null && p.durationMs > 0 && p.durationMs != s0.durationMs) {
                     _state.update { it.copy(durationMs = p.durationMs) }
                 }
-                if (p.positionMs != null && sinceCommand > SETTLE_MS) {
+                val oldTracksClock = now < handoffPositionUntil && p.positionMs != null && p.positionMs > HANDOFF_FRESH_MS
+                if (p.positionMs != null && sinceCommand > SETTLE_MS && !oldTracksClock) {
                     _state.update { it.copy(positionMs = p.positionMs, positionSampledAtMs = now) }
                 }
             }
@@ -688,10 +743,12 @@ class DlnaPlaybackEngine<T : Any>(
             armedNext = LoadedTrack(nextIndex, nextItem.uid, resolved.url)
             armedAt = clock()
             if (setNextSupported == null) setNextSupported = true
+            log("armed index $nextIndex as next (item ${nextItem.uid}, ${streamId(resolved.url)})")
         } catch (c: CancellationException) {
             throw c
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
             // Renderer does not do SetNextAVTransportURI (or not now); fall back to stop-detection.
+            log("SetNext refused (${t.message}); each track starts when the last stops")
             setNextSupported = false
             armedNext = null
         }
@@ -805,7 +862,12 @@ class DlnaPlaybackEngine<T : Any>(
     private fun advanceToArmed(armed: LoadedTrack, p: TransportPosition, s0: EngineState<T>, now: Long, reason: String, stale: Boolean) {
         val frozen = reason == REASON_FROZEN
         val reportDescribesOldTrack = frozen || stale
+        // Named by URI or item id while the clock still counts the old track's end: it starts from 0.
+        val earlyName = (reason == "uri" || reason == "track metadata") && p.positionMs != null &&
+            s0.durationMs > 0 && p.positionMs >= s0.durationMs - NEAR_END_WINDOW_MS
+        if (earlyName) handoffPositionUntil = now + HANDOFF_POSITION_GRACE_MS
         val position = when {
+            earlyName -> 0L
             // The report stopped moving when the previous track ended; the next one has played since.
             frozen -> now - reportUnchangedSinceMs
             // The report is stale: the time past the old track's end on the engine's clock.
@@ -862,8 +924,11 @@ class DlnaPlaybackEngine<T : Any>(
         }
     }
 
+    /** The same stream, however the renderer echoes it: decoded, case aside, and without a default port (the Yamaha adds ":80"). */
     private fun sameUrl(a: String, b: String): Boolean {
         fun norm(u: String): String = runCatching { URLDecoder.decode(u.trim(), "UTF-8") }.getOrDefault(u.trim()).trimEnd('/').lowercase()
+            .replaceFirst(Regex("""^(http://[^/:?#]+):80(?=[/?#]|$)"""), "$1")
+            .replaceFirst(Regex("""^(https://[^/:?#]+):443(?=[/?#]|$)"""), "$1")
         return norm(a) == norm(b)
     }
 
@@ -894,5 +959,10 @@ class DlnaPlaybackEngine<T : Any>(
         /** GetMediaInfo is asked only this close to a track's end, while a next track is armed. */
         const val MEDIA_INFO_WINDOW_MS = 5_000L
         const val UNKNOWN_DURATION_MIN_PLAY_MS = 5_000L
+        /** A poll this late means the phone wasn't running the loop (asleep, frozen): worth a log line. */
+        const val LATE_POLL_MS = 5_000L
+        /** How long after an early-named hand-off a position past [HANDOFF_FRESH_MS] is still the old track's. */
+        const val HANDOFF_POSITION_GRACE_MS = 8_000L
+        const val HANDOFF_FRESH_MS = 5_000L
     }
 }

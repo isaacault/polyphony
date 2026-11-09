@@ -59,4 +59,21 @@ class SoapEnvelopeTest {
         val parsed = SoapEnvelope.parseFault(xml)!!
         assertEquals(701, parsed.code)
     }
+
+    @Test
+    fun `the Yamaha's answer with unescaped ampersands in its URIs still reads`() {
+        // Its real GetPositionInfo answer (2026-11-09), the library credential replaced.
+        val xml = javaClass.classLoader!!.getResource("yamaha-rx-v483-position-info.xml")!!.readText()
+        val out = SoapEnvelope.parseResponse(xml, "GetPositionInfo")
+        assertTrue(out["TrackURI"]!!.startsWith("http://192.168.0.101:80/rest/stream?u=REDACTED&t=REDACTED&s=REDACTED&v=1.16.1"))
+        assertTrue(out["TrackURI"]!!.contains("&id=5oP93ok4kxrhX4D8BWEzqy&format=raw"))
+        assertEquals("0:04:30", out["TrackDuration"])
+        assertEquals("10", app.polyphony.core.dlna.service.DidlLite.itemId(out["TrackMetaData"]))
+    }
+
+    @Test
+    fun `escaping leaves real entities alone`() {
+        val esc = app.polyphony.core.dlna.upnp.UpnpXml::escapeBareAmpersands
+        assertEquals("a&amp;b &lt; &#38; &#x26; &amp;c", esc("a&b &lt; &#38; &#x26; &c"))
+    }
 }
