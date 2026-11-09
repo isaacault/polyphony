@@ -77,6 +77,7 @@ import app.polyphony.core.playback.stream.StreamCache
 import app.polyphony.core.playback.stream.StreamResolver
 import app.polyphony.core.playback.timer.SleepTimer
 import app.polyphony.core.playback.audio.OutputVolume
+import app.polyphony.core.playback.audio.PausingAudioFocus
 import com.google.common.util.concurrent.MoreExecutors
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -137,6 +138,11 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var sleepTimer: SleepTimer
     /** The local player's volume: ReplayGain, the sleep timer and crossfade each set their share. */
     private lateinit var localVolume: OutputVolume
+    private lateinit var pausingFocus: PausingAudioFocus
+    private val audioAttributes: AudioAttributes = AudioAttributes.Builder()
+        .setUsage(C.USAGE_MEDIA)
+        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+        .build()
     private lateinit var reporter: PlaybackReporter
     private lateinit var headset: HeadsetMonitor
     private lateinit var latencyListener: LatencyPlayerListener
@@ -176,6 +182,7 @@ class PlaybackService : MediaLibraryService() {
 
         localPlayer = buildLocalPlayer(initial.playback)
         localVolume = OutputVolume { localPlayer.volume = it }
+        pausingFocus = PausingAudioFocus(this, localPlayer).also { it.enabled = !initial.playback.duckOnTransientFocusLoss }
         prefetcher = QueuePrefetcher(scope, streamResolver, streamCache, streamingUpstream)
         val players = PlayerFactory.create(this, localPlayer, castManager.isSupported, converter)
         basePlayer = SeekableStreamsPlayer(players.session, ::seekByReload)
@@ -248,6 +255,7 @@ class PlaybackService : MediaLibraryService() {
             dlnaManager.disconnect()
         }
         closeAudioEffectSession()
+        pausingFocus.release()
         prefetcher.stop()
         headset.setEnabled(false)
         sleepTimer.cancel()
@@ -285,14 +293,11 @@ class PlaybackService : MediaLibraryService() {
             .setBufferDurationsMs(30_000, 120_000, 2_500, 5_000)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-            .build()
         val exo = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(resolving))
             .setLoadControl(loadControl)
-            .setAudioAttributes(audioAttributes, true)
+            // Media3 ducks for a notification; with ducking off, PausingAudioFocus pauses instead.
+            .setAudioAttributes(audioAttributes, playback.duckOnTransientFocusLoss)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .setSkipSilenceEnabled(playback.skipSilence)
@@ -413,6 +418,10 @@ class PlaybackService : MediaLibraryService() {
         val old = settings
         settings = new
         if (old.skipSilence != new.skipSilence) localPlayer.skipSilenceEnabled = new.skipSilence
+        if (old.duckOnTransientFocusLoss != new.duckOnTransientFocusLoss) {
+            localPlayer.setAudioAttributes(audioAttributes, new.duckOnTransientFocusLoss)
+            pausingFocus.enabled = !new.duckOnTransientFocusLoss
+        }
         if (old.playbackSpeed != new.playbackSpeed) player.setPlaybackSpeed(new.playbackSpeed)
         if (old.preloadNextTrack != new.preloadNextTrack) applyPreload(localPlayer, new.preloadNextTrack)
         reporter.enabled = new.scrobble
