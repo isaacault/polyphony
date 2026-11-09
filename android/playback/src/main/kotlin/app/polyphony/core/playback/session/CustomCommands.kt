@@ -11,6 +11,8 @@ object CustomCommands {
     const val RESTORE_QUALITY = "app.polyphony.RESTORE_QUALITY"
     const val REFRESH_DECISION = "app.polyphony.REFRESH_DECISION"
     const val SET_SLEEP_TIMER = "app.polyphony.SET_SLEEP_TIMER"
+    /** The notification's quick extend: ten more minutes. */
+    const val EXTEND_SLEEP_TIMER = "app.polyphony.EXTEND_SLEEP_TIMER"
     const val SET_QUEUE_TITLE = "app.polyphony.SET_QUEUE_TITLE"
     const val SET_PLAY_CONTEXT = "app.polyphony.SET_PLAY_CONTEXT"
     const val GET_AUDIO_SESSION_ID = "app.polyphony.GET_AUDIO_SESSION_ID"
@@ -24,7 +26,7 @@ object CustomCommands {
 
     val ALL: List<SessionCommand> = listOf(
         TOGGLE_SHUFFLE, CYCLE_REPEAT, TOGGLE_FAVORITE, RESTORE_QUALITY, REFRESH_DECISION,
-        SET_SLEEP_TIMER, SET_QUEUE_TITLE, SET_PLAY_CONTEXT, GET_AUDIO_SESSION_ID,
+        SET_SLEEP_TIMER, EXTEND_SLEEP_TIMER, SET_QUEUE_TITLE, SET_PLAY_CONTEXT, GET_AUDIO_SESSION_ID,
     ).map { SessionCommand(it, Bundle.EMPTY) }
 
     fun of(action: String): SessionCommand = SessionCommand(action, Bundle.EMPTY)
