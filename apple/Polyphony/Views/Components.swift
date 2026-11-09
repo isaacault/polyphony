@@ -48,7 +48,7 @@ struct AlbumTile: View {
         VStack(alignment: .leading, spacing: 4) {
             Artwork(url: model.coverURL(album.coverArtID ?? album.id, size: 400))
             Text(album.name).font(.callout.weight(.medium)).lineLimit(1)
-            Text(album.artistName ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Text(album.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
         .contentShape(Rectangle())
     }
@@ -131,7 +131,7 @@ struct AlbumList: View {
                         Artwork(url: model.coverURL(album.coverArtID ?? album.id, size: 100), cornerRadius: 4).frame(width: 44, height: 44)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(album.name).lineLimit(1)
-                            Text(album.artistName ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text(album.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer()
                         Text([album.year.map(String.init), album.songCount > 0 ? "\(album.songCount) songs" : nil]

@@ -34,10 +34,13 @@ public struct Album: Sendable, Hashable, Identifiable {
     /// The user's 1–5 stars for the album (ratings mode); nil when unrated.
     public var rating: Int?
     public var tracks: [Track]
+    /// An album, an EP or a single; nil when the server doesn't say (untagged): shown as an album.
+    public var releaseType: ReleaseType?
 
     public init(id: String, name: String, artistName: String? = nil, artistID: String? = nil, year: Int? = nil,
                 genre: String? = nil, songCount: Int = 0, duration: TimeInterval = 0, coverArtID: String? = nil,
-                starred: Bool = false, rating: Int? = nil, tracks: [Track] = []) {
+                starred: Bool = false, rating: Int? = nil, tracks: [Track] = [], releaseType: ReleaseType? = nil) {
+        self.releaseType = releaseType
         self.id = id
         self.name = name
         self.artistName = artistName
