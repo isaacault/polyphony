@@ -25,6 +25,9 @@ import androidx.compose.ui.unit.dp
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Artist
 import app.polyphony.core.domain.model.Playlist
+import app.polyphony.core.domain.model.ReleaseType
+import androidx.compose.ui.res.stringResource
+import app.polyphony.core.ui.R
 import app.polyphony.core.ui.theme.ArtworkShapes
 
 /** Square artwork tile with title and subtitle. Pass [width] inside carousels; grids fill. */
@@ -71,8 +74,24 @@ fun AlbumCard(
     }
 }
 
-/** The artist alone; the year is intentionally omitted to keep album lists uncluttered. */
-fun albumSubtitle(album: Album): String = album.artistName ?: "Unknown artist"
+/**
+ * The artist, after "Single" or "EP" when it isn't a full album, so singles stand apart in every
+ * list; the year is intentionally omitted to keep album lists uncluttered.
+ */
+@Composable
+fun albumSubtitle(album: Album): String {
+    val artist = album.artistName ?: "Unknown artist"
+    val kind = albumKindLabel(album.releaseType) ?: return artist
+    return "$kind · $artist"
+}
+
+/** "Single" or "EP"; null for an album (or an untagged one). */
+@Composable
+fun albumKindLabel(type: ReleaseType?): String? = when (type) {
+    ReleaseType.SINGLE -> stringResource(R.string.album_kind_single)
+    ReleaseType.EP -> stringResource(R.string.album_kind_ep)
+    else -> null
+}
 
 /** Circular artist artwork with the name underneath. */
 @Composable

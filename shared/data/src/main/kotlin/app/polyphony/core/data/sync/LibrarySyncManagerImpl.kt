@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -94,7 +95,9 @@ class LibrarySyncManagerImpl @Inject constructor(
             }
             val provider = providerRegistry.forServer(server)
             val lastFull = lastFullSyncAt(server.id)
-            val doFull = full || lastFull == null || System.currentTimeMillis() - lastFull > FULL_SYNC_INTERVAL_MS
+            // A cache from before a field it now keeps (albums' release types) is filled in by one full sync.
+            val stale = (prefs.data.first()[syncFormatKey(server.id)] ?: 0) < SYNC_FORMAT
+            val doFull = full || stale || lastFull == null || System.currentTimeMillis() - lastFull > FULL_SYNC_INTERVAL_MS
             val generation = System.currentTimeMillis().coerceAtLeast(generations.lastCompleted(server.id) + 1)
             generations.markRunning(server.id, generation)
             _state.update { it.copy(status = SyncState.Status.RUNNING, progress = null, phase = "Starting", lastError = null) }
@@ -156,16 +159,22 @@ class LibrarySyncManagerImpl @Inject constructor(
     private suspend fun setLastSync(serverId: String, at: Long, full: Boolean) {
         prefs.edit { p ->
             p[lastSyncKey(serverId)] = at
-            if (full) p[lastFullSyncKey(serverId)] = at
+            if (full) {
+                p[lastFullSyncKey(serverId)] = at
+                p[syncFormatKey(serverId)] = SYNC_FORMAT
+            }
         }
     }
 
     private fun lastSyncKey(serverId: String) = longPreferencesKey("last_sync_$serverId")
     private fun lastFullSyncKey(serverId: String) = longPreferencesKey("last_full_sync_$serverId")
+    private fun syncFormatKey(serverId: String) = intPreferencesKey("sync_format_$serverId")
 
     private companion object {
         const val TAG = "LibrarySync"
         const val WORK_NAME = "library-sync"
         const val FULL_SYNC_INTERVAL_MS = 24L * 60 * 60 * 1000
+        /** Bump when synced rows gain a field: the next sync is a full one. 1: albums' release types. */
+        const val SYNC_FORMAT = 1
     }
 }

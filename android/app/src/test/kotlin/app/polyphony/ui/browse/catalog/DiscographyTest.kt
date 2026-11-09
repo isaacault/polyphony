@@ -3,6 +3,7 @@ package app.polyphony.ui.browse.catalog
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.Availability
 import app.polyphony.core.domain.model.CatalogAlbum
+import app.polyphony.core.domain.model.ReleaseType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -83,5 +84,22 @@ class DiscographyTest {
         val entries = Discography.merged(listOf(live), catalog, emptyMap()).single().entries
         assertEquals(listOf("o-nd-live", "m-mb:rg:zero"), entries.map { it.key })
         assertEquals(Availability.Requestable, (entries[1] as DiscographyEntry.Missing).album.availability)
+    }
+
+    private fun mine(id: String, type: ReleaseType?, year: Int) = Album(id = id, serverId = "s", name = id, year = year, releaseType = type)
+
+    @Test
+    fun `without a catalogue, a library tagged with singles is grouped by its own tags`() {
+        val groups = Discography.libraryOnly(listOf(mine("lp", ReleaseType.ALBUM, 2018), mine("by-any-means", ReleaseType.SINGLE, 2023), mine("rip", null, 2001)))
+        assertEquals(listOf(ReleaseType.ALBUM, ReleaseType.SINGLE), groups.map { it.type })
+        assertEquals("untagged counts as an album", listOf("o-lp", "o-rip"), groups[0].entries.map { it.key })
+        assertEquals(listOf("o-by-any-means"), groups[1].entries.map { it.key })
+        assertTrue("all albums: the plain grid", Discography.libraryOnly(listOf(mine("lp", ReleaseType.ALBUM, 2018), mine("rip", null, 2001))).isEmpty())
+    }
+
+    @Test
+    fun `a library single the catalogue doesn't list goes with the singles`() {
+        val groups = Discography.merged(listOf(mine("by-any-means", ReleaseType.SINGLE, 2023)), listOf(album("old", "Album", 1998)), emptyMap())
+        assertEquals(listOf("o-by-any-means"), groups.single { it.type == ReleaseType.SINGLE }.entries.map { it.key })
     }
 }

@@ -38,7 +38,12 @@ data class Album(
     val lastPlayedAt: Long? = null,
     val isCompilation: Boolean = false,
     val musicBrainzId: String? = null,
-)
+    /** An album, an EP or a single; null when the server doesn't say (untagged): shown as an album. */
+    val releaseType: ReleaseType? = null,
+) {
+    /** A single or an EP: listed apart from the full albums. */
+    val isShortRelease: Boolean get() = releaseType == ReleaseType.SINGLE || releaseType == ReleaseType.EP
+}
 
 @Serializable
 data class Track(

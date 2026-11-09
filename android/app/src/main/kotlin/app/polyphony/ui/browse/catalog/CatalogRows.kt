@@ -1,5 +1,6 @@
 package app.polyphony.ui.browse.catalog
 
+import app.polyphony.core.domain.model.ReleaseType
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column

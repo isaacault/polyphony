@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Before the artist under an album that isn't a full album: "Single · Jorja Smith". -->
+    <string name="album_kind_single">Single</string>
+    <string name="album_kind_ep">EP</string>
+</resources>

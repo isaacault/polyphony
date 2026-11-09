@@ -16,3 +16,5 @@ continuo lives in its own repo, so what the clients may rely on is written down 
     `android/app` (ContractCasesTest) and `apple/PolyphonyKit` (ContractCasesTests).
   - `transcode.json`: which quality profile applies, and when an already-compressed file stays as it
     is. Tested by `shared/domain` (TranscodeContractTest) and `apple/PolyphonyKit` (ContractCasesTests).
+  - `release-type.json`: whether an album is an album, an EP or a single, from its MusicBrainz release
+    types. Tested by `shared/domain` (ReleaseTypeContractTest) and `apple/PolyphonyKit` (ContractCasesTests).

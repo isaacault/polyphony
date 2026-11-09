@@ -54,6 +54,7 @@ import androidx.compose.foundation.layout.Box
 import app.polyphony.R
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.ui.components.EmptyState
+import app.polyphony.core.ui.components.albumKindLabel
 import app.polyphony.core.ui.components.ErrorState
 import app.polyphony.core.ui.components.HeroHeader
 import app.polyphony.core.ui.components.HeroScaffold
@@ -211,6 +212,7 @@ fun AlbumScreen(viewModel: AlbumViewModel = hiltViewModel()) {
                                 )
                             },
                             meta = buildList {
+                                albumKindLabel(album.releaseType)?.let(::add)
                                 album.year?.let { add(it.toString()) }
                                 album.genre?.let { add(it) }
                                 val count = state.tracks.size.takeIf { it > 0 } ?: album.trackCount
