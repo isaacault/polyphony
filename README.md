@@ -52,10 +52,10 @@ built to be artwork-forward, fast and smooth, and unapologetically open: GPL-3.0
 
 **Playback**
 - Media3 / ExoPlayer with gapless playback, a persistent queue that survives restarts, media
-  notification and lock-screen controls, external equaliser hookup, ReplayGain (track/album/auto),
-  skip silence, crossfade that keeps albums gapless, radio from any song or artist, a sleep timer
-  that fades out, playback speed, scrobbling / now-playing reporting, an LRU stream
-  cache, and a basic Android Auto / Bluetooth browse tree
+  notification and lock-screen controls, a built-in 10-band equaliser with presets (or the phone's
+  own effects), ReplayGain (track/album/auto), skip silence, crossfade that keeps albums gapless,
+  radio from any song or artist, a sleep timer that fades out, playback speed, scrobbling /
+  now-playing reporting, an LRU stream cache, and a basic Android Auto / Bluetooth browse tree
 - **Google Cast** with seamless local ⇄ Cast hand-off of the current queue and position
 - **UPnP / DLNA renderers** (TVs, AVRs, network speakers) through a built-in control point, with
   the same queue hand-off and per-device quality settings as Cast

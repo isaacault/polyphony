@@ -46,6 +46,7 @@ enum class AlbumListKind { RECENTLY_ADDED, RECENTLY_PLAYED, MOST_PLAYED, RANDOM,
 @Serializable data object PlaybackSettingsRoute : Route
 /** Scrobbling straight from this phone to ListenBrainz and Last.fm (#39). */
 @Serializable data object PhoneScrobblingRoute : Route
+@Serializable data object EqualizerSettingsRoute : Route
 @Serializable data object StreamingSettingsRoute : Route
 @Serializable data class TranscodeProfileEditRoute(val profileId: String? = null) : Route
 @Serializable data object RemoteDevicesSettingsRoute : Route

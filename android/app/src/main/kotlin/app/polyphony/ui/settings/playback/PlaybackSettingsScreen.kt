@@ -1,16 +1,9 @@
 package app.polyphony.ui.settings.playback
 
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.media.audiofx.AudioEffect
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -18,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.polyphony.R
+import app.polyphony.core.domain.playback.EqualizerMode
 import app.polyphony.core.domain.playback.PlaybackController
 import app.polyphony.core.domain.repository.PlaybackSettings
 import app.polyphony.core.domain.repository.ReplayGainMode
@@ -36,7 +30,7 @@ import app.polyphony.ui.settings.components.preferenceCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -45,7 +39,6 @@ import kotlin.math.roundToInt
 
 data class PlaybackSettingsUiState(
     val settings: PlaybackSettings,
-    val audioSessionId: Int,
 )
 
 @HiltViewModel
@@ -54,12 +47,9 @@ class PlaybackSettingsViewModel @Inject constructor(
     private val playbackController: PlaybackController,
 ) : ViewModel() {
 
-    val state: StateFlow<PlaybackSettingsUiState?> = combine(
-        settingsRepository.settings,
-        playbackController.state,
-    ) { settings, playback ->
-        PlaybackSettingsUiState(settings.playback, playback.audioSessionId)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val state: StateFlow<PlaybackSettingsUiState?> = settingsRepository.settings
+        .map { PlaybackSettingsUiState(it.playback) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun update(transform: (PlaybackSettings) -> PlaybackSettings) {
         viewModelScope.launch {
@@ -76,17 +66,12 @@ class PlaybackSettingsViewModel @Inject constructor(
 @Composable
 fun PlaybackSettingsScreen(viewModel: PlaybackSettingsViewModel = hiltViewModel()) {
     val navigator = LocalNavigator.current
-    val context = LocalContext.current
     val resources = LocalResources.current
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val noEqualizerMessage = stringResource(R.string.settings_playback_no_equalizer)
 
     SettingsScaffold(
         title = stringResource(R.string.settings_playback),
         onBack = { navigator.back() },
-        snackbarHostState = snackbar,
     ) {
         val ui = state ?: return@SettingsScaffold
         val s = ui.settings
@@ -127,20 +112,13 @@ fun PlaybackSettingsScreen(viewModel: PlaybackSettingsViewModel = hiltViewModel(
             )
             ActionPreference(
                 title = stringResource(R.string.settings_playback_equalizer),
-                summary = stringResource(R.string.settings_playback_equalizer_summary),
-                icon = Icons.Rounded.GraphicEq,
-                onClick = {
-                    val intent = Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL).apply {
-                        putExtra(AudioEffect.EXTRA_AUDIO_SESSION, ui.audioSessionId)
-                        putExtra(AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
-                        putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
-                    }
-                    try {
-                        context.startActivity(intent)
-                    } catch (_: ActivityNotFoundException) {
-                        scope.launch { snackbar.showSnackbar(noEqualizerMessage) }
-                    }
+                summary = when (s.equalizer.mode) {
+                    EqualizerMode.OFF -> stringResource(R.string.settings_playback_equalizer_off)
+                    EqualizerMode.BUILT_IN -> stringResource(R.string.settings_playback_equalizer_built_in, stringResource(s.equalizer.preset.labelRes()))
+                    EqualizerMode.SYSTEM -> stringResource(R.string.settings_playback_equalizer_system)
                 },
+                icon = Icons.Rounded.GraphicEq,
+                onClick = { navigator.openEqualizerSettings() },
             )
         }
 

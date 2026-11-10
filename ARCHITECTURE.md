@@ -19,7 +19,8 @@ android/                      the Android app, and the modules still tied to And
   app                         Compose screens, navigation, Application, DI aggregation
   ui                          Theme (Material 3 Expressive), motion tokens, shared components, palette utils
   playback                    Media3 PlaybackService, local ⇄ Cast switching, stream URL resolution,
-                              latency monitor, scrobbling, PlaybackController/CastController impls
+                              latency monitor, scrobbling, crossfade, the built-in equaliser (an
+                              AudioProcessor in each local player), PlaybackController/CastController impls
   dlna                        Hand-rolled UPnP AV control point (SSDP, SOAP AVTransport/RenderingControl),
                               DlnaPlayer (Media3 SimpleBasePlayer), DlnaController impl
   downloads                   Offline downloads: own Room DB, WorkManager download queue, rules engine

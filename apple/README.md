@@ -60,8 +60,9 @@ and Jellyfin and Cast have only met scripted servers, not real ones.
 
 Not on the Mac yet, which Android has: custom HTTP headers, trusting self-signed certificates and legacy
 authentication for a server; skip silence (AVPlayer can't); hiding compilations under artists; a chosen
-download location. Android's equaliser opens the phone's own panel, which a Mac doesn't have; library sync
-isn't needed, as the Mac reads the server live; swipe gestures, haptics and Android Auto are the phone's.
+download location; the built-in equaliser (Android's other choice, the phone's own effects panel, a Mac
+doesn't have). Library sync isn't needed, as the Mac reads the server live; swipe gestures, haptics and
+Android Auto are the phone's.
 
 Once `shared/` (Kotlin Multiplatform) produces its Apple framework, the Subsonic and continuo code in
 PolyphonyKit gives way to it; the Apple glue stays.
