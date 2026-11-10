@@ -238,6 +238,12 @@ fun NowPlayingScreen(
                             usesRatings = feedback.usesRatings,
                             rating = rating,
                             onRate = viewModel::rate,
+                            onAlbum = {
+                                track.albumId?.let {
+                                    navigator.openAlbum(it)
+                                    sheet.collapse()
+                                }
+                            },
                             onArtist = {
                                 track.artistId?.let {
                                     navigator.openArtist(it)
@@ -653,6 +659,7 @@ private fun PlayerTrackInfo(
     usesRatings: Boolean,
     rating: Int,
     onRate: (Int) -> Unit,
+    onAlbum: () -> Unit,
     onArtist: () -> Unit,
     onToggleFavorite: () -> Unit,
     /** A Play now song still downloading: "Downloading 40%". */
@@ -671,7 +678,14 @@ private fun PlayerTrackInfo(
                 style = NowPlayingTitleStyle,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
-                modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2_000),
+                modifier = Modifier
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        enabled = track.albumId != null,
+                        onClick = onAlbum,
+                    )
+                    .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2_000),
             )
             Text(
                 text = track.displayArtist,
