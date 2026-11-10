@@ -119,6 +119,7 @@ dependencies {
     implementation(project(":android:downloads"))
     implementation(project(":android:dlna"))
     implementation(project(":shared:requests"))
+    implementation(project(":shared:scrobble"))
     implementation(project(":shared:providers:subsonic"))
     implementation(project(":shared:providers:jellyfin"))
 
