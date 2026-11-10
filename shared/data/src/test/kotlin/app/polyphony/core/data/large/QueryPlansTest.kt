@@ -48,6 +48,8 @@ class QueryPlansTest {
     fun `albums and artists tabs`() {
         for (sort in AlbumSort.entries) plan("albums $sort", SortQueries.albums(sid, sort, true))
         for (sort in ArtistSort.entries) plan("artists $sort", SortQueries.artists(sid, sort))
+        val newest = db.queryPlan(SortQueries.artists(sid, ArtistSort.RECENTLY_ADDED))
+        assertFalse("artists by newest album run a subquery per artist: $newest", newest.any { "CORRELATED" in it })
     }
 
     @Test

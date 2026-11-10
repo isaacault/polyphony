@@ -45,6 +45,17 @@ class LibraryTabsTest {
     }
 
     @Test
+    fun `artists by recently added follow their newest album`() {
+        val artists = Timings.measure("artists tab: RECENTLY_ADDED, newest album first") {
+            db.artistDao().observeSorted(SortQueries.artists(sid, ArtistSort.RECENTLY_ADDED)).first()
+        }
+        assertEquals(library.artists.size, artists.size)
+        val newest = library.albums.filter { it.artistId != null }.groupBy { it.artistId!! }.mapValues { (_, a) -> a.maxOf { it.createdAt } }
+        // Artists with no album of their own (only on compilations) come last.
+        assertSorted("artists by newest album", artists.map { newest[it.id] ?: Long.MIN_VALUE }, naturalOrder<Long>().reversed())
+    }
+
+    @Test
     fun `albums sort both ways by every column`() {
         for (sort in AlbumSort.entries) {
             for (ascending in listOf(true, false)) {
