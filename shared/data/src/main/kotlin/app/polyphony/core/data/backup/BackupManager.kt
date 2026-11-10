@@ -1,8 +1,10 @@
 package app.polyphony.core.data.backup
 
+import app.polyphony.core.domain.model.ScrobbleAccount
 import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.model.ServerOptions
 import app.polyphony.core.domain.repository.AppSettings
+import app.polyphony.core.domain.repository.ScrobbleAccounts
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.first
@@ -20,7 +22,9 @@ import javax.inject.Singleton
  * the user does not have to sign in again; it is the user's own private file. The one exception is a
  * continuo server ([Server.isContinuo]): its credential is this install's device session, which must
  * never be shared with a second phone, so it is left out ([Server.withoutContinuoSession]) and a
- * restored copy asks for the continuo password once. [version] lets future
+ * restored copy asks for the continuo password once. The phone's ListenBrainz and Last.fm accounts
+ * ([scrobblers]: a user token, a session key) are carried the same way as server passwords: in this
+ * file, never in the cloud backup. [version] lets future
  * readers recognise and migrate older files. The backup [Json] ignores unknown keys and defaults any
  * missing ones, so a file written by a newer build still opens in an older one.
  */
@@ -29,6 +33,7 @@ data class BackupFile(
     val version: Int = CURRENT_VERSION,
     val settings: AppSettings = AppSettings(),
     val servers: List<Server> = emptyList(),
+    val scrobblers: List<ScrobbleAccount> = emptyList(),
 ) {
     companion object {
         /** Bumped only when the on-disk shape changes in a way a reader must branch on. */
@@ -52,6 +57,7 @@ class BackupManager @Inject constructor(
     private val json: Json,
     private val settingsRepository: SettingsRepository,
     private val serverRepository: ServerRepository,
+    private val scrobbleAccounts: ScrobbleAccounts = ScrobbleAccounts.NONE,
 ) {
 
     /** A JSON string capturing the current settings and every configured server. */
@@ -59,6 +65,7 @@ class BackupManager @Inject constructor(
         BackupFile(
             settings = settingsRepository.current(),
             servers = serverRepository.servers.first().map { it.withoutContinuoSession() },
+            scrobblers = scrobbleAccounts.all(),
         ),
     )
 
@@ -79,6 +86,7 @@ class BackupManager @Inject constructor(
         for (server in restored) {
             serverRepository.add(server, makeActive = false)
         }
+        scrobbleAccounts.restore(backup.scrobblers)
         return RestoreResult(
             serverCount = restored.size,
             version = backup.version,
