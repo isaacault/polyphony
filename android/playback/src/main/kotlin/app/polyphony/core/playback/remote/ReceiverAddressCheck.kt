@@ -1,11 +1,11 @@
 package app.polyphony.core.playback.remote
 
 import app.polyphony.core.domain.model.Server
+import app.polyphony.core.domain.model.TrackSort
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.ProviderRegistry
 import app.polyphony.core.domain.transcode.TranscodeProfile
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -38,7 +38,9 @@ class ReceiverAddressCheck @Inject constructor(
 
     suspend fun check(server: Server, overrideBaseUrl: String): Outcome = withContext(Dispatchers.IO) {
         val provider = providerRegistry.forServer(server)
-        val track = runCatching { libraryRepository.tracks().first() }.getOrDefault(emptyList())
+        // One song is enough: a slice, not the whole library.
+        val track = runCatching { libraryRepository.tracksSlice(TrackSort.TITLE, ascending = true, offset = 0, limit = 1) }
+            .getOrDefault(emptyList())
             .firstOrNull { it.serverId == server.id }
         val (url, viaStream) = if (track != null) {
             remoteUrls.previewForReceiver(provider.streamRequest(track, TranscodeProfile.ORIGINAL).url, server, overrideBaseUrl) to true

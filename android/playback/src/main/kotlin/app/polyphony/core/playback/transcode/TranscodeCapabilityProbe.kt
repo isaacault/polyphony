@@ -4,6 +4,7 @@ import android.util.Log
 import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.model.ServerOptions
 import app.polyphony.core.domain.model.Track
+import app.polyphony.core.domain.model.TrackSort
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.LibrarySyncManager
 import app.polyphony.core.domain.repository.ProviderRegistry
@@ -20,7 +21,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -141,14 +141,18 @@ class TranscodeCapabilityProbe @Inject constructor(
     }
 
     private suspend fun sampleTrack(server: Server): Track? {
-        val tracks = runCatching { libraryRepository.tracks().first() }.getOrDefault(emptyList())
-            .filter { it.serverId == server.id }
-        // Short tracks keep the probe cheap for the server; anything with audio will do.
-        return tracks.filter { it.durationMs > 0 }.minByOrNull { it.durationMs } ?: tracks.firstOrNull()
+        // The shortest songs first (Duration reversed), a page of them rather than the whole
+        // library: short tracks keep the probe cheap for the server; anything with audio will do.
+        val tracks = runCatching {
+            libraryRepository.tracksSlice(TrackSort.DURATION, ascending = false, offset = 0, limit = SAMPLE_WINDOW)
+        }.getOrDefault(emptyList()).filter { it.serverId == server.id }
+        return tracks.firstOrNull { it.durationMs > 0 } ?: tracks.firstOrNull()
     }
 
     private companion object {
         const val TAG = "TranscodeProbe"
+        /** Songs without a known length sort first; look past a few hundred of them. */
+        const val SAMPLE_WINDOW = 500
         val PROBED = listOf(AudioCodec.OPUS, AudioCodec.MP3, AudioCodec.AAC)
         const val MIN_BYTES = 4_096
         const val PROBE_READ_TIMEOUT_S = 12L
