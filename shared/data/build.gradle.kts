@@ -17,6 +17,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { buildConfig = false }
+    // The large-library tests (src/test/.../large) hold a 60,000-track library in memory.
+    testOptions { unitTests.all { it.maxHeapSize = "1g" } }
 }
 
 androidComponents {
@@ -65,6 +67,12 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+    // Room on the JVM, in memory, for the DAO and sync tests: Robolectric's SQLite has no
+    // linux-arm64 build (the CI host is one), so Room runs on the bundled SQLite instead.
+    testImplementation(libs.androidx.sqlite.bundled.jvm)
+    // The JVM androidx.sqlite.SQLiteException, which the driver's native code throws (on Android
+    // that name is only a typealias); see BundledOpenHelper in src/test.
+    testRuntimeOnly(libs.androidx.sqlite.jvm)
 
     androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.androidx.test.ext.junit)
