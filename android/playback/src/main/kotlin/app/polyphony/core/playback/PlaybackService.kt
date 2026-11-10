@@ -11,6 +11,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
@@ -50,6 +51,8 @@ import app.polyphony.core.playback.cast.CastManager
 import app.polyphony.core.playback.cast.PlayerFactory
 import app.polyphony.core.playback.cast.PlayerFactory.isRemotePlayback
 import app.polyphony.core.playback.cast.PolyphonyMediaItemConverter
+import app.polyphony.core.playback.connection.ConnectionSampler
+import app.polyphony.core.playback.connection.MeteredDataSource
 import app.polyphony.core.playback.dlna.PolyphonyDlnaResolver
 import app.polyphony.core.playback.engine.LatencyMonitor
 import app.polyphony.core.playback.engine.LatencyPlayerListener
@@ -124,6 +127,7 @@ class PlaybackService : MediaLibraryService() {
     @Inject lateinit var requestRepository: RequestRepository
     @Inject lateinit var engine: TranscodeDecisionEngine
     @Inject lateinit var latencyMonitor: LatencyMonitor
+    @Inject lateinit var connectionSampler: ConnectionSampler
     @Inject lateinit var castManager: CastManager
     @Inject lateinit var converter: PolyphonyMediaItemConverter
     @Inject lateinit var serverLookup: ServerLookup
@@ -155,7 +159,7 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var headset: HeadsetMonitor
     private lateinit var latencyListener: LatencyPlayerListener
     /** The streaming HTTP source, shared by the player and the queue's fetching ahead. */
-    private lateinit var streamingUpstream: OkHttpDataSource.Factory
+    private lateinit var streamingUpstream: DataSource.Factory
     private lateinit var prefetcher: QueuePrefetcher
 
     private var settings: PlaybackSettings = PlaybackSettings()
@@ -224,7 +228,7 @@ class PlaybackService : MediaLibraryService() {
             }
         }
         headset.setEnabled(settings.resumeOnConnect)
-        latencyListener = LatencyPlayerListener(latencyMonitor)
+        latencyListener = LatencyPlayerListener(latencyMonitor, connectionSampler::onStall)
 
         session = buildSession()
         setMediaNotificationProvider(
@@ -256,6 +260,7 @@ class PlaybackService : MediaLibraryService() {
                 withTimeoutOrNull(1_000) { historyJob?.join() }
             }
         }
+        connectionSampler.tick(streaming = false, playing = null)
         dlnaManager.setSessionListener(null)
         dlnaManager.setMediaResolver(null)
         dlnaPlayer?.let { dlna ->
@@ -293,15 +298,20 @@ class PlaybackService : MediaLibraryService() {
             .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
             .build()
-        val upstream = OkHttpDataSource.Factory(streamingClient)
+        // What comes off the network, what the cache serves and what downloads serve are each
+        // counted for the connection samples (#185).
+        val upstream = MeteredDataSource.Factory(
+            OkHttpDataSource.Factory(streamingClient), connectionSampler, MeteredDataSource.Kind.NETWORK,
+        )
         streamingUpstream = upstream
         val cached = CacheDataSource.Factory()
             .setCache(cache)
             .setUpstreamDataSourceFactory(upstream)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+            .setEventListener(MeteredDataSource.CacheListener(connectionSampler))
         // DefaultDataSource routes http(s) through the cache + OkHttp and file:// (downloads) to
         // FileDataSource, so downloaded tracks bypass the stream cache entirely.
-        val local = DefaultDataSource.Factory(this, cached)
+        val local = MeteredDataSource.Factory(DefaultDataSource.Factory(this, cached), connectionSampler, MeteredDataSource.Kind.FILES)
         val resolving = ResolvingDataSource.Factory(local, streamResolver)
         mediaSourceFactory = DefaultMediaSourceFactory(resolving)
         val loadControl = DefaultLoadControl.Builder()
@@ -445,6 +455,7 @@ class PlaybackService : MediaLibraryService() {
             var ticks = 0
             while (isActive) {
                 delay(1_000)
+                connectionSampler.tick(isStreamingHere(), playingIds())
                 if (player.isPlaying) {
                     reporter.onPlayingTick(1_000)
                     // Every 15 s while playing (and at once after a start): the next songs on the phone.
@@ -458,6 +469,15 @@ class PlaybackService : MediaLibraryService() {
             }
         }
     }
+
+    /** This phone's own player is playing or rebuffering (not paused, not on a Cast or DLNA receiver). */
+    private fun isStreamingHere(): Boolean =
+        player === basePlayer && !player.isRemotePlayback() && player.playWhenReady && player.mediaItemCount > 0 &&
+            (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING)
+
+    private fun playingIds(): ConnectionSampler.Playing? =
+        localPlayer.currentMediaItem?.localConfiguration?.uri?.let(MediaItemFactory::parseUri)
+            ?.let { (serverId, trackId) -> ConnectionSampler.Playing(serverId, trackId) }
 
     private fun onSettingsChanged(new: PlaybackSettings) {
         val old = settings

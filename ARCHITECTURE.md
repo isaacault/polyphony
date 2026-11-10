@@ -96,6 +96,11 @@ settings ──▶│ TranscodePolicy│   │ NetworkState │   │ OutputTarg
   stalls) in a sliding window. Crossing the threshold sets `latencyDegraded = true`, which makes
   the resolver cap quality with the high-latency profile. It auto-recovers after a quiet period
   or when the user taps "Restore quality". Network changes reset it.
+- **Connection samples** (#185): while the phone streams, `ConnectionSampler` (android:playback)
+  turns stream reads (timed at the HTTP source under the stream cache; cache and download reads
+  counted apart), stalls and the latency cap into a `ConnectionSample` (shared:domain) every 30 s
+  and on a network change, kept in `connection_samples` for 14 days. About → Diagnostics sums them
+  up per network and the report carries them as CSV. Nothing is sent to continuo yet.
 - If `reloadCurrentTrackOnChange` is on, a changed decision re-prepares the current item at the
   same position; otherwise it applies from the next track.
 
