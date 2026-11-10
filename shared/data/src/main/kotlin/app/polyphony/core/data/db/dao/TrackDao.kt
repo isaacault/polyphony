@@ -3,6 +3,9 @@ package app.polyphony.core.data.db.dao
 import app.polyphony.core.data.offline.OfflineTrackRef
 import androidx.paging.PagingSource
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Update
 import androidx.room.Query
 import androidx.room.RawQuery
 import androidx.room.Upsert
@@ -14,6 +17,17 @@ import kotlinx.coroutines.flow.Flow
 interface TrackDao {
     @Upsert
     suspend fun upsertAll(items: List<TrackEntity>)
+
+    // Sync writes a page as inserts plus updates (see RoomSyncSink.writeAll): @Upsert throws and
+    // catches a constraint error for every row that already exists, which is every row of a re-sync.
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(items: List<TrackEntity>)
+
+    @Update
+    suspend fun updateAll(items: List<TrackEntity>)
+
+    @Query("SELECT id FROM tracks WHERE serverId = :serverId AND id IN (:ids)")
+    suspend fun existingIds(serverId: String, ids: List<String>): List<String>
 
     @Upsert
     suspend fun upsert(item: TrackEntity)
