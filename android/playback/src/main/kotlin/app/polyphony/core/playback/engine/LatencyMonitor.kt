@@ -109,8 +109,14 @@ class LatencyMonitor @Inject constructor(private val clock: Clock) {
     }
 }
 
-/** Adapts [Player.Listener] callbacks into stall start/end events for [LatencyMonitor]. */
-class LatencyPlayerListener(private val monitor: LatencyMonitor) : Player.Listener {
+/**
+ * Adapts [Player.Listener] callbacks into stall start/end events for [LatencyMonitor], and for
+ * [onStall] (the connection sampler, which counts stalls whether or not adaptive latency is on).
+ */
+class LatencyPlayerListener(
+    private val monitor: LatencyMonitor,
+    private val onStall: (stalled: Boolean) -> Unit = {},
+) : Player.Listener {
     private var lastState = Player.STATE_IDLE
     private var ignoreNextBuffering = false
     private var stalled = false
@@ -121,10 +127,7 @@ class LatencyPlayerListener(private val monitor: LatencyMonitor) : Player.Listen
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         ignoreNextBuffering = true
-        if (stalled) {
-            stalled = false
-            monitor.onStallEnded()
-        }
+        endStall()
     }
 
     fun onPlaybackStateChanged(playbackState: Int, playWhenReady: Boolean) {
@@ -133,24 +136,22 @@ class LatencyPlayerListener(private val monitor: LatencyMonitor) : Player.Listen
                 if (lastState == Player.STATE_READY && playWhenReady && !ignoreNextBuffering) {
                     stalled = true
                     monitor.onStallStarted()
+                    onStall(true)
                 }
             }
-            Player.STATE_READY -> {
+            Player.STATE_READY, Player.STATE_IDLE, Player.STATE_ENDED -> {
                 ignoreNextBuffering = false
-                if (stalled) {
-                    stalled = false
-                    monitor.onStallEnded()
-                }
-            }
-            Player.STATE_IDLE, Player.STATE_ENDED -> {
-                ignoreNextBuffering = false
-                if (stalled) {
-                    stalled = false
-                    monitor.onStallEnded()
-                }
+                endStall()
             }
         }
         lastState = playbackState
+    }
+
+    private fun endStall() {
+        if (!stalled) return
+        stalled = false
+        monitor.onStallEnded()
+        onStall(false)
     }
 
     override fun onEvents(player: Player, events: Player.Events) {
