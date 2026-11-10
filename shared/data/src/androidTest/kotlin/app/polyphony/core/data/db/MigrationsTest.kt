@@ -56,6 +56,17 @@ class MigrationsTest {
         }
     }
 
+    @Test
+    fun migratesFromV4AddingConnectionSamples() {
+        helper.createDatabase(DB, 4).close()
+        helper.runMigrationsAndValidate(DB, 5, true, *Migrations.ALL).use { db ->
+            db.query("SELECT COUNT(*) FROM connection_samples").use { c ->
+                c.moveToFirst()
+                assertEquals(0, c.getInt(0))
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

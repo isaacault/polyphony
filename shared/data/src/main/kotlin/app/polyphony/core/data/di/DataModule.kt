@@ -1,6 +1,7 @@
 package app.polyphony.core.data.di
 
 import app.polyphony.core.data.network.NetworkMonitorImpl
+import app.polyphony.core.data.repository.ConnectionSampleRepositoryImpl
 import app.polyphony.core.data.repository.FeedbackRepositoryImpl
 import app.polyphony.core.data.repository.LibraryRepositoryImpl
 import app.polyphony.core.data.repository.ListeningHistoryRepositoryImpl
@@ -10,6 +11,7 @@ import app.polyphony.core.data.repository.SettingsRepositoryImpl
 import app.polyphony.core.data.repository.TranscodeProfileRepositoryImpl
 import app.polyphony.core.data.sync.LibrarySyncManagerImpl
 import app.polyphony.core.domain.provider.MediaProviderFactory
+import app.polyphony.core.domain.repository.ConnectionSampleRepository
 import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.LibrarySyncManager
@@ -42,4 +44,5 @@ abstract class DataModule {
     @Binds abstract fun bindTranscodeProfileRepository(impl: TranscodeProfileRepositoryImpl): TranscodeProfileRepository
     @Binds abstract fun bindNetworkMonitor(impl: NetworkMonitorImpl): NetworkMonitor
     @Binds abstract fun bindListeningHistoryRepository(impl: ListeningHistoryRepositoryImpl): ListeningHistoryRepository
+    @Binds abstract fun bindConnectionSampleRepository(impl: ConnectionSampleRepositoryImpl): ConnectionSampleRepository
 }

@@ -4,6 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.withTransaction
 import app.polyphony.core.data.db.dao.AlbumDao
+import app.polyphony.core.data.db.dao.ConnectionSampleDao
 import app.polyphony.core.data.db.dao.ArtistDao
 import app.polyphony.core.data.db.dao.GenreDao
 import app.polyphony.core.data.db.dao.PlayContextDao
@@ -17,6 +18,7 @@ import app.polyphony.core.data.db.entity.AlbumEntity
 import app.polyphony.core.data.db.entity.AlbumFtsEntity
 import app.polyphony.core.data.db.entity.ArtistEntity
 import app.polyphony.core.data.db.entity.ArtistFtsEntity
+import app.polyphony.core.data.db.entity.ConnectionSampleEntity
 import app.polyphony.core.data.db.entity.GenreEntity
 import app.polyphony.core.data.db.entity.PlayContextEntity
 import app.polyphony.core.data.db.entity.PlayHistoryEntity
@@ -40,6 +42,7 @@ import app.polyphony.core.data.db.entity.TranscodeProfileEntity
         RemoteDeviceEntity::class,
         PlayHistoryEntity::class,
         PlayContextEntity::class,
+        ConnectionSampleEntity::class,
     ],
     version = PolyphonyDatabase.VERSION,
     exportSchema = true,
@@ -55,6 +58,7 @@ abstract class PolyphonyDatabase : RoomDatabase() {
     abstract fun remoteDeviceDao(): RemoteDeviceDao
     abstract fun playHistoryDao(): PlayHistoryDao
     abstract fun playContextDao(): PlayContextDao
+    abstract fun connectionSampleDao(): ConnectionSampleDao
 
     /** Remove every cached row belonging to [serverId] (used when a server is removed). */
     suspend fun clearServerData(serverId: String) = withTransaction {
@@ -75,6 +79,6 @@ abstract class PolyphonyDatabase : RoomDatabase() {
          * Bump together with a new entry in [Migrations.ALL] and the exported JSON under
          * `core/data/schemas`; `MigrationsChainTest` fails the build if the chain has a gap.
          */
-        const val VERSION = 4
+        const val VERSION = 5
     }
 }
