@@ -37,7 +37,8 @@ interface SessionActions {
     fun setQueueTitle(title: String?)
     fun setPlayContext(context: PlayContext?)
     fun audioSessionId(): Int
-    suspend fun restoreQueue(): MediaSession.MediaItemsWithStartPosition?
+    /** The queue for Media3's playback resumption; [isForPlayback] false is System UI only asking what it would be. */
+    suspend fun restoreQueue(isForPlayback: Boolean): MediaSession.MediaItemsWithStartPosition?
     fun buttons(): List<CommandButton>
 }
 
@@ -109,7 +110,7 @@ class PolyphonySessionCallback(
         controller: MediaSession.ControllerInfo,
         isForPlayback: Boolean,
     ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = scope.future {
-        actions.restoreQueue() ?: MediaSession.MediaItemsWithStartPosition(emptyList(), 0, 0L)
+        actions.restoreQueue(isForPlayback) ?: MediaSession.MediaItemsWithStartPosition(emptyList(), 0, 0L)
     }
 
     private suspend fun rebuild(items: List<MediaItem>): List<MediaItem> = items.mapNotNull { item ->

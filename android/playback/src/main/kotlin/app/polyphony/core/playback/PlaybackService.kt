@@ -182,6 +182,8 @@ class PlaybackService : MediaLibraryService() {
     private var saveJob: Job? = null
     /** A restored queue's shuffle order, until the player holds that queue (see [applyRestoredShuffle]). */
     private var restoredShuffle: PendingShuffleOrder? = null
+    /** The restore at start, which Media3's playback resumption waits for. */
+    private var startRestore: Job? = null
     private var playNowOrderJob: Job? = null
     private var keepGoingJob: Job? = null
     /** Play now streams' playability, briefly remembered: streamId to (playable, checked at). */
@@ -981,28 +983,63 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    private suspend fun loadPersistedQueue(): MediaSession.MediaItemsWithStartPosition? {
-        val plan = queuePersistence.load()?.let(QueueRestore::plan) ?: return null
+    /** The saved queue, as it would come back; reads the file and changes nothing. */
+    private suspend fun loadRestorePlan(): QueueRestore.Plan? = queuePersistence.load()?.let(QueueRestore::plan)
+
+    private fun restoredItems(plan: QueueRestore.Plan): MediaSession.MediaItemsWithStartPosition =
+        MediaSession.MediaItemsWithStartPosition(
+            plan.tracks.mapIndexed { i, track -> MediaItemFactory.fromTrack(track, queued = plan.queued[i]) },
+            plan.index,
+            plan.positionMs,
+        )
+
+    /**
+     * Takes on the restored queue's title, collection and modes, and returns its items, which the
+     * caller puts in the player at once. Only then: a restore that lost the race to a queue started
+     * meanwhile used to overwrite that queue's collection, shuffle and repeat with the old ones.
+     */
+    private fun adoptRestored(plan: QueueRestore.Plan): MediaSession.MediaItemsWithStartPosition {
+        val restored = restoredItems(plan)
         queueStore.putAll(plan.tracks)
         queueTitle = plan.queueTitle
         playContext = plan.context
         player.shuffleModeEnabled = plan.shuffle
         player.repeatMode = plan.repeatMode
-        val items = plan.tracks.mapIndexed { i, track -> MediaItemFactory.fromTrack(track, queued = plan.queued[i]) }
-        restoredShuffle = plan.shuffleOrder?.let { PendingShuffleOrder(items.map(MediaItem::mediaId), it) }
-        return MediaSession.MediaItemsWithStartPosition(items, plan.index, plan.positionMs)
+        restoredShuffle = plan.shuffleOrder?.let { PendingShuffleOrder(restored.mediaItems.map(MediaItem::mediaId), it) }
+        publishExtras()
+        return restored
     }
 
     /** Puts the last queue back (paused, not prepared) so the mini player shows it on launch. */
     private fun restoreQueueOnStart(enabled: Boolean) {
         if (!enabled) return
-        scope.launch {
-            val restored = loadPersistedQueue() ?: return@launch
-            if (player.mediaItemCount == 0) {
-                player.setMediaItems(restored.mediaItems, restored.startIndex, restored.startPositionMs)
-                publishExtras()
-            }
+        startRestore = scope.launch {
+            val plan = loadRestorePlan() ?: return@launch
+            // Something was put in the player while the file was read (a controller's play): it wins.
+            if (player.mediaItemCount > 0) return@launch
+            val restored = adoptRestored(plan)
+            player.setMediaItems(restored.mediaItems, restored.startIndex, restored.startPositionMs)
         }
+    }
+
+    /**
+     * Media3's playback resumption: a media button or Bluetooth play with nothing loaded (often
+     * right after the process died, racing [restoreQueueOnStart]), or System UI's resume card.
+     * When the restore at start has filled the player meanwhile, that queue is the answer (Media3
+     * sets it again and plays). System UI asking at boot ([isForPlayback] false) only shows the
+     * song, so nothing is changed for it.
+     */
+    private suspend fun resumptionQueue(isForPlayback: Boolean): MediaSession.MediaItemsWithStartPosition? {
+        startRestore?.join()
+        if (player.mediaItemCount > 0) {
+            return MediaSession.MediaItemsWithStartPosition(
+                currentItems(),
+                player.currentMediaItemIndex.coerceAtLeast(0),
+                player.currentPosition.coerceAtLeast(0L),
+            )
+        }
+        val plan = loadRestorePlan() ?: return null
+        return if (isForPlayback) adoptRestored(plan) else restoredItems(plan)
     }
 
     // ---- session plumbing ----
@@ -1077,7 +1114,8 @@ class PlaybackService : MediaLibraryService() {
 
         override fun audioSessionId(): Int = audioSessionId
 
-        override suspend fun restoreQueue(): MediaSession.MediaItemsWithStartPosition? = loadPersistedQueue()
+        override suspend fun restoreQueue(isForPlayback: Boolean): MediaSession.MediaItemsWithStartPosition? =
+            resumptionQueue(isForPlayback)
 
         override fun buttons(): List<CommandButton> {
             val starred = currentTrack()?.starred == true
