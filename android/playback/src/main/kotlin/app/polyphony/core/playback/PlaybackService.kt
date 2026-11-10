@@ -498,6 +498,10 @@ class PlaybackService : MediaLibraryService() {
         reporter.enabled = new.scrobble
         reporter.threshold = new.scrobbleThreshold
         headset.setEnabled(new.resumeOnConnect)
+        // Off, the saved queue goes (it used to stay, and a media button after a restart brought it back).
+        if (old.rememberQueue != new.rememberQueue) {
+            if (new.rememberQueue) scheduleSave(immediate = true) else scope.launch { queuePersistence.clear() }
+        }
         applyReplayGain()
         if (old.prefetchQueue != new.prefetchQueue || old.prefetchOnMobileData != new.prefetchOnMobileData) refreshPrefetch()
     }
@@ -984,7 +988,10 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /** The saved queue, as it would come back; reads the file and changes nothing. */
-    private suspend fun loadRestorePlan(): QueueRestore.Plan? = queuePersistence.load()?.let(QueueRestore::plan)
+    private suspend fun loadRestorePlan(): QueueRestore.Plan? {
+        if (!settings.rememberQueue) return null
+        return queuePersistence.load()?.let(QueueRestore::plan)
+    }
 
     private fun restoredItems(plan: QueueRestore.Plan): MediaSession.MediaItemsWithStartPosition =
         MediaSession.MediaItemsWithStartPosition(
