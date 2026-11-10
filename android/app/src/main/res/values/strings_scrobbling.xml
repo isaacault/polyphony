@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Settings, Playback, Scrobbling from this phone (#39) -->
+    <string name="phone_scrobbling">Scrobble from this phone</string>
+    <string name="phone_scrobbling_off">Off. Send plays straight to ListenBrainz or Last.fm</string>
+    <string name="phone_scrobbling_on">On: %1$s</string>
+    <string name="phone_scrobbling_privacy">Off until you connect an account. Then the songs you play (title, artist, album, length and when) go from this phone to the services you connect. It\'s the only thing Polyphony sends anywhere but your own server.</string>
+    <string name="phone_scrobbling_twice">If your server already scrobbles to the same account (Navidrome: Personal; continuo: Play now songs), connect it in one place only, or plays count twice.</string>
+    <string name="phone_scrobbling_connect">Connect</string>
+    <string name="phone_scrobbling_connecting">Connecting…</string>
+    <string name="phone_scrobbling_connected_as">Connected as %1$s</string>
+    <string name="phone_scrobbling_disconnect">Disconnect</string>
+    <string name="phone_scrobbling_disconnect_text">Plays from this phone will no longer be sent to %1$s, and those still waiting are forgotten.</string>
+    <string name="phone_scrobbling_refused">%1$s refused the sign-in. Plays wait until you connect again: tap to connect</string>
+    <string name="phone_scrobbling_now_playing">Show what\'s playing</string>
+    <string name="phone_scrobbling_now_playing_summary">Your profile shows the song while it plays</string>
+    <plurals name="phone_scrobbling_pending">
+        <item quantity="one">%d play waiting to be sent</item>
+        <item quantity="other">%d plays waiting to be sent</item>
+    </plurals>
+    <string name="phone_scrobbling_listenbrainz_summary">Not connected. Tap to add your user token</string>
+    <string name="phone_scrobbling_lastfm_summary">Not connected. Tap to sign in to Last.fm</string>
+    <string name="phone_scrobbling_lastfm_username">Last.fm user name</string>
+    <string name="phone_scrobbling_lastfm_password">Password</string>
+    <string name="phone_scrobbling_lastfm_password_hint">Sent to Last.fm alone to sign in, and not kept: Polyphony keeps the session Last.fm gives back</string>
+    <string name="phone_scrobbling_auth_failed">%1$s didn\'t accept that. Check it and try again.</string>
+    <string name="phone_scrobbling_unreachable">Couldn\'t reach %1$s. Check the connection and try again.</string>
+</resources>

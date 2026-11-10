@@ -9,6 +9,7 @@ import app.polyphony.navigation.ContinuoDevicesRoute
 import app.polyphony.navigation.DownloadRuleEditRoute
 import app.polyphony.navigation.DownloadsSettingsRoute
 import app.polyphony.navigation.LibrarySettingsRoute
+import app.polyphony.navigation.PhoneScrobblingRoute
 import app.polyphony.navigation.PlaybackSettingsRoute
 import app.polyphony.navigation.PolyphonyNavigator
 import app.polyphony.navigation.RemoteDevicesSettingsRoute
@@ -23,6 +24,7 @@ import app.polyphony.ui.settings.backup.BackupSettingsScreen
 import app.polyphony.ui.settings.downloads.DownloadsSettingsScreen
 import app.polyphony.ui.downloads.DownloadRuleEditScreen
 import app.polyphony.ui.settings.library.LibrarySettingsScreen
+import app.polyphony.ui.settings.playback.PhoneScrobblingScreen
 import app.polyphony.ui.settings.playback.PlaybackSettingsScreen
 import app.polyphony.ui.settings.servers.ContinuoDevicesScreen
 import app.polyphony.ui.settings.servers.ServerEditScreen
@@ -40,6 +42,7 @@ fun NavGraphBuilder.settingsGraph(navigator: PolyphonyNavigator) {
     composable<ContinuoDevicesRoute> { ContinuoDevicesScreen() }
     composable<AppearanceSettingsRoute> { AppearanceSettingsScreen() }
     composable<PlaybackSettingsRoute> { PlaybackSettingsScreen() }
+    composable<PhoneScrobblingRoute> { PhoneScrobblingScreen() }
     composable<StreamingSettingsRoute> { StreamingSettingsScreen() }
     composable<TranscodeProfileEditRoute> { TranscodeProfileEditScreen() }
     composable<RemoteDevicesSettingsRoute> { RemoteDevicesSettingsScreen() }

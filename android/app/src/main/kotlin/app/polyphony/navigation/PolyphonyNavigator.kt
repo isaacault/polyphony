@@ -58,6 +58,7 @@ class PolyphonyNavigator(val navController: NavHostController) {
     fun openContinuoDevices(serverId: String) = navController.navigate(ContinuoDevicesRoute(serverId), singleTop)
     fun openAppearanceSettings() = navController.navigate(AppearanceSettingsRoute, singleTop)
     fun openPlaybackSettings() = navController.navigate(PlaybackSettingsRoute, singleTop)
+    fun openPhoneScrobblingSettings() = navController.navigate(PhoneScrobblingRoute, singleTop)
     fun openStreamingSettings() = navController.navigate(StreamingSettingsRoute, singleTop)
     fun openTranscodeProfile(profileId: String?) = navController.navigate(TranscodeProfileEditRoute(profileId), singleTop)
     fun openRemoteDevicesSettings() = navController.navigate(RemoteDevicesSettingsRoute, singleTop)
