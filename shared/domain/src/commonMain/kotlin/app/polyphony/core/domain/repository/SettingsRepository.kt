@@ -6,6 +6,7 @@ import app.polyphony.core.domain.model.Feedback
 import app.polyphony.core.domain.model.FeedbackMode
 import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.model.TrackSort
+import app.polyphony.core.domain.playback.EqualizerSettings
 import app.polyphony.core.domain.transcode.TranscodePolicy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
@@ -136,8 +137,8 @@ data class PlaybackSettings(
     val rememberQueue: Boolean = true,
     val hapticFeedback: Boolean = true,
     val playbackSpeed: Float = 1f,
-    /** Preferred audio session usage for the equaliser hookup. */
-    val externalEqualizer: Boolean = true,
+    /** The built-in equaliser, the phone's own effects, or none (this phone's playback only). */
+    val equalizer: EqualizerSettings = EqualizerSettings(),
 )
 
 @Serializable
