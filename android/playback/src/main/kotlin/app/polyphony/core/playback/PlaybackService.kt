@@ -79,8 +79,10 @@ import app.polyphony.core.playback.session.SeekableStreamsPlayer
 import app.polyphony.core.playback.session.SessionExtras
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
+import app.polyphony.core.playback.stream.LoadFailures
 import app.polyphony.core.playback.stream.StreamCache
 import app.polyphony.core.playback.stream.StreamResolver
+import app.polyphony.core.playback.stream.UnplayableSkips
 import app.polyphony.core.playback.timer.SleepTimer
 import app.polyphony.core.playback.audio.OutputVolume
 import app.polyphony.core.playback.audio.PausingAudioFocus
@@ -184,6 +186,7 @@ class PlaybackService : MediaLibraryService() {
     private var restoredShuffle: PendingShuffleOrder? = null
     /** The restore at start, which Media3's playback resumption waits for. */
     private var startRestore: Job? = null
+    private val unplayableSkips = UnplayableSkips()
     private var playNowOrderJob: Job? = null
     private var keepGoingJob: Job? = null
     /** Play now streams' playability, briefly remembered: streamId to (playable, checked at). */
@@ -713,6 +716,20 @@ class PlaybackService : MediaLibraryService() {
         player.playWhenReady = playWhenReady
     }
 
+    /**
+     * Moves on from a song that can't play, keeping play or pause as it was; with nothing after it
+     * that could (the end of the queue, or a whole queue of them) the error stays showing.
+     */
+    private fun skipUnplayable(why: String) {
+        if (!player.hasNextMediaItem() || !unplayableSkips.allow(player.mediaItemCount)) {
+            Log.w(TAG, "$why; nothing after it to play")
+            return
+        }
+        Log.w(TAG, "$why; skipping to the next song")
+        player.seekToNextMediaItem()
+        player.prepare()
+    }
+
     private fun refreshUpcomingItems() {
         val count = player.mediaItemCount
         val index = player.currentMediaItemIndex
@@ -797,6 +814,11 @@ class PlaybackService : MediaLibraryService() {
                 }
             }
             if (!loadFailure || player.isRemotePlayback()) return
+            // Offline mode and no download, a removed server: no retry helps (a restored queue meets these).
+            if (LoadFailures.isUnplayable(error)) {
+                skipUnplayable("\"${player.currentMediaItem?.mediaMetadata?.title}\" can't play (${error.cause?.message})")
+                return
+            }
             // A Play now song (continuo#12) that caught up with its download: the next bytes are
             // still coming from Soulseek. Wait for them and carry on where it was, instead of
             // treating it as a broken stream.
@@ -836,6 +858,11 @@ class PlaybackService : MediaLibraryService() {
                 reloadCurrentItem()
                 return
             }
+            // The server answers that the song isn't there (deleted since it was queued): waiting won't bring it.
+            if (networkMonitor.state.value.isOnline && LoadFailures.isGone(LoadFailures.httpStatus(error))) {
+                skipUnplayable("\"${player.currentMediaItem?.mediaMetadata?.title}\" is gone from the server")
+                return
+            }
             if (!networkMonitor.state.value.isOnline || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
                 error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
                 error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
@@ -847,7 +874,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (isPlaying) { slowRetryJob?.cancel(); awaitingNetwork = false; restoredShuffle = null }
+            if (isPlaying) { slowRetryJob?.cancel(); awaitingNetwork = false; restoredShuffle = null; unplayableSkips.onPlaying() }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {

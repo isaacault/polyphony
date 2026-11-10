@@ -168,7 +168,7 @@ class StreamResolver @Inject constructor(
         resolveDownloaded(trackId, dataSpec)?.let { return it }
         val provider = serverLookup.providerFor(serverId)
             ?: runBlocking { serverLookup.awaitProvider(serverId) }
-            ?: throw IOException("Unknown server $serverId")
+            ?: throw UnplayableSongException("Unknown server $serverId")
         var decision = engine.localDecision()
         val codec = decision.profile.codec
         if (!decision.profile.isPassthrough &&
@@ -219,7 +219,7 @@ class StreamResolver @Inject constructor(
     private fun resolvePlayNow(serverId: String, trackId: String, streamId: String, dataSpec: DataSpec): DataSpec {
         val provider = serverLookup.providerFor(serverId)
             ?: runBlocking { serverLookup.awaitProvider(serverId) }
-            ?: throw IOException("Unknown server $serverId")
+            ?: throw UnplayableSongException("Unknown server $serverId")
         val request = runBlocking { runCatching { requestRepository.playNowStream(provider.server, streamId) }.getOrNull() }
             ?: throw IOException("continuo can't serve $trackId")
         record(trackId, TranscodeDecision(TranscodeProfile.ORIGINAL, TranscodeDecision.Reason.DEFAULT))
@@ -240,11 +240,11 @@ class StreamResolver @Inject constructor(
         val local = runBlocking { runCatching { downloadRepository.localFile(trackId) }.getOrNull() }
         val path = local?.filePath
         if (path == null) {
-            if (downloads.offlineMode) throw IOException("Not downloaded; offline mode is on")
+            if (downloads.offlineMode) throw UnplayableSongException("Not downloaded; offline mode is on")
             return null
         }
         val file = File(path)
-        if (!file.exists()) return if (downloads.offlineMode) throw IOException("Downloaded file is missing") else null
+        if (!file.exists()) return if (downloads.offlineMode) throw UnplayableSongException("Downloaded file is missing") else null
         val profile = engine.profileById(local.profileId) ?: TranscodeProfile.ORIGINAL
         record(trackId, TranscodeDecision(profile, TranscodeDecision.Reason.DOWNLOADED))
         return dataSpec.buildUpon()
