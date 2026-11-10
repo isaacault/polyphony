@@ -11,6 +11,8 @@ shared/                       the logic every client needs; becoming Kotlin Mult
   network                     OkHttp/Json plumbing, per-server client factory
   data                        Room cache, DataStore settings, repository impls, library sync, network monitor
   requests                    The continuo client: search, requests, Play now, discovery, lyrics
+  scrobble                    Scrobbling from the phone to ListenBrainz and Last.fm: both clients, the
+                              offline queue (own Room DB) and its WorkManager drain
   providers/subsonic          Subsonic / OpenSubsonic / Navidrome implementation of MediaProvider
   providers/jellyfin          Jellyfin implementation of MediaProvider (official Kotlin SDK)
 android/                      the Android app, and the modules still tied to Android
@@ -33,8 +35,8 @@ contract/                     continuo's OpenAPI schema and the test cases every
 ```
 
 The dependency rule is strict:
-`android:app → android:{ui, playback, dlna, downloads}, shared:data, shared:providers:*, shared:requests
-→ shared:network → shared:domain`. Nothing in `shared/` depends on `android/`; `shared:domain` is pure
+`android:app → android:{ui, playback, dlna, downloads}, shared:data, shared:providers:*, shared:requests,
+shared:scrobble → shared:network → shared:domain`. Nothing in `shared/` depends on `android/`; `shared:domain` is pure
 Kotlin with no Android dependencies. Logic that a second platform will need moves from `android/`
 into `shared/` (the playback queue rules, the download rules engine), leaving the platform glue behind.
 
@@ -56,6 +58,8 @@ step-by-step guide.
 | `TranscodeResolver` | Pure policy → profile decision (unit-tested). |
 | `PlaybackController` / `CastController` / `DlnaController` | What the UI talks to. |
 | `DownloadRepository` (`DownloadRule`, `DownloadSettings`) | Pinned and rule-managed downloads, storage usage, offline mode. |
+| `ScrobbleRule` | When a play counts; the server's play count, history and the phone's own scrobbles all use it. |
+| `Scrobbler` / `ScrobbleRepository` | The phone's ListenBrainz and Last.fm accounts and the queue of plays not yet sent. |
 
 ## Transcoding engine
 
@@ -103,6 +107,18 @@ settings ──▶│ TranscodePolicy│   │ NetworkState │   │ OutputTarg
   `refreshX` to pick up changes immediately.
 - Credentials live in the app-private Room database. Subsonic uses salted token auth; Jellyfin
   stores the access token obtained at login.
+- Scrobbling from the phone (opt-in, the only traffic that leaves the user's own server): the
+  `PlaybackReporter` hands a started track and a counted play (`ScrobbleRule`) to the `Scrobbler`,
+  which queues one row per connected account in `polyphony-scrobble.db` (its own database: the
+  ListenBrainz token and Last.fm session key sit there, left out of the cloud backup like the
+  server passwords and carried in the backup file like them). A unique WorkManager job drains the
+  queue when there is a network: oldest first, 100 listens per ListenBrainz request and 50 per
+  Last.fm one, exponential backoff for an unreachable or busy service, a refused batch retried one by
+  one so only the bad listen is dropped, and a refused token leaves the plays waiting for a
+  reconnect. Last.fm needs the app's API account at build time (`lastfm.apiKey` and
+  `lastfm.apiSecret` in `local.properties`, or `POLYPHONY_LASTFM_API_KEY` /
+  `POLYPHONY_LASTFM_API_SECRET`; `scripts/release.sh` reads `lastfm.properties` from the signing
+  folder); without them Last.fm isn't offered.
 
 ## Conventions
 
