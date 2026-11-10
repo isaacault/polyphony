@@ -122,7 +122,10 @@ class DownloadRuleEvaluator @Inject constructor(
             is DownloadRuleTarget.Genre -> library.tracksByGenre(t.genre).first()
             is DownloadRuleTarget.RecentlyAdded -> library.recentlyAddedAlbums(t.albumCount).first()
                 .flatMap { album -> library.tracksForAlbum(album.id).first() }
-            is DownloadRuleTarget.MostPlayed -> library.tracks(TrackSort.MOST_PLAYED, ascending = false).first().take(t.trackCount)
+            // ascending = true is the sort's natural direction, most played first; a slice reads
+            // only those rows instead of the whole Songs list.
+            is DownloadRuleTarget.MostPlayed ->
+                library.tracksSlice(TrackSort.MOST_PLAYED, ascending = true, offset = 0, limit = t.trackCount)
             is DownloadRuleTarget.RecentlyPlayed -> library.recentlyPlayedTracks(t.trackCount).first()
         }
         return if (rule.maxTracks > 0) tracks.take(rule.maxTracks) else tracks
