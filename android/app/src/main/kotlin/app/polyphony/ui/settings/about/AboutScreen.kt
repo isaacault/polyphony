@@ -33,7 +33,9 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.polyphony.core.domain.connection.ConnectionSummary
 import app.polyphony.diagnostics.DiagnosticsViewModel
+import androidx.compose.material.icons.rounded.NetworkCheck
 import app.polyphony.ui.settings.components.ActionPreference
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.DeleteSweep
@@ -118,6 +120,18 @@ fun AboutScreen(diagnostics: DiagnosticsViewModel = hiltViewModel()) {
                 enabled = !diag.exporting,
                 onClick = { diagnostics.export { intent -> context.startActivity(intent) } },
             )
+            PreferenceRow(
+                title = stringResource(R.string.settings_about_connection),
+                summary = stringResource(if (diag.connection.isEmpty()) R.string.settings_about_connection_empty else R.string.settings_about_connection_summary),
+                icon = Icons.Rounded.NetworkCheck,
+            )
+            diag.connection.forEach { row ->
+                PreferenceRow(
+                    title = ConnectionSummary.label(row.network),
+                    summary = ConnectionSummary.details(row),
+                    modifier = Modifier.padding(start = 40.dp),
+                )
+            }
             if (diag.crashCount > 0) {
                 ActionPreference(
                     title = stringResource(R.string.settings_about_clear_crashes, diag.crashCount),

@@ -9,10 +9,12 @@ import android.os.Build
 import android.os.Process
 import androidx.core.content.FileProvider
 import app.polyphony.BuildConfig
+import app.polyphony.core.domain.connection.ConnectionSummary
 import app.polyphony.core.domain.playback.CastController
 import app.polyphony.core.dlna.DlnaManager
 import app.polyphony.core.domain.model.ServerOptions
 import app.polyphony.core.domain.playback.PlaybackController
+import app.polyphony.core.domain.repository.ConnectionSampleRepository
 import app.polyphony.core.domain.repository.NetworkMonitor
 import app.polyphony.core.playback.cast.CastManager
 import app.polyphony.core.playback.engine.HomeNetworkDetector
@@ -34,7 +36,8 @@ import javax.inject.Inject
 
 /**
  * Builds a shareable text report: app and device info, servers (hosts only), settings, the live
- * playback and Cast state, recent crashes, and this process's recent logcat output. Credentials,
+ * playback and Cast state, the connection samples (#185: a summary per network, then every sample
+ * as CSV), recent crashes, and this process's recent logcat output. Credentials,
  * tokens and auth query parameters are redacted.
  */
 class DiagnosticsExporter @Inject constructor(
@@ -48,6 +51,7 @@ class DiagnosticsExporter @Inject constructor(
     private val homeNetworkDetector: HomeNetworkDetector,
     private val castManager: CastManager,
     private val dlnaManager: DlnaManager,
+    private val connectionSamples: ConnectionSampleRepository,
 ) {
     private val json = Json { prettyPrint = true; encodeDefaults = true }
 
@@ -123,6 +127,16 @@ class DiagnosticsExporter @Inject constructor(
             dlna.rejected.forEach { appendLine("dlna rejected: $it") }
         }
         runCatching { castManager.diagnostics() }.getOrDefault(listOf("cast: unavailable")).forEach { appendLine("cast $it") }
+        appendLine()
+
+        val samples = runCatching { connectionSamples.all() }.getOrDefault(emptyList())
+        appendLine("== Connection while streaming (${samples.size} samples, last 14 days) ==")
+        ConnectionSummary.describe(ConnectionSummary.of(samples)).forEach(::appendLine)
+        if (samples.isNotEmpty()) {
+            appendLine("--- connection-samples.csv")
+            ConnectionSamplesCsv.write(samples, this)
+            appendLine("--- end of connection-samples.csv")
+        }
         appendLine()
 
         val crashes = CrashRecorder.recent(context)
