@@ -60,8 +60,10 @@ import app.polyphony.core.playback.engine.ServerLookup
 import app.polyphony.core.playback.engine.TranscodeDecisionEngine
 import app.polyphony.core.playback.queue.MediaItemFactory
 import app.polyphony.core.playback.queue.QueueShuffleOrder
-import app.polyphony.core.playback.queue.PersistedQueue
+import app.polyphony.core.playback.queue.PendingShuffleOrder
 import app.polyphony.core.playback.queue.QueuePersistence
+import app.polyphony.core.playback.queue.QueueRestore
+import app.polyphony.core.playback.queue.QueueSnapshot
 import app.polyphony.core.playback.queue.QueueStore
 import app.polyphony.core.playback.remote.PlayNowReceiverLinks
 import app.polyphony.core.playback.reporting.PlaybackReporter
@@ -178,6 +180,8 @@ class PlaybackService : MediaLibraryService() {
     private var awaitingNetwork = false
     private var slowRetryJob: Job? = null
     private var saveJob: Job? = null
+    /** A restored queue's shuffle order, until the player holds that queue (see [applyRestoredShuffle]). */
+    private var restoredShuffle: PendingShuffleOrder? = null
     private var playNowOrderJob: Job? = null
     private var keepGoingJob: Job? = null
     /** Play now streams' playability, briefly remembered: streamId to (playable, checked at). */
@@ -837,7 +841,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (isPlaying) { slowRetryJob?.cancel(); awaitingNetwork = false }
+            if (isPlaying) { slowRetryJob?.cancel(); awaitingNetwork = false; restoredShuffle = null }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -869,6 +873,7 @@ class PlaybackService : MediaLibraryService() {
                 warmPlayNowLinks()
             }
             if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
+                applyRestoredShuffle()
                 queueStore.retain(currentItems().map { it.mediaId })
                 if (p.mediaItemCount == 0 && playContext != null) {
                     playContext = null
@@ -942,35 +947,50 @@ class PlaybackService : MediaLibraryService() {
     private suspend fun saveQueue() {
         if (!settings.rememberQueue) return
         val items = currentItems()
-        val tracks = items.mapNotNull(::trackFor)
-        if (tracks.isEmpty()) {
-            queuePersistence.clear()
-            return
-        }
-        queuePersistence.save(
-            PersistedQueue(
-                tracks = tracks,
-                index = player.currentMediaItemIndex.coerceIn(0, tracks.lastIndex),
-                positionMs = player.currentPosition.coerceAtLeast(0L),
-                shuffle = player.shuffleModeEnabled,
-                repeatMode = player.repeatMode,
-                queueTitle = queueTitle,
-                savedAt = System.currentTimeMillis(),
-                context = playContext,
-            ),
+        val snapshot = QueueSnapshot.of(
+            items = items.map { QueueSnapshot.Item(trackFor(it), MediaItemFactory.isQueued(it)) },
+            currentIndex = player.currentMediaItemIndex,
+            positionMs = player.currentPosition,
+            shuffleOrder = localShuffleOrder(items.size),
+            shuffle = player.shuffleModeEnabled,
+            repeatMode = player.repeatMode,
+            queueTitle = queueTitle,
+            context = playContext,
+            savedAt = System.currentTimeMillis(),
         )
+        if (snapshot == null) queuePersistence.clear() else queuePersistence.save(snapshot)
+    }
+
+    /** The local player's shuffle order while it plays the [size]-item queue; null on a speaker. */
+    private fun localShuffleOrder(size: Int): List<Int>? =
+        if (player === basePlayer && !player.isRemotePlayback() && localPlayer.mediaItemCount == size) {
+            QueueShuffleOrder.playOrder(localPlayer.shuffleOrder)
+        } else {
+            null
+        }
+
+    /** Puts the saved shuffle order back once the restored list is in the local player ([PendingShuffleOrder]). */
+    private fun applyRestoredShuffle() {
+        val pending = restoredShuffle ?: return
+        if (player !== basePlayer || player.isRemotePlayback()) return
+        val ids = (0 until localPlayer.mediaItemCount).map { localPlayer.getMediaItemAt(it).mediaId }
+        when (pending.step(ids, QueueShuffleOrder.playOrder(localPlayer.shuffleOrder))) {
+            PendingShuffleOrder.Step.APPLY -> localPlayer.setShuffleOrder(QueueShuffleOrder.restored(pending.order))
+            PendingShuffleOrder.Step.FORGET -> restoredShuffle = null
+            PendingShuffleOrder.Step.NOTHING -> Unit
+        }
     }
 
     private suspend fun loadPersistedQueue(): MediaSession.MediaItemsWithStartPosition? {
-        val saved = queuePersistence.load() ?: return null
-        if (saved.tracks.isEmpty()) return null
-        queueStore.putAll(saved.tracks)
-        queueTitle = saved.queueTitle
-        playContext = saved.context
-        player.shuffleModeEnabled = saved.shuffle
-        player.repeatMode = saved.repeatMode
-        val items = saved.tracks.map { MediaItemFactory.fromTrack(it) }
-        return MediaSession.MediaItemsWithStartPosition(items, saved.index.coerceIn(0, items.lastIndex), saved.positionMs)
+        val plan = queuePersistence.load()?.let(QueueRestore::plan) ?: return null
+        queueStore.putAll(plan.tracks)
+        queueTitle = plan.queueTitle
+        playContext = plan.context
+        player.shuffleModeEnabled = plan.shuffle
+        player.repeatMode = plan.repeatMode
+        val items = plan.tracks.mapIndexed { i, track -> MediaItemFactory.fromTrack(track, queued = plan.queued[i]) }
+        restoredShuffle = plan.shuffleOrder?.let { PendingShuffleOrder(items.map(MediaItem::mediaId), it) }
+        return MediaSession.MediaItemsWithStartPosition(items, plan.index, plan.positionMs)
     }
 
     /** Puts the last queue back (paused, not prepared) so the mini player shows it on launch. */

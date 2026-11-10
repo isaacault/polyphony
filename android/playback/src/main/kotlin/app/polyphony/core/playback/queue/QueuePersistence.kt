@@ -23,6 +23,10 @@ data class PersistedQueue(
     val queueTitle: String? = null,
     val savedAt: Long = 0L,
     val context: PlayContext? = null,
+    /** List indices of the songs you added (Play next, Add to queue), "Next in queue" (UserQueue). */
+    val queuedIndices: List<Int> = emptyList(),
+    /** The local player's shuffle order: list indices in the order shuffle plays them; empty when unknown. */
+    val shuffleOrder: List<Int> = emptyList(),
 )
 
 /**

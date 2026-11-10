@@ -66,4 +66,26 @@ class QueueShuffleOrder private constructor(private val shuffled: IntArray, priv
 
     /** For tests: the shuffled order as list indices. */
     internal fun order(): List<Int> = shuffled.toList()
+
+    companion object {
+        /**
+         * A saved order put back (a queue restored after the process died): [order] holds every
+         * index of the list once, in the order shuffle plays them.
+         */
+        fun restored(order: List<Int>, seed: Long = System.nanoTime()): QueueShuffleOrder {
+            require(QueueSnapshot.isPermutation(order, order.size)) { "not an order of the whole list: $order" }
+            return QueueShuffleOrder(order.toIntArray(), Random(seed))
+        }
+
+        /** Any shuffle order as list indices, in the order it plays them. */
+        fun playOrder(order: ShuffleOrder): List<Int> {
+            val out = ArrayList<Int>(order.length)
+            var i = order.firstIndex
+            while (i != androidx.media3.common.C.INDEX_UNSET && out.size < order.length) {
+                out += i
+                i = order.getNextIndex(i)
+            }
+            return out
+        }
+    }
 }
