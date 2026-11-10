@@ -7,6 +7,7 @@ import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.playback.di.PlaybackScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -30,6 +31,10 @@ class ServerLookup @Inject constructor(
     fun serverFor(serverId: String): Server? = servers.value[serverId]
 
     fun providerFor(serverId: String): MediaProvider? = serverFor(serverId)?.let(providerRegistry::forServer)
+
+    /** The ids of the servers set up now, read from storage (the hot map may still be empty at start); null if unreadable. */
+    suspend fun knownServerIds(): Set<String>? =
+        runCatching { serverRepository.servers.first().mapTo(HashSet()) { it.id } }.getOrNull()
 
     suspend fun awaitProvider(serverId: String): MediaProvider? {
         providerFor(serverId)?.let { return it }

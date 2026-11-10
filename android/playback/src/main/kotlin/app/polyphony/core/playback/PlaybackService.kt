@@ -990,7 +990,8 @@ class PlaybackService : MediaLibraryService() {
     /** The saved queue, as it would come back; reads the file and changes nothing. */
     private suspend fun loadRestorePlan(): QueueRestore.Plan? {
         if (!settings.rememberQueue) return null
-        return queuePersistence.load()?.let(QueueRestore::plan)
+        val saved = queuePersistence.load() ?: return null
+        return QueueRestore.plan(saved, serverLookup.knownServerIds())
     }
 
     private fun restoredItems(plan: QueueRestore.Plan): MediaSession.MediaItemsWithStartPosition =

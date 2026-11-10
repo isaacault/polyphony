@@ -61,6 +61,51 @@ class QueueRestoreTest {
         assertEquals(Player.REPEAT_MODE_OFF, plan.repeatMode)
     }
 
+    @Test fun `songs from a server removed since are left out, the rest renumbered`() {
+        val saved = PersistedQueue(
+            tracks = listOf(track("a"), track("gone1", server = "old"), track("q", server = "s1"), track("b")),
+            index = 3,
+            positionMs = 30_000,
+            queuedIndices = listOf(2),
+            shuffleOrder = listOf(1, 3, 0, 2),
+        )
+        val plan = QueueRestore.plan(saved, knownServers = setOf("s1"))!!
+        assertEquals(listOf("a", "q", "b"), plan.tracks.map { it.id })
+        assertEquals("b", plan.tracks[plan.index].id)
+        assertEquals(30_000, plan.positionMs)
+        assertEquals(listOf(false, true, false), plan.queued)
+        assertEquals(listOf(2, 0, 1), plan.shuffleOrder)
+    }
+
+    @Test fun `the playing song's server is gone, the next song takes its place from its start`() {
+        val saved = PersistedQueue(tracks = listOf(track("a"), track("x", server = "old"), track("b")), index = 1, positionMs = 30_000)
+        val plan = QueueRestore.plan(saved, knownServers = setOf("s1"))!!
+        assertEquals("b", plan.tracks[plan.index].id)
+        assertEquals(0, plan.positionMs)
+    }
+
+    @Test fun `every server gone, nothing comes back`() {
+        assertNull(QueueRestore.plan(saved(listOf("a", "b")), knownServers = emptySet()))
+    }
+
+    @Test fun `servers that can't be read keep every song`() {
+        assertEquals(2, QueueRestore.plan(saved(listOf("a", "b")), knownServers = null)!!.tracks.size)
+    }
+
+    @Test fun `a song saved at its very end comes back from its start`() {
+        assertEquals(0, QueueRestore.plan(saved(listOf("a"), positionMs = 200_000))!!.positionMs)
+        assertEquals(0, QueueRestore.plan(saved(listOf("a"), positionMs = 199_000))!!.positionMs)
+        assertEquals(197_000, QueueRestore.plan(saved(listOf("a"), positionMs = 197_000))!!.positionMs)
+    }
+
+    @Test fun `resume position`() {
+        assertEquals(0, QueueRestore.resumePosition(-1, 100_000))
+        assertEquals(50_000, QueueRestore.resumePosition(50_000, 100_000))
+        assertEquals(0, QueueRestore.resumePosition(99_000, 100_000))
+        assertEquals(0, QueueRestore.resumePosition(150_000, 100_000))
+        assertEquals("unknown length: where it was", 150_000, QueueRestore.resumePosition(150_000, 0))
+    }
+
     @Test fun `an empty saved queue restores nothing`() {
         assertNull(QueueRestore.plan(saved(emptyList())))
     }
