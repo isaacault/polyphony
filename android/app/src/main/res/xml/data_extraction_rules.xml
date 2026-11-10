@@ -2,6 +2,7 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="database" path="polyphony-library.db" />
+        <exclude domain="database" path="polyphony-scrobble.db" />
         <exclude domain="file" path="stream-cache" />
     </cloud-backup>
     <device-transfer>

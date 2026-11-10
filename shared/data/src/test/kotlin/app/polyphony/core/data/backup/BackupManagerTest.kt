@@ -1,5 +1,7 @@
 package app.polyphony.core.data.backup
 
+import app.polyphony.core.domain.model.ScrobbleAccount
+import app.polyphony.core.domain.model.ScrobbleService
 import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.model.ServerOptions
 import app.polyphony.core.domain.model.ServerType
@@ -7,6 +9,7 @@ import app.polyphony.core.domain.repository.AppearanceSettings
 import app.polyphony.core.domain.repository.AppSettings
 import app.polyphony.core.domain.repository.LibrarySettings
 import app.polyphony.core.domain.repository.PlaybackSettings
+import app.polyphony.core.domain.repository.ScrobbleAccounts
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.ThemeMode
@@ -79,6 +82,32 @@ class BackupManagerTest {
         assertEquals(BackupFile.CURRENT_VERSION, restored.version)
         assertEquals(sampleSettings, restored.settings)
         assertEquals(listOf(subsonic, jellyfin), restored.servers)
+    }
+
+    private class FakeScrobbleAccounts(var accounts: List<ScrobbleAccount> = emptyList()) : ScrobbleAccounts {
+        override suspend fun all() = accounts
+        override suspend fun restore(accounts: List<ScrobbleAccount>) {
+            this.accounts = this.accounts.filter { a -> accounts.none { it.service == a.service } } + accounts
+        }
+    }
+
+    @Test
+    fun `the phone's scrobbling accounts travel in the file like server passwords`() = runTest {
+        val accounts = listOf(
+            ScrobbleAccount(ScrobbleService.LISTENBRAINZ, "alice", "lb-token"),
+            ScrobbleAccount(ScrobbleService.LASTFM, "alice", "session-key", nowPlaying = false),
+        )
+        val exported = BackupManager(json, FakeSettingsRepository(), FakeServerRepository(), FakeScrobbleAccounts(accounts)).export()
+        assertEquals(accounts, json.decodeFromString(BackupFile.serializer(), exported).scrobblers)
+
+        val target = FakeScrobbleAccounts()
+        BackupManager(json, FakeSettingsRepository(), FakeServerRepository(), target).restore(exported)
+        assertEquals(accounts, target.accounts)
+
+        // A file from before scrobbling still opens, and restores none.
+        val old = FakeScrobbleAccounts()
+        BackupManager(json, FakeSettingsRepository(), FakeServerRepository(), old).restore("""{"version":1,"servers":[]}""")
+        assertEquals(emptyList<ScrobbleAccount>(), old.accounts)
     }
 
     @Test
