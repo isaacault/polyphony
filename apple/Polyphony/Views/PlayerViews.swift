@@ -629,7 +629,15 @@ struct NowPlayingView: View {
                         Artwork(url: model.artworkURL(for: entry, size: 1200), cornerRadius: artworkShape.cornerRadius)
                             .frame(maxWidth: 460, maxHeight: 460)
                             .shadow(radius: 24, y: 10)
-                        Text(entry.title).font(.title.weight(.bold)).lineLimit(2)
+                        if let albumID = entry.libraryTrack?.albumID {
+                            Button { model.open(.album(albumID)) } label: {
+                                Text(entry.title).font(.title.weight(.bold)).lineLimit(2).multilineTextAlignment(.leading)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Go to Album")
+                        } else {
+                            Text(entry.title).font(.title.weight(.bold)).lineLimit(2)
+                        }
                         Text([entry.artist, entry.album].compactMap { $0 }.joined(separator: " — "))
                             .font(.title3).foregroundStyle(.secondary).lineLimit(2)
                         NowPlayingActions(entry: entry)
