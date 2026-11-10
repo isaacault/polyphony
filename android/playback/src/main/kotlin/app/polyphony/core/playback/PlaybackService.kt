@@ -35,6 +35,8 @@ import app.polyphony.core.domain.model.RecentContext
 import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.DlnaRenderer
+import app.polyphony.core.domain.playback.EqualizerMode
+import app.polyphony.core.domain.playback.EqualizerSettings
 import app.polyphony.core.domain.repository.AppSettings
 import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
@@ -86,6 +88,7 @@ import app.polyphony.core.playback.stream.UnplayableSkips
 import app.polyphony.core.playback.timer.SleepTimer
 import app.polyphony.core.playback.audio.OutputVolume
 import app.polyphony.core.playback.audio.PausingAudioFocus
+import app.polyphony.core.playback.audio.eq.BuiltInEqualizer
 import app.polyphony.core.playback.crossfade.CrossfadePlan
 import app.polyphony.core.playback.crossfade.Crossfader
 import androidx.media3.exoplayer.source.MediaSource
@@ -152,6 +155,8 @@ class PlaybackService : MediaLibraryService() {
     /** The local player's volume: ReplayGain, the sleep timer and crossfade each set their share. */
     private lateinit var localVolume: OutputVolume
     private lateinit var crossfader: Crossfader
+    /** The built-in equaliser, in the local player and the crossfade's second player alike. */
+    private val equalizer = BuiltInEqualizer()
     private lateinit var pausingFocus: PausingAudioFocus
     /** How the local player opens songs; the crossfade's second player opens them the same way. */
     private lateinit var mediaSourceFactory: MediaSource.Factory
@@ -200,6 +205,7 @@ class PlaybackService : MediaLibraryService() {
             runBlocking { withTimeoutOrNull(1_500) { settingsRepository.current() } }
         }.getOrNull() ?: AppSettings()
         settings = initial.playback
+        equalizer.apply(initial.playback.equalizer)
 
         localPlayer = buildLocalPlayer(initial.playback)
         localVolume = OutputVolume { localPlayer.volume = it }
@@ -253,7 +259,7 @@ class PlaybackService : MediaLibraryService() {
         dlnaManager.setMediaResolver(dlnaResolver)
         dlnaManager.setSessionListener(dlnaSessionListener)
         startCollectors()
-        openAudioEffectSession()
+        if (settings.equalizer.mode == EqualizerMode.SYSTEM) openAudioEffectSession()
         restoreQueueOnStart(initial.playback.rememberQueue)
         crossfader.start()
     }
@@ -328,6 +334,7 @@ class PlaybackService : MediaLibraryService() {
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
         val exo = ExoPlayer.Builder(this)
+            .setRenderersFactory(equalizer.renderersFactory(this))
             .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
             // Media3 ducks for a notification; with ducking off, PausingAudioFocus pauses instead.
@@ -356,6 +363,7 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun buildCrossfadePlayer(): ExoPlayer =
         ExoPlayer.Builder(this)
+            .setRenderersFactory(equalizer.renderersFactory(this))
             .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(audioAttributes, false)
             .setSkipSilenceEnabled(settings.skipSilence)
@@ -498,6 +506,7 @@ class PlaybackService : MediaLibraryService() {
         }
         if (old.playbackSpeed != new.playbackSpeed) player.setPlaybackSpeed(new.playbackSpeed)
         if (old.preloadNextTrack != new.preloadNextTrack) applyPreload(localPlayer, new.preloadNextTrack)
+        if (old.equalizer != new.equalizer) applyEqualizer(old.equalizer.mode, new.equalizer)
         reporter.enabled = new.scrobble
         reporter.threshold = new.scrobbleThreshold
         headset.setEnabled(new.resumeOnConnect)
@@ -1187,6 +1196,19 @@ class PlaybackService : MediaLibraryService() {
     }
 
     // ---- audio effects ----
+
+    /**
+     * The built-in equaliser plays the new curve, and the phone's own effects hear of the session only
+     * while they are the choice: switching to the built-in one tells them to let go, so the two never
+     * both shape the sound.
+     */
+    private fun applyEqualizer(oldMode: EqualizerMode, new: EqualizerSettings) {
+        equalizer.apply(new)
+        val wasSystem = oldMode == EqualizerMode.SYSTEM
+        val isSystem = new.mode == EqualizerMode.SYSTEM
+        if (isSystem && !wasSystem) openAudioEffectSession()
+        if (wasSystem && !isSystem) closeAudioEffectSession()
+    }
 
     private fun openAudioEffectSession() {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
