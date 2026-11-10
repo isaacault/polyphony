@@ -8,6 +8,8 @@
 # local CI first if there is none). No passwords are typed: signing reads
 # $POLYPHONY_SIGNING_DIR/keystore.properties (default ~/.config/polyphony, mode 600; keys
 # storePassword, keyAlias, keyPassword) and the release.jks next to it, inside the build container.
+# Optional: lastfm.properties beside them (apiKey, apiSecret; the app's Last.fm API account) turns on
+# Last.fm scrobbling in the build; without it the release simply doesn't offer Last.fm.
 #
 # Steps: bump version.properties, commit "Release vX" and tag vX locally; build the signed APK and
 # bundle in the polyphony-build image (under the shared CI lock); check the signer is the Polyphony
@@ -44,6 +46,7 @@ die() { echo "release.sh: $*" >&2; exit 1; }
 for key in storePassword keyAlias keyPassword; do
   grep -q "^$key=." "$signing/keystore.properties" || die "$signing/keystore.properties has no $key"
 done
+[ -f "$signing/lastfm.properties" ] || say "no $signing/lastfm.properties: this release won't offer Last.fm scrobbling"
 [ "$(git branch --show-current)" = main ] || die "run it on main"
 [ -z "$(git status --porcelain)" ] || die "the working tree has changes"
 git fetch -q origin main --tags
@@ -121,6 +124,10 @@ docker run --rm \
     p() { grep "^$1=" /signing/keystore.properties | cut -d= -f2-; }
     export POLYPHONY_KEYSTORE_PATH=/signing/release.jks
     export POLYPHONY_KEYSTORE_PASSWORD="$(p storePassword)" POLYPHONY_KEY_ALIAS="$(p keyAlias)" POLYPHONY_KEY_PASSWORD="$(p keyPassword)"
+    if [ -f /signing/lastfm.properties ]; then
+      l() { grep "^$1=" /signing/lastfm.properties | cut -d= -f2-; }
+      export POLYPHONY_LASTFM_API_KEY="$(l apiKey)" POLYPHONY_LASTFM_API_SECRET="$(l apiSecret)"
+    fi
     ./gradlew --no-daemon --console=plain '"$props"' :android:app:assembleRelease :android:app:bundleRelease
     rc=$?; find . -user 0 -exec chown '"$(id -u):$(id -g)"' {} + 2>/dev/null; exit $rc' \
   > "$log" 2>&1

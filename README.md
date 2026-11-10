@@ -135,6 +135,11 @@ Signing needs no typing: the script reads `~/.config/polyphony/release.jks` and
 override the folder with `POLYPHONY_SIGNING_DIR`) inside the build container. Keep a backup of both
 files: Android only installs an update over an app signed with the same key.
 
+Last.fm scrobbling needs the app's Last.fm API account, which is never committed: `lastfm.properties`
+(`apiKey`, `apiSecret`) in the same folder for releases, `lastfm.apiKey` and `lastfm.apiSecret` in
+`local.properties` for local builds, or `POLYPHONY_LASTFM_API_KEY` / `POLYPHONY_LASTFM_API_SECRET`.
+A build without it works and simply doesn't offer Last.fm; ListenBrainz needs no app key.
+
 Tags containing a dash (`v0.2.0-beta.1`) are published as pre-releases. Each release carries the
 universal APK, the Play bundle, the R8 mapping file and a `.sha256` checksum list. The `Release`
 workflow remains as a manual fallback (run it from the Actions tab with a tag; it signs with the
