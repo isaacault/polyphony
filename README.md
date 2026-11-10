@@ -24,10 +24,11 @@ built to be artwork-forward, fast and smooth, and unapologetically open: GPL-3.0
 
 <sub>Screenshots from the debug build on an Android 16 emulator against a local Navidrome test library (generated tones with solid-colour covers, hence the flat artwork).</sub>
 
-> **Status: early alpha.** The architecture, providers, playback engine and UI are in place; the
-> debug build has been exercised end to end on an emulator against Navidrome (onboarding, sync,
-> browsing, search, playback, queue, settings), but not yet through a long real-world soak or on
-> physical Cast and DLNA hardware. Expect rough edges and please file issues.
+> **Status: alpha, in daily use.** The architecture, providers, playback engine and UI are in
+> place and are used every day on a phone against Navidrome, Jellyfin and continuo, playing to a
+> Chromecast and a Yamaha AV receiver over DLNA (gapless included). A companion Mac app shares the
+> same rules (`apple/`). Other receivers, very large libraries and long soaks are still being
+> verified. Expect rough edges and please file issues.
 
 ## What it does
 
@@ -52,7 +53,8 @@ built to be artwork-forward, fast and smooth, and unapologetically open: GPL-3.0
 **Playback**
 - Media3 / ExoPlayer with gapless playback, a persistent queue that survives restarts, media
   notification and lock-screen controls, external equaliser hookup, ReplayGain (track/album/auto),
-  skip silence, sleep timer, playback speed, scrobbling / now-playing reporting, an LRU stream
+  skip silence, crossfade that keeps albums gapless, radio from any song or artist, a sleep timer
+  that fades out, playback speed, scrobbling / now-playing reporting, an LRU stream
   cache, and a basic Android Auto / Bluetooth browse tree
 - **Google Cast** with seamless local ⇄ Cast hand-off of the current queue and position
 - **UPnP / DLNA renderers** (TVs, AVRs, network speakers) through a built-in control point, with
