@@ -13,6 +13,7 @@ import androidx.room.Room
 import app.polyphony.core.data.db.Migrations
 import app.polyphony.core.data.db.PolyphonyDatabase
 import app.polyphony.core.data.db.dao.AlbumDao
+import app.polyphony.core.data.db.dao.ConnectionSampleDao
 import app.polyphony.core.data.db.dao.ArtistDao
 import app.polyphony.core.data.db.dao.GenreDao
 import app.polyphony.core.data.db.dao.PlayContextDao
@@ -60,6 +61,7 @@ object DatabaseModule {
     @Provides fun provideRemoteDeviceDao(db: PolyphonyDatabase): RemoteDeviceDao = db.remoteDeviceDao()
     @Provides fun providePlayHistoryDao(db: PolyphonyDatabase): PlayHistoryDao = db.playHistoryDao()
     @Provides fun providePlayContextDao(db: PolyphonyDatabase): PlayContextDao = db.playContextDao()
+    @Provides fun provideConnectionSampleDao(db: PolyphonyDatabase): ConnectionSampleDao = db.connectionSampleDao()
 
     @Provides
     @Singleton
