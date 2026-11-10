@@ -886,6 +886,8 @@ class PlaybackService : MediaLibraryService() {
                     publishExtras()
                 }
             }
+            // A seek, notably while paused, where neither the playing timer nor a pause saves the place.
+            if (events.contains(Player.EVENT_POSITION_DISCONTINUITY)) scheduleSave()
             if (events.contains(Player.EVENT_PLAY_WHEN_READY_CHANGED) && !p.playWhenReady) {
                 scheduleSave(immediate = true)
                 recordContextProgress()
