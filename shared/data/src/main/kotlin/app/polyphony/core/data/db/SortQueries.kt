@@ -67,13 +67,27 @@ internal object SortQueries {
         val order = when (sort) {
             ArtistSort.NAME -> "nameSortKey ASC"
             ArtistSort.ALBUM_COUNT -> "albumCount DESC, nameSortKey ASC"
-            ArtistSort.RECENTLY_ADDED ->
-                "(SELECT MAX(a.createdAt) FROM albums a WHERE a.serverId = artists.serverId AND a.artistId = artists.id) DESC, " +
-                    "nameSortKey ASC"
+            ArtistSort.RECENTLY_ADDED -> return artistsByNewestAlbum(serverId, filter)
             ArtistSort.STARRED -> "starred DESC, nameSortKey ASC"
         }
         val where = filterClause(filter.restrictedTo(ItemKind.ARTIST))
         return SimpleSQLiteQuery("SELECT * FROM artists WHERE serverId = ?${where.sql} ORDER BY $order", where.args(serverId))
+    }
+
+    /**
+     * Artists by their newest album. Each artist's latest date comes from one grouped pass over
+     * the albums: a per-artist `MAX(createdAt)` subquery let SQLite walk the createdAt index over
+     * every album for every artist (2,000 × 5,000 rows on a large library).
+     */
+    private fun artistsByNewestAlbum(serverId: String, filter: LibraryFilter): SimpleSQLiteQuery {
+        val where = filterClause(filter.restrictedTo(ItemKind.ARTIST)) { "artists.$it" }
+        return SimpleSQLiteQuery(
+            "SELECT artists.* FROM artists LEFT JOIN " +
+                "(SELECT artistId, MAX(createdAt) AS newest FROM albums WHERE serverId = ? GROUP BY artistId) latest " +
+                "ON latest.artistId = artists.id " +
+                "WHERE artists.serverId = ?${where.sql} ORDER BY latest.newest DESC, artists.nameSortKey ASC",
+            where.args(serverId, serverId),
+        )
     }
 
     fun albums(serverId: String, sort: AlbumSort, ascending: Boolean, filter: LibraryFilter = LibraryFilter.NONE): SimpleSQLiteQuery {
