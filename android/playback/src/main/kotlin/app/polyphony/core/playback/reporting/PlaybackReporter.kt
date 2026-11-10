@@ -4,6 +4,7 @@ import app.polyphony.core.domain.model.PlayNowIds
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.ScrobbleRule
 import app.polyphony.core.domain.repository.LibraryRepository
+import app.polyphony.core.domain.repository.Scrobbler
 import app.polyphony.core.playback.engine.ServerLookup
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,11 +16,15 @@ import kotlinx.coroutines.launch
  * song (continuo#12) isn't a Navidrome song, so it goes to [playNow] instead (continuo scrobbles
  * it to the account's linked ListenBrainz and Last.fm): stream id, and when it was listened to
  * (null: it's playing now).
+ *
+ * The same moments go to [scrobbler], this phone's own ListenBrainz and Last.fm accounts, whatever
+ * [enabled] (the server's reporting) says: connecting an account there is its own opt-in.
  */
 class PlaybackReporter(
     private val scope: CoroutineScope,
     private val serverLookup: ServerLookup,
     private val libraryRepository: LibraryRepository,
+    private val scrobbler: Scrobbler = Scrobbler.NONE,
     private val playNow: suspend (serverId: String, streamId: String, listenedAtMs: Long?) -> Unit = { _, _, _ -> },
 ) {
     @Volatile var enabled: Boolean = true
@@ -36,6 +41,7 @@ class PlaybackReporter(
         reported = false
         startedAt = System.currentTimeMillis()
         val reportable = current ?: return
+        scope.launch(Dispatchers.IO) { runCatching { scrobbler.nowPlaying(reportable) } }
         if (!enabled) return
         val stream = PlayNowIds.streamId(reportable.id)
         scope.launch(Dispatchers.IO) {
@@ -54,6 +60,7 @@ class PlaybackReporter(
             val playedAt = startedAt
             val stream = PlayNowIds.streamId(track.id)
             scope.launch(Dispatchers.IO) {
+                runCatching { scrobbler.played(track, playedAt) }
                 if (stream != null) {
                     if (enabled) runCatching { playNow(track.serverId, stream, playedAt) }
                     return@launch

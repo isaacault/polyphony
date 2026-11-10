@@ -41,6 +41,7 @@ import app.polyphony.core.domain.repository.ListeningHistoryRepository
 import app.polyphony.core.domain.repository.NetworkMonitor
 import app.polyphony.core.domain.repository.PlaybackSettings
 import app.polyphony.core.domain.repository.RequestRepository
+import app.polyphony.core.domain.repository.Scrobbler
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.transcode.TranscodeDecision
 import app.polyphony.core.playback.audio.HeadsetMonitor
@@ -129,6 +130,7 @@ class PlaybackService : MediaLibraryService() {
     @Inject lateinit var dlnaManager: DlnaManager
     @Inject lateinit var dlnaResolver: PolyphonyDlnaResolver
     @Inject lateinit var playNowLinks: PlayNowReceiverLinks
+    @Inject lateinit var scrobbler: Scrobbler
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var localPlayer: ExoPlayer
@@ -208,7 +210,7 @@ class PlaybackService : MediaLibraryService() {
                 if (duration == C.TIME_UNSET || duration <= 0 || !player.isPlaying) null else duration - player.currentPosition
             },
         )
-        reporter = PlaybackReporter(scope, serverLookup, libraryRepository) { serverId, streamId, listenedAtMs ->
+        reporter = PlaybackReporter(scope, serverLookup, libraryRepository, scrobbler) { serverId, streamId, listenedAtMs ->
             val server = serverLookup.providerFor(serverId)?.server ?: return@PlaybackReporter
             if (requestRepository.supports(server)) requestRepository.scrobblePlayNow(server, streamId, listenedAtMs)
         }.also {
