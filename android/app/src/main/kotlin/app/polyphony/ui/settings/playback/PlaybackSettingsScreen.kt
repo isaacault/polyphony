@@ -221,6 +221,7 @@ fun PlaybackSettingsScreen(viewModel: PlaybackSettingsViewModel = hiltViewModel(
                 onSelected = { t -> viewModel.update { it.copy(scrobbleThreshold = t) } },
                 enabled = s.scrobble,
             )
+            PhoneScrobblingRow()
             PlayNowScrobbling()
         }
 
