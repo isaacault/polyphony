@@ -25,29 +25,28 @@ data class PersistedQueue(
     val context: PlayContext? = null,
 )
 
-/** Atomic JSON persistence of the queue for playback resumption after process death. */
+/**
+ * The queue on disk, for playback resumption after process death or a reboot ([AtomicTextFile]:
+ * a kill mid-save keeps the last complete queue, and overlapping saves keep the newest).
+ */
 @Singleton
 class QueuePersistence @Inject constructor(@ApplicationContext context: Context) {
-    private val file = File(context.filesDir, "playback/queue.json")
+    private val file = AtomicTextFile(File(context.filesDir, "playback/queue.json"))
 
-    suspend fun save(queue: PersistedQueue) = withContext(Dispatchers.IO) {
-        runCatching {
-            file.parentFile?.mkdirs()
-            val tmp = File(file.parentFile, file.name + ".tmp")
-            tmp.writeText(PlaybackJson.encodeToString(queue))
-            if (!tmp.renameTo(file)) {
-                file.delete()
-                tmp.renameTo(file)
-            }
+    /** Saves [queue]. Call it where the snapshot is taken: saves land in the order they're called. */
+    suspend fun save(queue: PersistedQueue) {
+        val ticket = file.ticket()
+        withContext(Dispatchers.IO) {
+            runCatching { file.write(ticket, PlaybackJson.encodeToString(queue)) }
         }
     }
 
     suspend fun load(): PersistedQueue? = withContext(Dispatchers.IO) {
-        runCatching {
-            if (!file.exists()) null
-            else PlaybackJson.decodeFromString(PersistedQueue.serializer(), file.readText())
-        }.getOrNull()
+        file.read { PlaybackJson.decodeFromString(PersistedQueue.serializer(), it) }
     }
 
-    suspend fun clear() = withContext(Dispatchers.IO) { file.delete() }
+    suspend fun clear() {
+        val ticket = file.ticket()
+        withContext(Dispatchers.IO) { runCatching { file.clear(ticket) } }
+    }
 }
