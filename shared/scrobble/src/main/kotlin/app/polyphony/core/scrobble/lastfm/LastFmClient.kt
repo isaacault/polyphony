@@ -115,8 +115,12 @@ class LastFmClient(
             val reason = "Last.fm error $error: ${body?.message().orEmpty()}"
             return when (error) {
                 in AUTH -> SubmitResult.Unauthorized
-                in RETRYABLE -> SubmitResult.Retry(reason)
-                else -> SubmitResult.Rejected(reason)
+                // Only this says the listen itself is wrong; the drainer then drops just that one.
+                INVALID_PARAMETERS -> SubmitResult.Rejected(reason)
+                // Anything else is the service (8, 11, 16, 29) or this build (a wrong API secret
+                // gives 13 on every request): the plays wait, backing off, rather than all being
+                // dropped one by one.
+                else -> SubmitResult.Retry(reason)
             }
         }
         if (response.code >= 500 || response.code == 429 || response.code == 408) return SubmitResult.Retry("Last.fm answered ${response.code}")
@@ -156,8 +160,11 @@ class LastFmClient(
         /** Authentication failed (4), invalid session key (9), invalid or suspended API key (10, 26), unauthorised token (14). */
         private val AUTH = setOf(4, 9, 10, 14, 26)
 
-        /** Operation failed (8), service offline (11), temporarily unavailable (16), rate limit (29). */
+        /** Operation failed (8), service offline (11), temporarily unavailable (16), rate limit (29): a sign-in to try again. */
         private val RETRYABLE = setOf(8, 11, 16, 29)
+
+        /** Invalid parameters: the one Last.fm error about the listen rather than the service or the app. */
+        private const val INVALID_PARAMETERS = 6
 
         /** A scrobble's ignoredMessage code for "daily scrobble limit exceeded": send it again later. */
         private const val IGNORED_DAILY_LIMIT = 5
