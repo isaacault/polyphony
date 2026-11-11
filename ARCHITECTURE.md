@@ -115,9 +115,15 @@ settings ──▶│ TranscodePolicy│   │ NetworkState │   │ OutputTarg
   minutes are fetched ahead at that rung (HLS playlists and segments into the stream cache under
   the URLs the player asks for), and continuo is told the next four songs and the level
   (`POST /v1/stream/upcoming`) so it encodes them first. Gapless: continuo states each rendition's
-  trims in its init segment (docs/spikes/hls-gapless on branch spike/hls-gapless). A song whose
-  HLS fails after the usual retries plays its ordinary stream for the session. Cast and DLNA keep
-  the progressive URLs. Off in Playback settings → Adaptive streaming.
+  trims in its init segment (docs/spikes/hls-gapless on branch spike/hls-gapless). A song plays
+  its ordinary stream for the session only when continuo answered and couldn't serve it (an
+  error status, playlists or segments that don't parse), or it was downloaded after it was
+  queued; a lost connection keeps it adaptive and waits for the network (the ordinary stream
+  couldn't get through either, and would be heavier when it did). Now Playing shows the rung
+  playing ("Adaptive Opus 64k"). The wiring is `HlsDataSources` (stream/AdaptiveHls.kt), which
+  `HlsPlaybackTest` plays through Media3's real HLS player under Robolectric against continuo's
+  playlists and a real song's segments. Cast and DLNA keep the progressive URLs. Off in Playback
+  settings → Adaptive streaming.
 - If `reloadCurrentTrackOnChange` is on, a changed decision re-prepares the current item at the
   same position (not an adaptive stream, which follows from its next segment); otherwise it
   applies from the next track.
