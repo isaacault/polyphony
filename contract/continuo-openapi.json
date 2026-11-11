@@ -333,6 +333,32 @@
     "title": "TokenIn",
     "type": "object"
    },
+   "UpcomingIn": {
+    "properties": {
+     "kbps": {
+      "default": 64,
+      "maximum": 10000.0,
+      "minimum": 1.0,
+      "title": "Kbps",
+      "type": "integer"
+     },
+     "lowerToo": {
+      "default": false,
+      "title": "Lowertoo",
+      "type": "boolean"
+     },
+     "songs": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 50,
+      "title": "Songs",
+      "type": "array"
+     }
+    },
+    "title": "UpcomingIn",
+    "type": "object"
+   },
    "UserCreate": {
     "properties": {
      "navidromeUsername": {
@@ -1891,6 +1917,35 @@
     ]
    }
   },
+  "/v1/library/partial": {
+   "get": {
+    "description": "The account's library albums with fewer songs than the album has (MusicBrainz's count, filled\nin the background, so new albums show once counted): {albums: [{navidromeAlbumId, have,\nexpected}]}. The apps' Albums leaves them out unless asked; the album page shows the rest.",
+    "operationId": "partial_v1_library_partial_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Partial V1 Library Partial Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Partial",
+    "tags": [
+     "library"
+    ]
+   }
+  },
   "/v1/library/removed": {
    "get": {
     "description": "Removed albums still restorable, newest first: the account's own, or the store's.",
@@ -2402,6 +2457,54 @@
        "title": "Stream Id",
        "type": "string"
       }
+     },
+     {
+      "in": "query",
+      "name": "d",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "D"
+      }
+     },
+     {
+      "in": "query",
+      "name": "exp",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Exp"
+      }
+     },
+     {
+      "in": "query",
+      "name": "sig",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Sig"
+      }
      }
     ],
     "responses": {
@@ -2480,6 +2583,56 @@
      }
     ],
     "summary": "Keep",
+    "tags": [
+     "play-now"
+    ]
+   }
+  },
+  "/v1/play-now/{stream_id}/receiver": {
+   "get": {
+    "description": "A link a speaker can play without a token: on RECEIVER_BASE_URL (the plain-HTTP LAN door)\nwhen set, else continuo's public address; signed for this device, good for 12 hours.",
+    "operationId": "receiver_link_v1_play_now__stream_id__receiver_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "stream_id",
+      "required": true,
+      "schema": {
+       "title": "Stream Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Receiver Link V1 Play Now  Stream Id  Receiver Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Receiver Link",
     "tags": [
      "play-now"
     ]
@@ -3317,6 +3470,251 @@
     "summary": "Search",
     "tags": [
      "search"
+    ]
+   }
+  },
+  "/v1/stream/upcoming": {
+   "post": {
+    "description": "Encode the next songs in the player's queue ahead, at the level it is on now (the nearest\nrung at or below), and forget earlier songs-ahead of this device that haven't started.",
+    "operationId": "upcoming_v1_stream_upcoming_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UpcomingIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Upcoming V1 Stream Upcoming Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Upcoming",
+    "tags": [
+     "stream"
+    ]
+   }
+  },
+  "/v1/stream/{song}/master.m3u8": {
+   "get": {
+    "operationId": "master_v1_stream__song__master_m3u8_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "song",
+      "required": true,
+      "schema": {
+       "title": "Song",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "max",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "minimum": 1,
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Max"
+      }
+     },
+     {
+      "in": "query",
+      "name": "min",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "minimum": 1,
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Min"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Master",
+    "tags": [
+     "stream"
+    ]
+   }
+  },
+  "/v1/stream/{song}/{kbps}/index.m3u8": {
+   "get": {
+    "operationId": "media_v1_stream__song___kbps__index_m3u8_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "song",
+      "required": true,
+      "schema": {
+       "title": "Song",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "kbps",
+      "required": true,
+      "schema": {
+       "title": "Kbps",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Media",
+    "tags": [
+     "stream"
+    ]
+   }
+  },
+  "/v1/stream/{song}/{kbps}/{name}": {
+   "get": {
+    "operationId": "segment_v1_stream__song___kbps___name__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "song",
+      "required": true,
+      "schema": {
+       "title": "Song",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "kbps",
+      "required": true,
+      "schema": {
+       "title": "Kbps",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "path",
+      "name": "name",
+      "required": true,
+      "schema": {
+       "title": "Name",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Segment",
+    "tags": [
+     "stream"
     ]
    }
   }
