@@ -710,6 +710,35 @@
     ]
    }
   },
+  "/v1/admin/stream": {
+   "get": {
+    "description": "Adaptive streaming since continuo started (polyphony#185): segments served per level (the\nplayers moving between levels), encodes running and recent, failures, each device's last\nsongs-ahead, and the cache. In memory only, for looking at; nothing decides from it.",
+    "operationId": "stream_activity_v1_admin_stream_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Stream Activity V1 Admin Stream Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "summary": "Stream Activity",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
   "/v1/admin/users": {
    "get": {
     "operationId": "list_users_v1_admin_users_get",
