@@ -104,7 +104,18 @@ Instrumented tests in any module run on demand from the Actions tab (`Connected 
 or locally against an emulator with the command above. Anything that depends on Android's own platform classes (XML factories, DataStore,
 Room) needs a test there, because the JVM stand-ins behave differently.
 
-## 6. Merging
+## 6. Playback under Robolectric
+
+`HlsPlaybackTest` (android:playback) plays continuo's adaptive streams through Media3's real
+ExoPlayer and HLS stack, against a MockWebServer answering as continuo does, with a real song's
+segments (`src/test/resources/hls`, from continuo's own fixtures). It shows what a phone can't
+without logs: which rendition each request asked for, with which token, and what the renderer got.
+Robolectric's Android comes through Gradle (the `robolectricSdk` configuration, so the CI's Gradle
+volume caches it) and runs offline; SDK 34, since the CI image's JDK 17 can't run 35. On an arm64
+host keep Conscrypt off (`@ConscryptMode(OFF)`) and use no SQLite: Robolectric has no linux-arm64
+build of either.
+
+## 7. Merging
 
 CI runs locally. `scripts/ci.sh` runs what the old `Build` workflow ran (`./gradlew test lintDebug
 :app:assembleDebug`) inside the `polyphony-build` Docker image and exits 0 when green; the log is
