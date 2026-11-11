@@ -133,6 +133,11 @@ data class PlaybackSettings(
     val prefetchQueue: Boolean = true,
     /** Also on mobile data (fewer songs ahead: each one costs data even if it's skipped). */
     val prefetchOnMobileData: Boolean = true,
+    /**
+     * Songs from a continuo server stream as HLS whose quality follows the connection, segment by
+     * segment (#185); off, they stream as one transcode per song, as from any Subsonic server.
+     */
+    val adaptiveStreaming: Boolean = true,
     val previousRestartsAfterMs: Long = 3_000,
     val rememberQueue: Boolean = true,
     val hapticFeedback: Boolean = true,

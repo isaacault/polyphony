@@ -217,6 +217,17 @@ class ContinuoRequestRepository internal constructor(
         headers = mapOf("Authorization" to "Bearer ${client.accessToken(server, force = false)}"),
     )
 
+    override suspend fun streamHeaders(server: Server, refresh: Boolean): Map<String, String> =
+        if (!supports(server)) emptyMap()
+        else mapOf("Authorization" to "Bearer ${client.accessToken(server, force = refresh)}")
+
+    override suspend fun streamUpcoming(server: Server, songs: List<String>, kbps: Int, lowerToo: Boolean) {
+        if (!supports(server)) return
+        val body = Json.encodeToString(StreamUpcomingBody.serializer(), StreamUpcomingBody(songs, kbps, lowerToo))
+        val reply = client.post(server, "/v1/stream/upcoming", body)
+        if (reply.code !in 200..299) throw client.serverError(reply, "continuo didn't take the songs coming up")
+    }
+
     override suspend fun playNowReceiverUrl(server: Server, streamId: String): String {
         val reply = client.get(server, "/v1/play-now/${URLEncoder.encode(streamId, "UTF-8")}/receiver")
         if (reply.code !in 200..299) throw client.serverError(reply, "no speaker link for that song")

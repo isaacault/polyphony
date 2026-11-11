@@ -191,4 +191,17 @@ interface RequestRepository {
 
     /** Mark every notification read; returns the unread count afterwards (0 unless one just arrived). */
     suspend fun markAllRead(server: Server): Int
+
+    /**
+     * The headers that authorise this install's adaptive streams on continuo (#185): a bearer
+     * token, a fresh one when [refresh] (the last one was refused). Empty for other servers.
+     */
+    suspend fun streamHeaders(server: Server, refresh: Boolean = false): Map<String, String> = emptyMap()
+
+    /**
+     * Tell continuo the songs coming up next in the queue (Navidrome ids, nearest first) and the
+     * level playing now, so it encodes them ahead; [lowerToo] while the connection comes and goes.
+     * Only the latest call counts. Best effort: a failure is the caller's to ignore.
+     */
+    suspend fun streamUpcoming(server: Server, songs: List<String>, kbps: Int, lowerToo: Boolean) {}
 }
