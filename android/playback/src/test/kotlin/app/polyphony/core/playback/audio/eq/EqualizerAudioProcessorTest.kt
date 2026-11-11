@@ -14,6 +14,8 @@ import org.junit.Test
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.log10
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -21,10 +23,10 @@ class EqualizerAudioProcessorTest {
 
     private val stereo16 = AudioFormat(44_100, 2, C.ENCODING_PCM_16BIT)
 
-    private fun tone(frames: Int = 4_410): ByteBuffer {
+    private fun tone(frames: Int = 4_410, hz: Double = 100.0): ByteBuffer {
         val buffer = ByteBuffer.allocateDirect(frames * 4).order(ByteOrder.nativeOrder())
         for (i in 0 until frames) {
-            val s = (8_000 * sin(2 * PI * 100.0 * i / 44_100)).roundToInt().toShort()
+            val s = (8_000 * sin(2 * PI * hz * i / 44_100)).roundToInt().toShort()
             buffer.putShort(s).putShort(s)
         }
         buffer.flip()
@@ -63,8 +65,36 @@ class EqualizerAudioProcessorTest {
         assertFalse(plain.contentEquals(boosted))
 
         eq.apply(EqualizerSettings(mode = EqualizerMode.SYSTEM, preset = EqualizerPreset.BASS_BOOST))
+        assertFalse("crossfades to the plain sound rather than stepping", plain.contentEquals(processor.feed(tone())))
+        processor.feed(tone())
         assertTrue(plain.contentEquals(processor.feed(tone())))
     }
+
+    @Test fun `turning it off or on mid-song is no step in level`() {
+        val eq = BuiltInEqualizer().apply { apply(EqualizerSettings(mode = EqualizerMode.BUILT_IN, preset = EqualizerPreset.BASS_BOOST)) }
+        val processor = EqualizerAudioProcessor { eq.curve }.start()
+        val boosted = processor.feed(tone(hz = 1_000.0))   // where Bass Boost's preamp is all there is
+        eq.apply(EqualizerSettings(mode = EqualizerMode.SYSTEM))
+        val off = processor.feed(tone(hz = 1_000.0))
+        assertTrue("off: ${peak(boosted, last = true)} then ${peak(off, last = false)}", stepDb(peak(boosted, last = true), peak(off, last = false)) < 1.0)
+        assertTrue("faded out to the plain level", stepDb(8_000.0, peak(off, last = true)) < 0.1)
+
+        repeat(2) { processor.feed(tone(hz = 1_000.0)) }
+        eq.apply(EqualizerSettings(mode = EqualizerMode.BUILT_IN, preset = EqualizerPreset.BASS_BOOST))
+        val on = processor.feed(tone(hz = 1_000.0))
+        assertTrue("on: starts from the plain level, ${peak(on, last = false)}", stepDb(8_000.0, peak(on, last = false)) < 1.0)
+        assertTrue("ends at the boosted level", stepDb(peak(boosted, last = true), peak(on, last = true)) < 0.1)
+    }
+
+    /** The largest sample of the first half cycle, or the last two cycles, of a 1 kHz tone (left channel). */
+    private fun peak(pcm: ByteArray, last: Boolean): Double {
+        val samples = ByteBuffer.wrap(pcm).order(ByteOrder.nativeOrder()).asShortBuffer()
+        val frames = samples.remaining() / 2
+        val range = if (last) (frames - 88 until frames) else (0 until 22)
+        return range.maxOf { abs(samples.get(it * 2).toInt()) }.toDouble()
+    }
+
+    private fun stepDb(a: Double, b: Double): Double = abs(20 * log10(b / a))
 
     @Test fun `the same settings again keep the same curve, so nothing is redesigned`() {
         val eq = BuiltInEqualizer()
