@@ -82,5 +82,13 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+    /** v6: the Songs tab sorted by duration or rating reads an index instead of every song (#9). */
+    private val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_tracks_serverId_durationMs` ON `tracks` (`serverId`, `durationMs`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_tracks_serverId_rating` ON `tracks` (`serverId`, `rating`)")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
 }

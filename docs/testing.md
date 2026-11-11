@@ -93,8 +93,10 @@ with `sqlite3`, and spell the name exactly, because `sqlite3` creates any path y
 
 Room schemas are exported to `shared/data/schemas/<db>/<version>.json`; commit the new file with every
 version bump together with a `Migration` in `Migrations.ALL`. `MigrationsChainTest` (plain unit
-test, runs in CI) fails if the chain has a gap. `MigrationsTest` migrates a real database from the
-oldest schema and lets Room validate the result; it needs the emulator:
+test, runs in CI) fails if the chain has a gap. `MigrationsOnJvmTest` (also in CI) builds every
+exported schema on the bundled SQLite, runs the migrations to the current version and lets Room
+validate the result, as an upgraded phone's first start does. `MigrationsTest` does the same on
+the framework SQLite; it needs the emulator:
 
 ```sh
 ./gradlew :shared:data:connectedDebugAndroidTest
