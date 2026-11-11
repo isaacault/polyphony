@@ -47,7 +47,11 @@ data class DownloadedAlbumGroup(
     val trackIds: List<String> get() = tracks.map { it.id }
 }
 
-data class RuleItem(val rule: DownloadRule, val profileName: String?)
+/** [findsNothing]: the rule found no songs although it holds downloads, which are kept (#17). */
+data class RuleItem(val rule: DownloadRule, val profileName: String?, val findsNothing: Boolean = false)
+
+/** The storage cap's last removal, for the Downloads screen (#17): how many, why, and the first few. */
+data class EvictionNote(val count: Int, val limitMb: Long, val leastRecentlyPlayed: Boolean, val titles: List<String>)
 
 data class DownloadsUiState(
     val isLoaded: Boolean = false,
@@ -94,13 +98,27 @@ class DownloadsViewModel @Inject constructor(
 
     private val profileNames = profiles.profiles.map { list -> list.associate { it.id to it.name } }
 
+    /** What the storage cap removed last, until dismissed. */
+    val eviction: StateFlow<EvictionNote?> = downloads.ruleReport
+        .map { it.eviction }
+        .distinctUntilChanged()
+        .mapLatest { e ->
+            e?.let {
+                val titles = runCatching { library.getTracks(it.trackIds.take(EVICTED_NAMED)) }.getOrDefault(emptyList()).map { t -> t.title }
+                EvictionNote(it.trackIds.size, it.limitMb, it.leastRecentlyPlayed, titles)
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun dismissEviction() = downloads.dismissEviction()
+
     val state: StateFlow<DownloadsUiState> = combine(
         allDownloads,
         tracksById,
-        downloads.rules,
+        combine(downloads.rules, downloads.ruleReport) { r, report -> r to report.emptyRules },
         downloads.ruleEvaluationState,
         combine(downloads.storageUsage, profileNames) { s, p -> s to p },
-    ) { list, tracks, rules, ruleState, (storage, names) ->
+    ) { list, tracks, (rules, emptyRules), ruleState, (storage, names) ->
         val active = list
             .filter { it.status != DownloadStatus.COMPLETED }
             .sortedWith(compareBy<DownloadedTrack> { statusOrder(it.status) }.thenByDescending { it.createdAt })
@@ -127,7 +145,9 @@ class DownloadsViewModel @Inject constructor(
             active = active.toImmutableList(),
             downloaded = groups.toImmutableList(),
             downloadedCount = completed.size,
-            rules = rules.map { RuleItem(it, it.profileId?.let { id -> names[id] ?: TranscodeProfile.builtIn(id)?.name }) }.toImmutableList(),
+            rules = rules.map {
+                RuleItem(it, it.profileId?.let { id -> names[id] ?: TranscodeProfile.builtIn(id)?.name }, findsNothing = it.id in emptyRules)
+            }.toImmutableList(),
             ruleState = ruleState,
             storage = storage,
             hasPaused = list.any { it.status == DownloadStatus.PAUSED },
@@ -156,5 +176,10 @@ class DownloadsViewModel @Inject constructor(
 
     fun deleteRule(ruleId: String, removeFiles: Boolean) {
         viewModelScope.launch { runCatching { downloads.deleteRule(ruleId, removeFiles) } }
+    }
+
+    private companion object {
+        /** Songs named in the eviction note; the rest are counted. */
+        const val EVICTED_NAMED = 3
     }
 }

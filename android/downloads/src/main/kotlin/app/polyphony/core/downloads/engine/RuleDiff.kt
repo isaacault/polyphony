@@ -28,6 +28,21 @@ data class Plan(
 /** Pure diffing between what rules want and what is on disk. */
 object RuleDiff {
 
+    /**
+     * Which rules' downloads to keep whatever they found ([Holding.held]), and which to show as
+     * finding nothing ([Holding.empty]), from each rule's songs (null: the lookup failed) and the
+     * rules that [owning] downloads. A failed lookup, or no songs at all from a rule that holds
+     * downloads, is far likelier a vanished playlist, album or artist (or a library mid-sync) than
+     * a wish to delete them all.
+     */
+    fun holding(found: Map<String, List<Track>?>, owning: Set<String>): Holding {
+        val empty = found.filter { (id, tracks) -> tracks != null && tracks.isEmpty() && id in owning }.keys
+        val failed = found.filterValues { it == null }.keys
+        return Holding(held = failed + empty, empty = empty)
+    }
+
+    data class Holding(val held: Set<String>, val empty: Set<String>)
+
     fun qualityRank(profileId: String?, profiles: Map<String, TranscodeProfile>): Int {
         val id = profileId ?: return 0
         return profiles[id]?.qualityRank ?: TranscodeProfile.builtIn(id)?.qualityRank ?: 0

@@ -247,6 +247,45 @@ private fun StorageCard(storage: StorageUsage?, fileCount: Int, onRules: () -> U
     }
 }
 
+/** What the storage cap removed last and why (#17), until dismissed; the notification says it too. */
+@Composable
+private fun EvictionCard(vm: DownloadsViewModel) {
+    val note by vm.eviction.collectAsStateWithLifecycle()
+    val eviction = note ?: return
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Dimens.screenPadding, vertical = 4.dp),
+    ) {
+        Row(Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    pluralStringResource(R.plurals.dl_evicted_title, eviction.count, eviction.count, formatBytes(eviction.limitMb * 1024L * 1024L)),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                val names = when {
+                    eviction.titles.isEmpty() -> null
+                    eviction.count > eviction.titles.size ->
+                        stringResource(R.string.dl_evicted_names_more, eviction.titles.joinToString(", "), eviction.count - eviction.titles.size)
+                    else -> stringResource(R.string.dl_evicted_names, eviction.titles.joinToString(", "))
+                }
+                Text(
+                    listOfNotNull(
+                        stringResource(if (eviction.leastRecentlyPlayed) R.string.dl_evicted_least_played else R.string.dl_evicted_oldest),
+                        names,
+                    ).joinToString(" "),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            IconButton(onClick = vm::dismissEviction) {
+                Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.dl_evicted_dismiss))
+            }
+        }
+    }
+}
+
 // ---- Active tab ----
 
 @Composable
@@ -378,6 +417,7 @@ private fun DownloadedTab(state: DownloadsUiState, vm: DownloadsViewModel, onTra
         item(key = "storage") {
             StorageCard(state.storage, state.downloadedCount, onRules = { }, onSettings = navigator::openDownloadsSettings)
         }
+        item(key = "eviction") { EvictionCard(vm) }
         when {
             !state.isLoaded -> item(key = "loading") { LoadingPlaceholder(PlaceholderStyle.LIST, count = 6) }
             state.downloaded.isEmpty() -> item(key = "empty") {
@@ -491,6 +531,7 @@ private fun RulesTab(state: DownloadsUiState, vm: DownloadsViewModel) {
                 }
             }
         }
+        item(key = "eviction") { EvictionCard(vm) }
         when {
             !state.isLoaded -> item(key = "loading") { LoadingPlaceholder(PlaceholderStyle.LIST, count = 3) }
             state.rules.isEmpty() -> item(key = "empty") {
@@ -515,16 +556,27 @@ private fun RulesTab(state: DownloadsUiState, vm: DownloadsViewModel) {
                         Text(label, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     },
                     supportingContent = {
-                        Text(
-                            listOfNotNull(
-                                item.profileName ?: stringResource(R.string.dl_rule_quality_default),
-                                if (rule.maxTracks > 0) stringResource(R.string.dl_rule_max_tracks, rule.maxTracks) else null,
-                                if (!rule.enabled) stringResource(R.string.dl_rule_disabled)
-                                else stringResource(R.string.dl_rule_last_evaluated, relativeTime(rule.lastEvaluatedAt)),
-                            ).joinToString(" · "),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        Column {
+                            Text(
+                                listOfNotNull(
+                                    item.profileName ?: stringResource(R.string.dl_rule_quality_default),
+                                    if (rule.maxTracks > 0) stringResource(R.string.dl_rule_max_tracks, rule.maxTracks) else null,
+                                    if (!rule.enabled) stringResource(R.string.dl_rule_disabled)
+                                    else stringResource(R.string.dl_rule_last_evaluated, relativeTime(rule.lastEvaluatedAt)),
+                                ).joinToString(" · "),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            // Its playlist, album or artist is gone (or the library is mid-sync):
+                            // said here rather than its downloads vanishing or lingering unexplained.
+                            if (item.findsNothing && rule.enabled) {
+                                Text(
+                                    stringResource(R.string.dl_rule_finds_nothing),
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
                     },
                     leadingContent = { Icon(Icons.AutoMirrored.Rounded.Rule, contentDescription = null, tint = if (rule.enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) },
                     trailingContent = {

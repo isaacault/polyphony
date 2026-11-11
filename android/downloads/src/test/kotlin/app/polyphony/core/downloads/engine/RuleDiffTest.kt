@@ -116,4 +116,20 @@ class RuleDiffTest {
         assertEquals(8, RuleDiff.estimateBytes(current))
         assertEquals(42, RuleDiff.estimateBytes(emptyList(), fallback = 42))
     }
+
+    @Test
+    fun `a rule that finds nothing keeps its downloads and is shown as finding nothing`() {
+        val holding = RuleDiff.holding(
+            found = mapOf(
+                "deleted playlist" to emptyList(),
+                "lookup failed" to null,
+                "new rule, nothing yet" to emptyList(),
+                "fine" to listOf(track("a")),
+            ),
+            owning = setOf("deleted playlist", "lookup failed", "fine"),
+        )
+        assertEquals(setOf("deleted playlist", "lookup failed"), holding.held)
+        // A failed lookup says nothing about the rule; a new rule has nothing to keep.
+        assertEquals(setOf("deleted playlist"), holding.empty)
+    }
 }
