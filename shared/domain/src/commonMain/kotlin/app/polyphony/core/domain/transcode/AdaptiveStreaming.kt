@@ -55,6 +55,16 @@ object AdaptiveStreaming {
     fun rungForBandwidth(bitsPerSecond: Int): Int? =
         if (bitsPerSecond <= 0) null else LADDER.lastOrNull { it * 1_325 <= bitsPerSecond }
 
+    /** The id of [profile], so labels can say "Adaptive". */
+    const val PROFILE_ID = "adaptive.continuo"
+
+    /**
+     * What the player shows for an adaptive song: Opus at the rung playing ([playingKbps], once the
+     * player has a rendition), else at the cap it may rise to.
+     */
+    fun profile(capKbps: Int, playingKbps: Int? = null): TranscodeProfile =
+        TranscodeProfile(PROFILE_ID, "Adaptive", AudioCodec.OPUS, maxBitrateKbps = playingKbps ?: capKbps)
+
     /** The level songs ahead are encoded at: what's playing now, within the cap. */
     fun upcomingKbps(playingKbps: Int?, capKbps: Int): Int =
         rungAtOrBelow(minOf(playingKbps ?: capKbps, capKbps))

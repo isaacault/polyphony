@@ -11,7 +11,7 @@ import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.NetworkMonitor
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.SettingsRepository
-import app.polyphony.core.domain.transcode.AudioCodec
+import app.polyphony.core.domain.transcode.AdaptiveStreaming
 import app.polyphony.core.domain.transcode.LossySourceRule
 import app.polyphony.core.domain.transcode.TranscodeProfile
 import app.polyphony.core.domain.transcode.TranscodeDecision
@@ -208,12 +208,12 @@ class StreamResolver @Inject constructor(
     }
 
     /**
-     * An adaptive (HLS) song opened from continuo (#185): its quality follows the connection up to
-     * [capKbps], which is what the player shows for it.
+     * An adaptive (HLS) song from continuo (#185): its quality follows the connection up to
+     * [capKbps]; the player shows the rung it's playing ([playingKbps]) once it has one.
      */
-    fun recordAdaptive(trackId: String, capKbps: Int) {
+    fun recordAdaptive(trackId: String, capKbps: Int, playingKbps: Int? = null) {
         val decision = engine.localDecision()
-        record(trackId, decision.copy(profile = TranscodeProfile(ADAPTIVE_ID, "Adaptive", AudioCodec.OPUS, maxBitrateKbps = capKbps)))
+        record(trackId, decision.copy(profile = AdaptiveStreaming.profile(capKbps, playingKbps)))
     }
 
     /** True when the song plays without a connection: downloaded, or complete in the stream cache. */
@@ -284,7 +284,6 @@ class StreamResolver @Inject constructor(
     private companion object {
         /** A bound for pins the service never released; normally only the current and next songs hold one. */
         const val MAX_PINS = 8
-        const val ADAPTIVE_ID = "adaptive.continuo"
         const val PROBE_TIMEOUT_S = 2L
         const val LENGTH_POLL_MS = 500L
     }

@@ -73,4 +73,12 @@ class AdaptiveStreamingTest {
         assertEquals(32, AdaptiveStreaming.upcomingKbps(playingKbps = 128, capKbps = 32))
         assertEquals(128, AdaptiveStreaming.upcomingKbps(playingKbps = null, capKbps = 128))
     }
+
+    @Test
+    fun `an adaptive song shows the rung playing, or its cap until there is one`() {
+        assertEquals(64, AdaptiveStreaming.profile(capKbps = 128, playingKbps = 64).maxBitrateKbps)
+        assertEquals(128, AdaptiveStreaming.profile(capKbps = 128).maxBitrateKbps)
+        assertEquals(AdaptiveStreaming.PROFILE_ID, AdaptiveStreaming.profile(capKbps = 32).id)
+        assertEquals(AudioCodec.OPUS, AdaptiveStreaming.profile(capKbps = 32).codec)
+    }
 }
