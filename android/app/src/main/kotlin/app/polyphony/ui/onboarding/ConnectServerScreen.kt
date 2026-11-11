@@ -48,7 +48,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -364,6 +367,49 @@ private fun ConnectForm(type: ServerType, state: ConnectFormState, viewModel: Co
                 Text(stringResource(R.string.connect_connecting))
             } else {
                 Text(stringResource(R.string.connect_button), style = MaterialTheme.typography.titleMedium)
+            }
+        }
+        // Jellyfin's Quick Connect (#22): approve a code from a device that's signed in, no password here.
+        if (viewModel.offersQuickConnect(type)) {
+            val code = state.quickConnectCode
+            if (code == null) {
+                OutlinedButton(
+                    onClick = viewModel::quickConnect,
+                    enabled = !state.isConnecting,
+                    shape = MaterialTheme.shapes.large,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .height(56.dp),
+                ) {
+                    Text(stringResource(R.string.connect_quick_connect))
+                }
+            } else {
+                Surface(
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(stringResource(R.string.connect_quick_connect_instructions), style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            code,
+                            style = MaterialTheme.typography.displaySmall,
+                            modifier = Modifier.semantics { contentDescription = code.toList().joinToString(" ") },
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Text(
+                                stringResource(R.string.connect_quick_connect_waiting),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = viewModel::cancelQuickConnect) { Text(stringResource(R.string.connect_quick_connect_cancel)) }
+                        }
+                    }
+                }
             }
         }
         Spacer(Modifier.height(24.dp))

@@ -105,6 +105,30 @@ data class ConnectRequest(
     val options: Map<String, String> = emptyMap(),
 )
 
+/**
+ * Signing in by approving a code from a device that's already signed in, instead of typing a
+ * password on this one (Jellyfin's Quick Connect, #22). A [MediaProviderFactory] that can offers it.
+ */
+interface QuickConnectFactory {
+    /**
+     * Starts a sign-in on [request]'s server (its username and password aren't used). Throws
+     * [ProviderException.Unsupported] when the server has Quick Connect turned off.
+     */
+    suspend fun startQuickConnect(request: ConnectRequest): QuickConnectSignIn
+}
+
+/** A Quick Connect sign-in under way. */
+interface QuickConnectSignIn {
+    /** What the user enters on the other device. */
+    val code: String
+
+    /**
+     * Waits until the code is approved, then returns the server signed in as the user who approved
+     * it. Throws [ProviderException.Unauthorized] when the code expires first.
+     */
+    suspend fun awaitServer(): Server
+}
+
 /** One factory per [ServerType]; registered into a Hilt multibinding set. */
 interface MediaProviderFactory {
     val type: ServerType

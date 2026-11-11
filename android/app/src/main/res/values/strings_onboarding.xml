@@ -40,6 +40,10 @@
     <string name="connect_remove_header">Remove header</string>
     <string name="connect_button">Test &amp; connect</string>
     <string name="connect_connecting">Connecting…</string>
+    <string name="connect_quick_connect">Sign in with Quick Connect</string>
+    <string name="connect_quick_connect_instructions">On a device that\'s signed in to Jellyfin, open your profile, then Quick Connect, and enter this code:</string>
+    <string name="connect_quick_connect_waiting">Waiting for approval…</string>
+    <string name="connect_quick_connect_cancel">Cancel</string>
     <string name="connect_success">Connected</string>
     <string name="connect_back">Back</string>
 
