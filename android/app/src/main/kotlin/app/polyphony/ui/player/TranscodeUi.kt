@@ -2,12 +2,14 @@ package app.polyphony.ui.player
 
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.provider.MediaProvider
+import app.polyphony.core.domain.transcode.AdaptiveStreaming
 import app.polyphony.core.domain.transcode.AudioCodec
 import app.polyphony.core.domain.transcode.TranscodeDecision
 import app.polyphony.core.domain.transcode.TranscodeProfile
 
-/** "Original", "Opus 128k", "FLAC ≤48 kHz" — a compact description of what is being streamed. */
+/** "Original", "Opus 128k", "FLAC ≤48 kHz", "Adaptive Opus 64k" — a compact description of what is being streamed. */
 fun TranscodeProfile.qualityLabel(): String = buildString {
+    if (id == AdaptiveStreaming.PROFILE_ID) append("Adaptive ")
     if (isPassthrough) {
         append("Original")
         return@buildString

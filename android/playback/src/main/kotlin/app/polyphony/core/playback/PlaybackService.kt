@@ -17,9 +17,11 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.session.CacheBitmapLoader
@@ -388,7 +390,29 @@ class PlaybackService : MediaLibraryService() {
         exo.setPlaybackSpeed(playback.playbackSpeed)
         // Shuffle mixes the list you pressed play on, never the songs you queued (UserQueue).
         exo.setShuffleOrder(QueueShuffleOrder())
+        exo.addAnalyticsListener(adaptiveRungs)
         return exo
+    }
+
+    /** The rung the adaptive song playing is at (song id, kbit/s), from [adaptiveRungs]. */
+    @Volatile private var playingRung: Pair<String, Int>? = null
+
+    /**
+     * Follows the rung an adaptive song is playing at (#185), shown in Now Playing and used for the
+     * songs ahead. The downstream format is the playing chunk's rendition, as the master playlist
+     * announces it; the renderer's input format won't do, as it keeps the first-listed rendition's
+     * bitrate whatever plays (HlsPlaybackTest).
+     */
+    private val adaptiveRungs = object : AnalyticsListener {
+        override fun onDownstreamFormatChanged(eventTime: AnalyticsListener.EventTime, mediaLoadData: MediaLoadData) {
+            val format = mediaLoadData.trackFormat ?: return
+            if (eventTime.timeline.isEmpty) return
+            val item = eventTime.timeline.getWindow(eventTime.windowIndex, Timeline.Window()).mediaItem
+            if (!isAdaptive(item)) return
+            val rung = AdaptiveStreaming.rungForBandwidth(format.bitrate) ?: return
+            playingRung = item.mediaId to rung
+            streamResolver.recordAdaptive(item.mediaId, currentCapKbps(), rung)
+        }
     }
 
     /**
