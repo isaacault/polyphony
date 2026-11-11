@@ -1,7 +1,9 @@
 package app.polyphony.core.playback.stream
 
+import android.net.Uri
 import android.util.Log
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSourceUtil
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheWriter
@@ -27,9 +29,14 @@ class QueuePrefetcher(
     private val resolver: StreamResolver,
     private val streamCache: StreamCache,
     private val upstream: DataSource.Factory,
+    /** continuo's HLS URLs with this install's token (no cache: the fetching adds its own). */
+    private val hlsUpstream: DataSource.Factory? = null,
 ) {
-    /** One queued song: what to resolve. */
-    data class Song(val serverId: String, val trackId: String)
+    /** One queued song: what to resolve; [hls] when it plays as an adaptive stream (#185). */
+    data class Song(val serverId: String, val trackId: String, val hls: Hls? = null)
+
+    /** An adaptive song: its stream's base URL (…/v1/stream/{song}/) and the rendition to fetch. */
+    data class Hls(val base: String, val kbps: Int)
 
     private var job: Job? = null
     private var planned: List<Song> = emptyList()
@@ -53,6 +60,20 @@ class QueuePrefetcher(
             if (fetched >= cap) {
                 Log.i(TAG, "Fetching ahead stops at ${cap / MB} MB, a quarter of the stream cache")
                 return
+            }
+            if (song.hls != null) {
+                val hlsUpstream = hlsUpstream ?: continue
+                val factory = CacheDataSource.Factory().setCache(cache).setUpstreamDataSourceFactory(hlsUpstream)
+                try {
+                    val bytes = fetchHls(factory, song.hls) { fetched += it }
+                    Log.i(TAG, "Fetched ${song.trackId} ahead at ${song.hls.kbps} kbit/s (${bytes / KB} KB)")
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: IOException) {
+                    Log.i(TAG, "Fetching ${song.trackId} ahead stopped: ${e.message}")
+                    return
+                }
+                continue
             }
             val spec = try {
                 resolver.resolveAhead(DataSpec(MediaItemFactory.uriFor(song.serverId, song.trackId))) ?: continue
@@ -82,6 +103,41 @@ class QueuePrefetcher(
             } finally {
                 stopOnCancel.dispose()
             }
+        }
+    }
+
+    /**
+     * An adaptive song into the cache under the URLs the player will ask for: the master playlist,
+     * the rendition's playlist, its init segment and every segment. Returns the bytes it wrote.
+     */
+    private suspend fun fetchHls(factory: CacheDataSource.Factory, hls: Hls, onBytes: (Long) -> Unit): Long {
+        val rendition = "${hls.base}${hls.kbps}/"
+        readAll(factory, hls.base + "master.m3u8")
+        val files = PrefetchPlan.hlsFiles(String(readAll(factory, rendition + "index.m3u8")))
+        var written = 0L
+        for (name in files) {
+            val writer = CacheWriter(factory.createDataSource(), DataSpec(Uri.parse(rendition + name)), null) { _, _, newBytes ->
+                written += newBytes
+                onBytes(newBytes)
+            }
+            val stopOnCancel = coroutineContext.job.invokeOnCompletion { writer.cancel() }
+            try {
+                writer.cache()
+            } finally {
+                stopOnCancel.dispose()
+            }
+        }
+        return written
+    }
+
+    /** A playlist through the cache (stored as it's read). */
+    private fun readAll(factory: CacheDataSource.Factory, url: String): ByteArray {
+        val source = factory.createDataSource()
+        try {
+            source.open(DataSpec(Uri.parse(url)))
+            return DataSourceUtil.readToEnd(source)
+        } finally {
+            source.close()
         }
     }
 

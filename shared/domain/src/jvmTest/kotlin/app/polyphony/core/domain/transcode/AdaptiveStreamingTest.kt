@@ -59,6 +59,15 @@ class AdaptiveStreamingTest {
     }
 
     @Test
+    fun `the rung playing is read back from the rendition's announced bandwidth`() {
+        for (k in AdaptiveStreaming.LADDER) {
+            assertEquals(k, AdaptiveStreaming.rungForBandwidth((k * 1000 * 1.06 * 1.25).toInt()))
+        }
+        assertEquals(null, AdaptiveStreaming.rungForBandwidth(-1))
+        assertEquals(null, AdaptiveStreaming.rungForBandwidth(20_000))
+    }
+
+    @Test
     fun `songs ahead are encoded at the level playing now, within the cap`() {
         assertEquals(64, AdaptiveStreaming.upcomingKbps(playingKbps = 64, capKbps = 256))
         assertEquals(32, AdaptiveStreaming.upcomingKbps(playingKbps = 128, capKbps = 32))

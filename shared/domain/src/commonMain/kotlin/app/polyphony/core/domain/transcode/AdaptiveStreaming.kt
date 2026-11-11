@@ -51,6 +51,10 @@ object AdaptiveStreaming {
     fun selectorMaxBitrate(capKbps: Int): Int =
         if (capKbps >= LADDER.last()) Int.MAX_VALUE else rungAtOrBelow(capKbps) * 1_400
 
+    /** The rung an adaptive stream is playing, from its rendition's announced peak bandwidth (bit/s). */
+    fun rungForBandwidth(bitsPerSecond: Int): Int? =
+        if (bitsPerSecond <= 0) null else LADDER.lastOrNull { it * 1_325 <= bitsPerSecond }
+
     /** The level songs ahead are encoded at: what's playing now, within the cap. */
     fun upcomingKbps(playingKbps: Int?, capKbps: Int): Int =
         rungAtOrBelow(minOf(playingKbps ?: capKbps, capKbps))
