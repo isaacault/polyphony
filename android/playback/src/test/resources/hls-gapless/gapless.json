@@ -1,0 +1,86 @@
+{
+ "t1_opus128_gapless": {
+  "packets": 0,
+  "declared": 0,
+  "preskip": 312,
+  "padding": 0,
+  "content": -312
+ },
+ "t1_opus128": {
+  "packets": 501,
+  "declared": 480353,
+  "preskip": 312,
+  "padding": 607,
+  "content": 480041
+ },
+ "t1_opus64_gapless": {
+  "packets": 0,
+  "declared": 0,
+  "preskip": 312,
+  "padding": 0,
+  "content": -312
+ },
+ "t1_opus64": {
+  "packets": 501,
+  "declared": 480353,
+  "preskip": 312,
+  "padding": 607,
+  "content": 480041
+ },
+ "t2_opus128_gapless": {
+  "packets": 0,
+  "declared": 0,
+  "preskip": 312,
+  "padding": 0,
+  "content": -312
+ },
+ "t2_opus128": {
+  "packets": 501,
+  "declared": 480611,
+  "preskip": 312,
+  "padding": 349,
+  "content": 480299
+ },
+ "t2_opus64_gapless": {
+  "packets": 0,
+  "declared": 0,
+  "preskip": 312,
+  "padding": 0,
+  "content": -312
+ },
+ "t2_opus64": {
+  "packets": 501,
+  "declared": 480611,
+  "preskip": 312,
+  "padding": 349,
+  "content": 480299
+ },
+ "t3_opus128_gapless": {
+  "packets": 0,
+  "declared": 0,
+  "preskip": 312,
+  "padding": 0,
+  "content": -312
+ },
+ "t3_opus128": {
+  "packets": 500,
+  "declared": 479974,
+  "preskip": 312,
+  "padding": 26,
+  "content": 479662
+ },
+ "t3_opus64_gapless": {
+  "packets": 0,
+  "declared": 0,
+  "preskip": 312,
+  "padding": 0,
+  "content": -312
+ },
+ "t3_opus64": {
+  "packets": 500,
+  "declared": 479974,
+  "preskip": 312,
+  "padding": 26,
+  "content": 479662
+ }
+}
