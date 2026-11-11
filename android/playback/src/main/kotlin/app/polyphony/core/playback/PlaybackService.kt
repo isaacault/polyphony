@@ -1013,6 +1013,20 @@ class PlaybackService : MediaLibraryService() {
                 if (player.hasNextMediaItem()) { player.seekToNextMediaItem(); player.prepare(); player.play() }
                 return
             }
+            val status = LoadFailures.httpStatus(error)
+            val adaptive = isAdaptive(player.currentMediaItem)
+            // The server answers that the song isn't there (deleted since it was queued): waiting
+            // won't bring it, so no retries. An adaptive stream's first tries the ordinary stream.
+            if (networkMonitor.state.value.isOnline && LoadFailures.isGone(status)) {
+                if (adaptive && hlsFallback.add(trackId)) {
+                    Log.w(TAG, "continuo has no adaptive stream of ${player.currentMediaItem?.mediaMetadata?.title}; playing its ordinary stream")
+                    retryCount = 0
+                    reloadCurrentItem()
+                    return
+                }
+                skipUnplayable("\"${player.currentMediaItem?.mediaMetadata?.title}\" is gone from the server")
+                return
+            }
             // Transient failures (network hand-over, server hiccup): retry the same stream with a
             // short back-off before concluding anything about the server.
             if (retryTrackId != trackId) { retryTrackId = trackId; retryCount = 0 }
@@ -1027,22 +1041,27 @@ class PlaybackService : MediaLibraryService() {
                 }
                 return
             }
-            // continuo couldn't serve the adaptive stream: the song's ordinary stream, from the same place.
-            if (isAdaptive(player.currentMediaItem) && hlsFallback.add(trackId)) {
-                Log.w(TAG, "Adaptive stream failed for ${player.currentMediaItem?.mediaMetadata?.title}; playing its ordinary stream")
-                retryCount = 0
-                reloadCurrentItem()
+            if (adaptive) {
+                // continuo answered but couldn't serve it, or the song was downloaded after it was
+                // queued: the ordinary path (which plays a download), from the same place.
+                val downloaded = trackId in downloadedIds
+                if ((downloaded || LoadFailures.continuoCouldNotServe(error.errorCode, status)) && hlsFallback.add(trackId)) {
+                    Log.w(TAG, "Adaptive stream failed for ${player.currentMediaItem?.mediaMetadata?.title}; playing its ordinary stream")
+                    retryCount = 0
+                    reloadCurrentItem()
+                    return
+                }
+                // The connection failed (a tunnel, no signal): the adaptive stream stays, at the
+                // lowest level while it keeps failing, and picks up when the network is back.
+                awaitingNetwork = true
+                Log.w(TAG, "Connection lost on an adaptive stream; will keep retrying \"${player.currentMediaItem?.mediaMetadata?.title}\"")
+                startSlowRetry()
                 return
             }
             if (streamResolver.markTranscodeFailure(trackId)) {
                 Log.w(TAG, "Retrying ${player.currentMediaItem?.mediaMetadata?.title} at original quality")
                 retryCount = 0
                 reloadCurrentItem()
-                return
-            }
-            // The server answers that the song isn't there (deleted since it was queued): waiting won't bring it.
-            if (networkMonitor.state.value.isOnline && LoadFailures.isGone(LoadFailures.httpStatus(error))) {
-                skipUnplayable("\"${player.currentMediaItem?.mediaMetadata?.title}\" is gone from the server")
                 return
             }
             if (!networkMonitor.state.value.isOnline || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||

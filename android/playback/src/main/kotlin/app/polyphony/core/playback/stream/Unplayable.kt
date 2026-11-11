@@ -22,6 +22,17 @@ object LoadFailures {
     /** The server says the song isn't there (deleted since it was queued), not that it's struggling. */
     fun isGone(httpStatus: Int?): Boolean = httpStatus == 404 || httpStatus == 410
 
+    /**
+     * continuo answered and couldn't serve an adaptive stream (an error status, or playlists or
+     * segments that don't parse): the song's ordinary stream may play where this won't. Not when
+     * the connection failed, which the ordinary stream can't get round either: the adaptive stream
+     * already drops to the lowest level the connection carries, so it waits for the network.
+     */
+    fun continuoCouldNotServe(errorCode: Int, httpStatus: Int?): Boolean =
+        httpStatus != null || errorCode in PARSING_ERRORS
+
+    private val PARSING_ERRORS = 3000..3999
+
     private fun causes(error: Throwable?): Sequence<Throwable> =
         generateSequence(error) { e -> e.cause?.takeIf { it !== e } }.take(MAX_DEPTH)
 
