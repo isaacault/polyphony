@@ -184,6 +184,9 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var continuoStreams: ContinuoStreams
     /** How HLS playlists and segments are fetched (token, stream cache, metering); fetching ahead uses it too. */
     private lateinit var hlsDataSourceFactory: DataSource.Factory
+    private lateinit var hlsNetwork: DataSource.Factory
+    /** What continuo was last told is coming up (server, songs, kbit/s, lower too), to send only changes. */
+    private var lastUpcoming: List<Any>? = null
     /** The local player's track selector, which carries the audio bitrate cap ([applyAudioCap]). */
     private lateinit var trackSelector: DefaultTrackSelector
     /** Songs whose adaptive stream failed this session: they play their ordinary stream instead. */
@@ -231,7 +234,7 @@ class PlaybackService : MediaLibraryService() {
         localVolume = OutputVolume { localPlayer.volume = it }
         crossfader = Crossfader(scope, localPlayer, localVolume, ::buildCrossfadePlayer, ::crossfadePlan)
         pausingFocus = PausingAudioFocus(this, localPlayer).also { it.enabled = !initial.playback.duckOnTransientFocusLoss }
-        prefetcher = QueuePrefetcher(scope, streamResolver, streamCache, streamingUpstream)
+        prefetcher = QueuePrefetcher(scope, streamResolver, streamCache, streamingUpstream, hlsNetwork)
         val players = PlayerFactory.create(this, localPlayer, castManager.isSupported, converter)
         basePlayer = SeekableStreamsPlayer(players.session, ::seekByReload)
         player = basePlayer
@@ -351,11 +354,12 @@ class PlaybackService : MediaLibraryService() {
         // continuo's adaptive streams (#185): HLS through the same cache and metering, with this
         // install's token on every request (a fresh one when continuo refuses an expired one).
         continuoStreams = ContinuoStreams(requestRepository)
-        val hlsResolving = ResolvingDataSource.Factory(
-            cached,
-            ContinuoHlsResolver(serverLookup, continuoStreams) { trackId, _ -> streamResolver.recordAdaptive(trackId, currentCapKbps()) },
-        )
-        hlsDataSourceFactory = RefreshingAuthDataSource.Factory(hlsResolving, serverLookup, continuoStreams)
+        val hlsResolver = ContinuoHlsResolver(serverLookup, continuoStreams) { trackId, _ ->
+            streamResolver.recordAdaptive(trackId, currentCapKbps())
+        }
+        hlsDataSourceFactory = RefreshingAuthDataSource.Factory(ResolvingDataSource.Factory(cached, hlsResolver), serverLookup, continuoStreams)
+        // The same without the cache, for fetching ahead (which writes the cache itself).
+        hlsNetwork = RefreshingAuthDataSource.Factory(ResolvingDataSource.Factory(upstream, hlsResolver), serverLookup, continuoStreams)
         val hls = HlsMediaSource.Factory(hlsDataSourceFactory).setAllowChunklessPreparation(true)
         mediaSourceFactory = AdaptiveMediaSourceFactory(DefaultMediaSourceFactory(resolving), hls, ::routeFor)
         trackSelector = newTrackSelector()
@@ -611,7 +615,9 @@ class PlaybackService : MediaLibraryService() {
      * player: a Cast or DLNA receiver streams for itself.
      */
     private fun refreshPrefetch() {
-        val budget = PrefetchPlan.budget(networkMonitor.state.value, settings.prefetchQueue, settings.prefetchOnMobileData)
+        val flaky = latencyMonitor.degraded.value
+        if (player === basePlayer && !player.isRemotePlayback()) syncUpcoming(flaky)
+        val budget = PrefetchPlan.budget(networkMonitor.state.value, settings.prefetchQueue, settings.prefetchOnMobileData, flaky)
         if (budget == null || player !== basePlayer || player.isRemotePlayback() || localPlayer.mediaItemCount == 0) {
             prefetcher.stop()
             return
@@ -712,13 +718,55 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /** The queue after the current song, in play order, as [PrefetchPlan] and the fetching see it. */
-    private fun upcomingSongs(max: Int): List<Pair<PrefetchPlan.Upcoming, QueuePrefetcher.Song>> =
-        upcomingItems(max).mapNotNull { item ->
+    private fun upcomingSongs(max: Int): List<Pair<PrefetchPlan.Upcoming, QueuePrefetcher.Song>> {
+        val kbps = upcomingKbps()
+        return upcomingItems(max).mapNotNull { item ->
             val serverId = MediaItemFactory.serverIdFrom(item) ?: return@mapNotNull null
             val trackId = item.mediaId
             PrefetchPlan.Upcoming(trackId, queueStore.get(trackId)?.durationMs ?: 0L, fetchable = PlayNowIds.streamId(trackId) == null) to
-                QueuePrefetcher.Song(serverId, trackId)
+                QueuePrefetcher.Song(serverId, trackId, hlsFor(item, serverId, trackId, kbps))
         }
+    }
+
+    /** An adaptive song's stream to fetch ahead: at the level playing now, within the cap (the lowest while stalling). */
+    private fun hlsFor(item: MediaItem, serverId: String, trackId: String, kbps: Int): QueuePrefetcher.Hls? {
+        if (routeFor(item) != AdaptiveStreaming.Route.HLS) return null
+        val server = serverLookup.providerFor(serverId)?.server ?: return null
+        return QueuePrefetcher.Hls(continuoStreams.masterUrl(server, trackId).removeSuffix("master.m3u8"), kbps)
+    }
+
+    /** The level songs ahead are fetched and encoded at ([AdaptiveStreaming.upcomingKbps]). */
+    private fun upcomingKbps(): Int {
+        val playing = if (isAdaptive(localPlayer.currentMediaItem)) {
+            localPlayer.audioFormat?.bitrate?.let(AdaptiveStreaming::rungForBandwidth)
+        } else {
+            null
+        }
+        return AdaptiveStreaming.upcomingKbps(playing, currentCapKbps())
+    }
+
+    /**
+     * Tell continuo the adaptive songs coming up (the next four, of the current song's server) and
+     * the level playing, so it encodes them ahead; one level lower too for the next song while the
+     * connection keeps stalling. Sent only when that changes.
+     */
+    private fun syncUpcoming(flaky: Boolean) {
+        val next = upcomingItems(UPCOMING_AHEAD * 2).filter(::isAdaptive)
+        val serverId = next.firstNotNullOfOrNull(MediaItemFactory::serverIdFrom) ?: return
+        val songs = next.filter { MediaItemFactory.serverIdFrom(it) == serverId }.map { it.mediaId }.take(UPCOMING_AHEAD)
+        val kbps = upcomingKbps()
+        val state = listOf(serverId, songs, kbps, flaky)
+        if (state == lastUpcoming) return
+        lastUpcoming = state
+        scope.launch(Dispatchers.IO) {
+            val server = serverLookup.providerFor(serverId)?.server ?: return@launch
+            runCatching { requestRepository.streamUpcoming(server, songs, kbps, lowerToo = flaky) }
+                .onFailure { e ->
+                    Log.i(TAG, "Couldn't tell continuo the songs coming up: ${e.message}")
+                    withContext(Dispatchers.Main) { if (lastUpcoming == state) lastUpcoming = null }
+                }
+        }
+    }
 
     /**
      * Reacts to a changed transcoding decision. A change of output target is already handled by
@@ -1011,6 +1059,7 @@ class PlaybackService : MediaLibraryService() {
                 updateButtons()
                 syncPlayNowOrder()
                 warmPlayNowLinks()
+                if (player === basePlayer && !player.isRemotePlayback()) syncUpcoming(latencyMonitor.degraded.value)
             }
             if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
                 applyRestoredShuffle()
@@ -1335,6 +1384,8 @@ class PlaybackService : MediaLibraryService() {
         private const val PLAY_NOW_WAIT_MS = 3_000L
         /** How far ahead of the queue continuo hears the Play now order. */
         private const val PLAY_NOW_LOOKAHEAD = 50
+        /** Adaptive songs continuo encodes ahead of the player (continuo's AHEAD). */
+        private const val UPCOMING_AHEAD = 4
         /** The ready song moves up this close to the end of the current one, from the next 10. */
         private const val KEEP_GOING_AHEAD_MS = 15_000L
         private const val KEEP_GOING_LOOKAHEAD = 10
