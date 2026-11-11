@@ -106,44 +106,44 @@ class QueuePrefetcher(
         }
     }
 
-    /**
-     * An adaptive song into the cache under the URLs the player will ask for: the master playlist,
-     * the rendition's playlist, its init segment and every segment. Returns the bytes it wrote.
-     */
-    private suspend fun fetchHls(factory: CacheDataSource.Factory, hls: Hls, onBytes: (Long) -> Unit): Long {
-        val rendition = "${hls.base}${hls.kbps}/"
-        readAll(factory, hls.base + "master.m3u8")
-        val files = PrefetchPlan.hlsFiles(String(readAll(factory, rendition + "index.m3u8")))
-        var written = 0L
-        for (name in files) {
-            val writer = CacheWriter(factory.createDataSource(), DataSpec(Uri.parse(rendition + name)), null) { _, _, newBytes ->
-                written += newBytes
-                onBytes(newBytes)
+    internal companion object {
+        private const val TAG = "PolyphonyPrefetch"
+        private const val KB = 1024L
+        private const val MB = 1024L * 1024L
+
+        /**
+         * An adaptive song into the cache under the URLs the player will ask for: the master playlist,
+         * the rendition's playlist, its init segment and every segment. Returns the bytes it wrote.
+         */
+        internal suspend fun fetchHls(factory: CacheDataSource.Factory, hls: Hls, onBytes: (Long) -> Unit): Long {
+            val rendition = "${hls.base}${hls.kbps}/"
+            readAll(factory, hls.base + "master.m3u8")
+            val files = PrefetchPlan.hlsFiles(String(readAll(factory, rendition + "index.m3u8")))
+            var written = 0L
+            for (name in files) {
+                val writer = CacheWriter(factory.createDataSource(), DataSpec(Uri.parse(rendition + name)), null) { _, _, newBytes ->
+                    written += newBytes
+                    onBytes(newBytes)
+                }
+                val stopOnCancel = coroutineContext.job.invokeOnCompletion { writer.cancel() }
+                try {
+                    writer.cache()
+                } finally {
+                    stopOnCancel.dispose()
+                }
             }
-            val stopOnCancel = coroutineContext.job.invokeOnCompletion { writer.cancel() }
+            return written
+        }
+
+        /** A playlist through the cache (stored as it's read). */
+        private fun readAll(factory: CacheDataSource.Factory, url: String): ByteArray {
+            val source = factory.createDataSource()
             try {
-                writer.cache()
+                source.open(DataSpec(Uri.parse(url)))
+                return DataSourceUtil.readToEnd(source)
             } finally {
-                stopOnCancel.dispose()
+                source.close()
             }
         }
-        return written
-    }
-
-    /** A playlist through the cache (stored as it's read). */
-    private fun readAll(factory: CacheDataSource.Factory, url: String): ByteArray {
-        val source = factory.createDataSource()
-        try {
-            source.open(DataSpec(Uri.parse(url)))
-            return DataSourceUtil.readToEnd(source)
-        } finally {
-            source.close()
-        }
-    }
-
-    private companion object {
-        const val TAG = "PolyphonyPrefetch"
-        const val KB = 1024L
-        const val MB = 1024L * 1024L
     }
 }

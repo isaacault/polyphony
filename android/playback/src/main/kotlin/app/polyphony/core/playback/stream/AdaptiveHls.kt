@@ -7,12 +7,13 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
+import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.transcode.AdaptiveStreaming
-import app.polyphony.core.playback.engine.ServerLookup
 import app.polyphony.core.playback.queue.MediaItemFactory
 import kotlinx.coroutines.runBlocking
 import java.net.URLEncoder
@@ -25,7 +26,9 @@ import java.util.concurrent.ConcurrentHashMap
  * (so logs and the stream cache's keys hold none). Tokens expire within the hour, inside a long
  * session: [RefreshingAuthDataSource] asks for a fresh one when continuo refuses the last.
  */
-class ContinuoStreams(private val requests: RequestRepository) {
+class ContinuoStreams(private val fetchHeaders: suspend (server: Server, refresh: Boolean) -> Map<String, String>) {
+    constructor(requests: RequestRepository) : this({ server, refresh -> requests.streamHeaders(server, refresh) })
+
     private val servers = ConcurrentHashMap<String, Server>()   // stream base -> server
     private val headers = ConcurrentHashMap<String, Map<String, String>>()   // server id -> headers
 
@@ -58,16 +61,15 @@ class ContinuoStreams(private val requests: RequestRepository) {
  * Runs on ExoPlayer's loader threads.
  */
 class ContinuoHlsResolver(
-    private val serverLookup: ServerLookup,
+    /** The server with this id (blocking: loader threads only), null when none is set up. */
+    private val serverFor: (serverId: String) -> Server?,
     private val streams: ContinuoStreams,
     private val onOpened: (trackId: String, server: Server) -> Unit = { _, _ -> },
 ) : ResolvingDataSource.Resolver {
     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
         var spec = dataSpec
         MediaItemFactory.parseUri(dataSpec.uri)?.let { (serverId, trackId) ->
-            val server = serverLookup.providerFor(serverId)?.server
-                ?: runBlocking { serverLookup.awaitProvider(serverId) }?.server
-                ?: throw UnplayableSongException("Unknown server $serverId")
+            val server = serverFor(serverId) ?: throw UnplayableSongException("Unknown server $serverId")
             spec = spec.buildUpon().setUri(Uri.parse(streams.masterUrl(server, trackId))).build()
             onOpened(trackId, server)
         }
@@ -79,14 +81,14 @@ class ContinuoHlsResolver(
 /** Retries a request continuo refused (401: the token expired) once, with a fresh token. */
 class RefreshingAuthDataSource(
     private val upstream: DataSource,
-    private val serverLookup: ServerLookup,
+    private val serverFor: (serverId: String) -> Server?,
     private val streams: ContinuoStreams,
 ) : DataSource by upstream {
     override fun open(dataSpec: DataSpec): Long = try {
         upstream.open(dataSpec)
     } catch (e: HttpDataSource.InvalidResponseCodeException) {
         if (e.responseCode != 401) throw e
-        val server = MediaItemFactory.parseUri(dataSpec.uri)?.let { serverLookup.providerFor(it.first)?.server }
+        val server = MediaItemFactory.parseUri(dataSpec.uri)?.let { serverFor(it.first) }
             ?: streams.serverFor(e.dataSpec.uri)
             ?: throw e
         if (streams.headersFor(server, refresh = true).isEmpty()) throw e
@@ -96,11 +98,47 @@ class RefreshingAuthDataSource(
 
     class Factory(
         private val upstream: DataSource.Factory,
-        private val serverLookup: ServerLookup,
+        private val serverFor: (serverId: String) -> Server?,
         private val streams: ContinuoStreams,
     ) : DataSource.Factory {
-        override fun createDataSource(): DataSource = RefreshingAuthDataSource(upstream.createDataSource(), serverLookup, streams)
+        override fun createDataSource(): DataSource = RefreshingAuthDataSource(upstream.createDataSource(), serverFor, streams)
     }
+}
+
+/**
+ * The adaptive streams' data sources, as the local player and fetching ahead use them:
+ * [player] reads through the stream cache (`cached`); [network] goes straight to continuo, for
+ * fetching ahead, which writes the cache itself under the same keys (continuo's URLs: the
+ * resolver runs above the cache). Both carry the token and renew it on a 401.
+ */
+class HlsDataSources(
+    cached: DataSource.Factory,
+    network: DataSource.Factory,
+    serverFor: (serverId: String) -> Server?,
+    val streams: ContinuoStreams,
+    onOpened: (trackId: String, server: Server) -> Unit = { _, _ -> },
+) {
+    private val resolver = ContinuoHlsResolver(serverFor, streams, onOpened)
+    val player: DataSource.Factory =
+        RefreshingAuthDataSource.Factory(ResolvingDataSource.Factory(cached, resolver), serverFor, streams)
+    val network: DataSource.Factory =
+        RefreshingAuthDataSource.Factory(ResolvingDataSource.Factory(network, resolver), serverFor, streams)
+
+    /** Adaptive songs' media sources: the master playlist's CODECS let them prepare without a segment. */
+    fun mediaSourceFactory(): HlsMediaSource.Factory = HlsMediaSource.Factory(player).setAllowChunklessPreparation(true)
+}
+
+/**
+ * The local players' track selection for adaptive streams: the cap as `maxAudioBitrate`
+ * ([AdaptiveStreaming.selectorMaxBitrate]), and adaptation between renditions allowed although
+ * the master playlist leaves their channel count and sample rate unstated (continuo's are all
+ * 48 kHz Opus with the source's channels). Without that, Media3 counts them incompatible and
+ * picks one rendition per song, kept whatever the throughput does (HlsPlaybackTest).
+ */
+fun DefaultTrackSelector.Parameters.Builder.forAdaptiveStreams(capKbps: Int): DefaultTrackSelector.Parameters.Builder = apply {
+    setMaxAudioBitrate(AdaptiveStreaming.selectorMaxBitrate(capKbps))
+    setAllowAudioMixedChannelCountAdaptiveness(true)
+    setAllowAudioMixedSampleRateAdaptiveness(true)
 }
 
 /**
