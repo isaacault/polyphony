@@ -52,9 +52,9 @@ import app.polyphony.core.domain.repository.DownloadRepository
 import app.polyphony.core.domain.transcode.AdaptiveStreaming
 import app.polyphony.core.domain.transcode.TranscodeDecision
 import app.polyphony.core.playback.stream.AdaptiveMediaSourceFactory
-import app.polyphony.core.playback.stream.ContinuoHlsResolver
 import app.polyphony.core.playback.stream.ContinuoStreams
-import app.polyphony.core.playback.stream.RefreshingAuthDataSource
+import app.polyphony.core.playback.stream.HlsDataSources
+import app.polyphony.core.playback.stream.forAdaptiveStreams
 import java.util.concurrent.ConcurrentHashMap
 import app.polyphony.core.playback.audio.HeadsetMonitor
 import app.polyphony.core.playback.audio.ReplayGain
@@ -182,11 +182,12 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var prefetcher: QueuePrefetcher
     /** continuo's adaptive streams (#185): their addresses and this install's tokens. */
     private lateinit var continuoStreams: ContinuoStreams
-    /** How HLS playlists and segments are fetched (token, stream cache, metering); fetching ahead uses it too. */
-    private lateinit var hlsDataSourceFactory: DataSource.Factory
+    /** continuo's HLS straight from the network (token, metering), for fetching ahead. */
     private lateinit var hlsNetwork: DataSource.Factory
     /** What continuo was last told is coming up (server, songs, kbit/s, lower too), to send only changes. */
     private var lastUpcoming: List<Any>? = null
+    /** The level songs ahead are fetched at, kept for the song playing and its cap ([upcomingKbps]). */
+    private var aheadKbps: Pair<String, Int>? = null
     /** The local player's track selector, which carries the audio bitrate cap ([applyAudioCap]). */
     private lateinit var trackSelector: DefaultTrackSelector
     /** Songs whose adaptive stream failed this session: they play their ordinary stream instead. */
@@ -354,13 +355,11 @@ class PlaybackService : MediaLibraryService() {
         // continuo's adaptive streams (#185): HLS through the same cache and metering, with this
         // install's token on every request (a fresh one when continuo refuses an expired one).
         continuoStreams = ContinuoStreams(requestRepository)
-        val hlsResolver = ContinuoHlsResolver(serverLookup, continuoStreams) { trackId, _ ->
+        val hlsSources = HlsDataSources(cached, upstream, ::serverForHls, continuoStreams) { trackId, _ ->
             streamResolver.recordAdaptive(trackId, currentCapKbps())
         }
-        hlsDataSourceFactory = RefreshingAuthDataSource.Factory(ResolvingDataSource.Factory(cached, hlsResolver), serverLookup, continuoStreams)
-        // The same without the cache, for fetching ahead (which writes the cache itself).
-        hlsNetwork = RefreshingAuthDataSource.Factory(ResolvingDataSource.Factory(upstream, hlsResolver), serverLookup, continuoStreams)
-        val hls = HlsMediaSource.Factory(hlsDataSourceFactory).setAllowChunklessPreparation(true)
+        hlsNetwork = hlsSources.network
+        val hls = hlsSources.mediaSourceFactory()
         mediaSourceFactory = AdaptiveMediaSourceFactory(DefaultMediaSourceFactory(resolving), hls, ::routeFor)
         trackSelector = newTrackSelector()
         val loadControl = DefaultLoadControl.Builder()
@@ -441,6 +440,10 @@ class PlaybackService : MediaLibraryService() {
         )
     }
 
+    /** A song's server for the HLS loaders (blocking; the hot map may still be empty at start). */
+    private fun serverForHls(serverId: String): Server? =
+        serverLookup.providerFor(serverId)?.server ?: runBlocking { serverLookup.awaitProvider(serverId) }?.server
+
     /** The highest rung adaptive streams may play now: the rules' ceiling, the lowest while the connection keeps failing. */
     private fun currentCapKbps(): Int {
         val decision = engine.localDecision()
@@ -448,7 +451,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun newTrackSelector(): DefaultTrackSelector = DefaultTrackSelector(this).apply {
-        setParameters(buildUponParameters().setMaxAudioBitrate(AdaptiveStreaming.selectorMaxBitrate(currentCapKbps())))
+        setParameters(buildUponParameters().forAdaptiveStreams(currentCapKbps()))
     }
 
     /**
