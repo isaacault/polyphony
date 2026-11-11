@@ -25,7 +25,9 @@ AAC is out (every song would start with ~23 ms of priming). Opus keeps everythin
    `Format.encoderPadding`. ffmpeg states no padding.
 2. **Media3 1.11.1 misreads `dOps`.** `BoxParser` builds a little-endian OpusHead by copying the
    big-endian `dOps` body, so PreSkip 312 (`0x0138`) is read as 14337 (`0x3801`): ~0.3 s cut from
-   the start of every song. (Worth reporting to androidx/media.)
+   the start of every song. Known upstream as androidx/media#3431, fixed on main by c2061b8
+   (2026-10-01, extractor and muxer) but not in 1.11.1; a zeroed PreSkip reads the same before and
+   after the fix, so the workaround below stays correct when Polyphony upgrades.
 
 ## What continuo does to each init segment (`inject.py`)
 - Zero `dOps` PreSkip (reads the same in either byte order), so the decoder skips nothing.
