@@ -45,12 +45,32 @@ class ContinuoStreams(private val fetchHeaders: suspend (server: Server, refresh
         return servers.entries.firstOrNull { url.startsWith(it.key) }?.value
     }
 
-    /** The authorising headers for [server]: cached, or fetched (blocking: loader threads only). */
+    /**
+     * The authorising headers for [server]: cached, or fetched (blocking: loader threads only).
+     * When fetching just failed (offline, with no token yet since the app started), none are
+     * fetched again for [RETRY_AFTER_MS]: the resolver runs for every playlist and segment, even
+     * those the stream cache serves, and each would otherwise wait on the network again.
+     */
     fun headersFor(server: Server, refresh: Boolean = false): Map<String, String> {
-        if (!refresh) headers[server.id]?.let { return it }
-        val fresh = runBlocking { runCatching { requests.streamHeaders(server, refresh) }.getOrDefault(emptyMap()) }
-        if (fresh.isNotEmpty()) headers[server.id] = fresh
+        if (!refresh) {
+            headers[server.id]?.let { return it }
+            failedAt[server.id]?.let { if (now() - it < RETRY_AFTER_MS) return emptyMap() }
+        }
+        val fresh = runBlocking { runCatching { fetchHeaders(server, refresh) }.getOrDefault(emptyMap()) }
+        if (fresh.isNotEmpty()) {
+            headers[server.id] = fresh
+            failedAt.remove(server.id)
+        } else {
+            failedAt[server.id] = now()
+        }
         return fresh
+    }
+
+    private val failedAt = ConcurrentHashMap<String, Long>()   // server id -> when fetching failed
+
+    private companion object {
+        const val RETRY_AFTER_MS = 15_000L
+        fun now(): Long = System.nanoTime() / 1_000_000
     }
 }
 
