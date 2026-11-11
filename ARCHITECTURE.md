@@ -102,8 +102,25 @@ settings ──▶│ TranscodePolicy│   │ NetworkState │   │ OutputTarg
   counted apart), stalls and the latency cap into a `ConnectionSample` (shared:domain) every 30 s
   and on a network change, kept in `connection_samples` for 14 days. About → Diagnostics sums them
   up per network and the report carries them as CSV. Nothing is sent to continuo yet.
+- **Adaptive streaming** (#185, continuo#119): a continuo server's network stream (not Play now
+  songs, downloads or other servers; `AdaptiveStreaming.route` in shared:domain) plays as HLS from
+  `/v1/stream/{song}/master.m3u8`, Opus at 32/64/128/256 kbit/s in 6 s segments, so Media3 changes
+  quality between segments from the throughput it measures, mid-song, on Wi-Fi and mobile data
+  alike. `AdaptiveMediaSourceFactory` picks HLS or progressive per item; items keep their opaque
+  URIs, `ContinuoHlsResolver` maps them to continuo's playlist and reports real URLs (so relative
+  playlist URIs resolve), every request carries the bearer token, and a 401 renews it once
+  (`RefreshingAuthDataSource`). The rules' profile (rounded down to a rung) or, while
+  `LatencyMonitor` is degraded, the lowest rung is the track selector's `maxAudioBitrate`: a
+  change applies from the next segment without a reload. While degraded, the queue's next 30
+  minutes are fetched ahead at that rung (HLS playlists and segments into the stream cache under
+  the URLs the player asks for), and continuo is told the next four songs and the level
+  (`POST /v1/stream/upcoming`) so it encodes them first. Gapless: continuo states each rendition's
+  trims in its init segment (docs/spikes/hls-gapless on branch spike/hls-gapless). A song whose
+  HLS fails after the usual retries plays its ordinary stream for the session. Cast and DLNA keep
+  the progressive URLs. Off in Playback settings → Adaptive streaming.
 - If `reloadCurrentTrackOnChange` is on, a changed decision re-prepares the current item at the
-  same position; otherwise it applies from the next track.
+  same position (not an adaptive stream, which follows from its next segment); otherwise it
+  applies from the next track.
 
 ## Data flow
 
