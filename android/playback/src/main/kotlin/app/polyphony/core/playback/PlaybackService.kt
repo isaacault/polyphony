@@ -19,7 +19,9 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.session.CacheBitmapLoader
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
@@ -46,7 +48,14 @@ import app.polyphony.core.domain.repository.PlaybackSettings
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.Scrobbler
 import app.polyphony.core.domain.repository.SettingsRepository
+import app.polyphony.core.domain.repository.DownloadRepository
+import app.polyphony.core.domain.transcode.AdaptiveStreaming
 import app.polyphony.core.domain.transcode.TranscodeDecision
+import app.polyphony.core.playback.stream.AdaptiveMediaSourceFactory
+import app.polyphony.core.playback.stream.ContinuoHlsResolver
+import app.polyphony.core.playback.stream.ContinuoStreams
+import app.polyphony.core.playback.stream.RefreshingAuthDataSource
+import java.util.concurrent.ConcurrentHashMap
 import app.polyphony.core.playback.audio.HeadsetMonitor
 import app.polyphony.core.playback.audio.ReplayGain
 import app.polyphony.core.playback.cast.CastManager
@@ -142,6 +151,7 @@ class PlaybackService : MediaLibraryService() {
     @Inject lateinit var dlnaResolver: PolyphonyDlnaResolver
     @Inject lateinit var playNowLinks: PlayNowReceiverLinks
     @Inject lateinit var scrobbler: Scrobbler
+    @Inject lateinit var downloadRepository: DownloadRepository
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var localPlayer: ExoPlayer
@@ -170,6 +180,16 @@ class PlaybackService : MediaLibraryService() {
     /** The streaming HTTP source, shared by the player and the queue's fetching ahead. */
     private lateinit var streamingUpstream: DataSource.Factory
     private lateinit var prefetcher: QueuePrefetcher
+    /** continuo's adaptive streams (#185): their addresses and this install's tokens. */
+    private lateinit var continuoStreams: ContinuoStreams
+    /** How HLS playlists and segments are fetched (token, stream cache, metering); fetching ahead uses it too. */
+    private lateinit var hlsDataSourceFactory: DataSource.Factory
+    /** The local player's track selector, which carries the audio bitrate cap ([applyAudioCap]). */
+    private lateinit var trackSelector: DefaultTrackSelector
+    /** Songs whose adaptive stream failed this session: they play their ordinary stream instead. */
+    private val hlsFallback: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    /** Downloaded songs, kept current, so choosing a song's stream ([routeFor]) never waits on the database. */
+    @Volatile private var downloadedIds: Set<String> = emptySet()
 
     private var settings: PlaybackSettings = PlaybackSettings()
     private var queueTitle: String? = null
@@ -328,7 +348,17 @@ class PlaybackService : MediaLibraryService() {
         // FileDataSource, so downloaded tracks bypass the stream cache entirely.
         val local = MeteredDataSource.Factory(DefaultDataSource.Factory(this, cached), connectionSampler, MeteredDataSource.Kind.FILES)
         val resolving = ResolvingDataSource.Factory(local, streamResolver)
-        mediaSourceFactory = DefaultMediaSourceFactory(resolving)
+        // continuo's adaptive streams (#185): HLS through the same cache and metering, with this
+        // install's token on every request (a fresh one when continuo refuses an expired one).
+        continuoStreams = ContinuoStreams(requestRepository)
+        val hlsResolving = ResolvingDataSource.Factory(
+            cached,
+            ContinuoHlsResolver(serverLookup, continuoStreams) { trackId, _ -> streamResolver.recordAdaptive(trackId, currentCapKbps()) },
+        )
+        hlsDataSourceFactory = RefreshingAuthDataSource.Factory(hlsResolving, serverLookup, continuoStreams)
+        val hls = HlsMediaSource.Factory(hlsDataSourceFactory).setAllowChunklessPreparation(true)
+        mediaSourceFactory = AdaptiveMediaSourceFactory(DefaultMediaSourceFactory(resolving), hls, ::routeFor)
+        trackSelector = newTrackSelector()
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(30_000, 120_000, 2_500, 5_000)
             .setPrioritizeTimeOverSizeThresholds(true)
@@ -336,6 +366,7 @@ class PlaybackService : MediaLibraryService() {
         val exo = ExoPlayer.Builder(this)
             .setRenderersFactory(equalizer.renderersFactory(this))
             .setMediaSourceFactory(mediaSourceFactory)
+            .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
             // Media3 ducks for a notification; with ducking off, PausingAudioFocus pauses instead.
             .setAudioAttributes(audioAttributes, playback.duckOnTransientFocusLoss)
@@ -365,6 +396,8 @@ class PlaybackService : MediaLibraryService() {
         ExoPlayer.Builder(this)
             .setRenderersFactory(equalizer.renderersFactory(this))
             .setMediaSourceFactory(mediaSourceFactory)
+            // The cap as it is when the fade starts; a fade is seconds long.
+            .setTrackSelector(newTrackSelector())
             .setAudioAttributes(audioAttributes, false)
             .setSkipSilenceEnabled(settings.skipSilence)
             .setName("Polyphony crossfade")
@@ -387,6 +420,46 @@ class PlaybackService : MediaLibraryService() {
         val fade = CrossfadePlan.fadeMs(settings.crossfadeMs, settings.gapless, current, nextTrack, localPlayer.duration)
         return if (fade > 0) Crossfader.Plan(next, fade) else null
     }
+
+    /**
+     * HLS from continuo or the ordinary stream, for one song ([AdaptiveStreaming.route]). Decided
+     * from what's in memory (servers, the downloaded set), as Media3 asks when songs are queued.
+     */
+    private fun routeFor(item: MediaItem): AdaptiveStreaming.Route {
+        val (serverId, trackId) = item.localConfiguration?.uri?.let(MediaItemFactory::parseUri)
+            ?: return AdaptiveStreaming.Route.PROGRESSIVE
+        if (trackId in hlsFallback) return AdaptiveStreaming.Route.PROGRESSIVE
+        return AdaptiveStreaming.route(
+            server = serverLookup.providerFor(serverId)?.server,
+            enabled = settings.adaptiveStreaming,
+            playNow = PlayNowIds.streamId(trackId) != null,
+            downloadedPlays = trackId in downloadedIds,
+        )
+    }
+
+    /** The highest rung adaptive streams may play now: the rules' ceiling, the lowest while the connection keeps failing. */
+    private fun currentCapKbps(): Int {
+        val decision = engine.localDecision()
+        return AdaptiveStreaming.capKbps(decision.profile, decision.cappedByLatency || latencyMonitor.degraded.value)
+    }
+
+    private fun newTrackSelector(): DefaultTrackSelector = DefaultTrackSelector(this).apply {
+        setParameters(buildUponParameters().setMaxAudioBitrate(AdaptiveStreaming.selectorMaxBitrate(currentCapKbps())))
+    }
+
+    /**
+     * Apply the cap to the local player: an adaptive stream moves to it from its next segment, in
+     * the middle of a song, with no reload. Other streams have one rendition and are unaffected
+     * (the selector still plays a track over the cap when it's the only one).
+     */
+    private fun applyAudioCap() {
+        val max = AdaptiveStreaming.selectorMaxBitrate(currentCapKbps())
+        if (trackSelector.parameters.maxAudioBitrate == max) return
+        Log.i(TAG, "Adaptive streams capped at ${currentCapKbps()} kbit/s")
+        trackSelector.setParameters(trackSelector.buildUponParameters().setMaxAudioBitrate(max))
+    }
+
+    private fun isAdaptive(item: MediaItem?): Boolean = item != null && routeFor(item) == AdaptiveStreaming.Route.HLS
 
     private fun applyPreload(exo: ExoPlayer, enabled: Boolean) {
         exo.setPreloadConfiguration(
@@ -439,7 +512,14 @@ class PlaybackService : MediaLibraryService() {
         scope.launch {
             networkMonitor.state.map { it.isOnline to it.isMetered }.distinctUntilChanged().collect { refreshPrefetch() }
         }
-        scope.launch { latencyMonitor.degraded.collect { publishExtras() } }
+        scope.launch {
+            latencyMonitor.degraded.collect {
+                publishExtras()
+                applyAudioCap()
+                refreshPrefetch()
+            }
+        }
+        scope.launch { downloadRepository.downloadedTrackIds().collect { downloadedIds = it } }
         scope.launch {
             sleepTimer.endsAtEpochMs.collect {
                 publishExtras()
@@ -516,6 +596,13 @@ class PlaybackService : MediaLibraryService() {
         }
         applyReplayGain()
         if (old.prefetchQueue != new.prefetchQueue || old.prefetchOnMobileData != new.prefetchOnMobileData) refreshPrefetch()
+        // Songs are opened as HLS or not when they're queued: re-queue them, at the same place.
+        if (old.adaptiveStreaming != new.adaptiveStreaming && player === basePlayer && !player.isRemotePlayback() &&
+            localPlayer.mediaItemCount > 0
+        ) {
+            reloadCurrentItem()
+            refreshPrefetch()
+        }
     }
 
     /**
@@ -640,13 +727,17 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun onDecisionChanged(decision: TranscodeDecision) {
         publishExtras()
+        applyAudioCap()
         val next = appliedNow(decision)
         Log.i(TAG, "Transcode decision for ${next.targetKey}: ${decision.profile.name} [${decision.profile.summary}] reason=${decision.reason} cappedByLatency=${decision.cappedByLatency}")
         val action = QualityChangeRule.decide(lastApplied, next, engine.policy.reloadCurrentTrackOnChange)
         lastApplied = next
         if (player.mediaItemCount == 0 || player.playbackState == Player.STATE_IDLE) return
         when (action) {
-            QualityChangeRule.Action.RELOAD_NOW -> {
+            QualityChangeRule.Action.RELOAD_NOW -> if (isAdaptive(player.currentMediaItem) && !player.isRemotePlayback()) {
+                // An adaptive stream follows the new cap from its next segment: no reload, no restart.
+                Log.i(TAG, "Quality changed; the adaptive stream follows from its next segment")
+            } else {
                 Log.i(TAG, "Quality changed for the current output; reloading the playing track at its position")
                 reloadCurrentItem()
             }
@@ -859,6 +950,13 @@ class PlaybackService : MediaLibraryService() {
                     delay(delayMs)
                     if (player.currentMediaItem?.mediaId == trackId && player.playbackState == Player.STATE_IDLE) reloadCurrentItem()
                 }
+                return
+            }
+            // continuo couldn't serve the adaptive stream: the song's ordinary stream, from the same place.
+            if (isAdaptive(player.currentMediaItem) && hlsFallback.add(trackId)) {
+                Log.w(TAG, "Adaptive stream failed for ${player.currentMediaItem?.mediaMetadata?.title}; playing its ordinary stream")
+                retryCount = 0
+                reloadCurrentItem()
                 return
             }
             if (streamResolver.markTranscodeFailure(trackId)) {

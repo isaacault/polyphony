@@ -45,6 +45,7 @@ dependencies {
     api(libs.androidx.media3.exoplayer)
     api(libs.androidx.media3.session)
     api(libs.androidx.media3.cast)
+    implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.datasource)
     implementation(libs.androidx.media3.datasource.okhttp)
     api(libs.play.services.cast.framework)
