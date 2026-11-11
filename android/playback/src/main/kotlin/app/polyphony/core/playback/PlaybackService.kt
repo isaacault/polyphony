@@ -763,29 +763,55 @@ class PlaybackService : MediaLibraryService() {
         return QueuePrefetcher.Hls(continuoStreams.masterUrl(server, trackId).removeSuffix("master.m3u8"), kbps)
     }
 
-    /** The level songs ahead are fetched and encoded at ([AdaptiveStreaming.upcomingKbps]). */
+    /**
+     * The level songs ahead are fetched and encoded at ([AdaptiveStreaming.upcomingKbps]): the
+     * level of the song playing, taken once per song (and cap), so the player moving between levels
+     * inside a song doesn't restart the fetching ahead at the other level each time.
+     */
     private fun upcomingKbps(): Int {
-        val playing = if (isAdaptive(localPlayer.currentMediaItem)) {
-            localPlayer.audioFormat?.bitrate?.let(AdaptiveStreaming::rungForBandwidth)
-        } else {
-            null
-        }
-        return AdaptiveStreaming.upcomingKbps(playing, currentCapKbps())
+        val cap = currentCapKbps()
+        val current = localPlayer.currentMediaItem
+        val key = "${current?.mediaId}|$cap"
+        aheadKbps?.let { (k, kbps) -> if (k == key) return kbps }
+        val adaptive = isAdaptive(current)
+        val playing = if (adaptive) playingRung?.takeIf { it.first == current?.mediaId }?.second else null
+        val kbps = AdaptiveStreaming.upcomingKbps(playing, cap)
+        // Until an adaptive song's level is known, the cap stands in, and isn't kept.
+        if (playing != null || !adaptive) aheadKbps = key to kbps
+        return kbps
     }
 
     /**
      * Tell continuo the adaptive songs coming up (the next four, of the current song's server) and
      * the level playing, so it encodes them ahead; one level lower too for the next song while the
-     * connection keeps stalling. Sent only when that changes.
+     * connection keeps stalling. Sent only when that changes; when none are coming up any more
+     * (another server's songs, the end of the queue, the setting off), continuo is told so once,
+     * and stops encoding the songs it was told before.
      */
     private fun syncUpcoming(flaky: Boolean) {
         val next = upcomingItems(UPCOMING_AHEAD * 2).filter(::isAdaptive)
-        val serverId = next.firstNotNullOfOrNull(MediaItemFactory::serverIdFrom) ?: return
+        val serverId = next.firstNotNullOfOrNull(MediaItemFactory::serverIdFrom)
+        val previous = lastUpcoming
+        if (previous != null && previous[0] != serverId && (previous[1] as List<*>).isNotEmpty()) {
+            postUpcoming(listOf(previous[0], emptyList<String>(), previous[2], false))
+        }
+        if (serverId == null) {
+            lastUpcoming = null
+            return
+        }
         val songs = next.filter { MediaItemFactory.serverIdFrom(it) == serverId }.map { it.mediaId }.take(UPCOMING_AHEAD)
-        val kbps = upcomingKbps()
-        val state = listOf(serverId, songs, kbps, flaky)
+        val state = listOf(serverId, songs, upcomingKbps(), flaky)
         if (state == lastUpcoming) return
         lastUpcoming = state
+        postUpcoming(state)
+    }
+
+    /** POST /v1/stream/upcoming with [state] (server id, songs, kbit/s, stalling). */
+    private fun postUpcoming(state: List<Any>) {
+        val serverId = state[0] as String
+        @Suppress("UNCHECKED_CAST") val songs = state[1] as List<String>
+        val kbps = state[2] as Int
+        val flaky = state[3] as Boolean
         scope.launch(Dispatchers.IO) {
             val server = serverLookup.providerFor(serverId)?.server ?: return@launch
             runCatching { requestRepository.streamUpcoming(server, songs, kbps, lowerToo = flaky) }
