@@ -80,6 +80,9 @@ class EqualizerDesign private constructor(
         /** Points per octave where the response is checked for its peak. */
         private const val GRID_PER_OCTAVE = 24
 
+        /** No bells and no preamp: the sound as it is. */
+        fun flat(sampleRate: Int): EqualizerDesign = EqualizerDesign(sampleRate, emptyList(), emptyList(), 0.0)
+
         fun of(gainsDb: List<Float>, sampleRate: Int): EqualizerDesign {
             require(sampleRate > 0) { "sample rate $sampleRate" }
             val curve = EqualizerBands.sanitize(gainsDb)

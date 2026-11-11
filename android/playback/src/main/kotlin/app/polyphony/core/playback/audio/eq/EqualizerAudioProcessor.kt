@@ -42,25 +42,42 @@ class EqualizerAudioProcessor(private val curve: () -> List<Float>?) : BaseAudio
         output.flip()
     }
 
-    /** The engine for [gains] in [format], built or updated only when either changed. */
+    /**
+     * The engine for [gains] in [format], built or updated only when either changed; null while
+     * the sound passes as it is. Turning the equaliser off (or flat) crossfades to the plain sound
+     * before it stops being used, and turning it on crossfades in, so neither is a step in level.
+     */
     private fun engineFor(gains: List<Float>?, format: AudioFormat): EqualizerDsp? {
-        if (gains == null || format.sampleRate <= 0 || format.channelCount <= 0) {
+        if (format.sampleRate <= 0 || format.channelCount <= 0) {
             dsp = null
             playing = null
             return null
         }
         val current = dsp
-        if (current != null && current.sampleRate == format.sampleRate && current.channelCount == format.channelCount) {
-            if (gains !== playing) {
-                current.update(EqualizerDesign.of(gains, format.sampleRate))
-                playing = gains
-            }
-            return current.takeUnless { it.design.isFlat }
+        if (current == null || current.sampleRate != format.sampleRate || current.channelCount != format.channelCount) {
+            // The first buffer, or a stream in another format: as the setting is, with no fade.
+            val design = designOf(gains, format.sampleRate)
+            playing = gains
+            val engine = EqualizerDsp(design ?: EqualizerDesign.flat(format.sampleRate), format.channelCount)
+            if (design == null) engine.startFadedOut()
+            dsp = engine
+            return engine.takeUnless { it.isFadedOut }
         }
-        val design = EqualizerDesign.of(gains, format.sampleRate)
-        playing = gains
-        return EqualizerDsp(design, format.channelCount).also { dsp = it }.takeUnless { design.isFlat }
+        if (gains !== playing) {
+            playing = gains
+            val design = designOf(gains, format.sampleRate)
+            if (design == null) {
+                current.fadeTo(on = false)   // the curve plays out under the fade
+            } else {
+                current.update(design)
+                current.fadeTo(on = true)
+            }
+        }
+        return current.takeUnless { it.isFadedOut }
     }
+
+    private fun designOf(gains: List<Float>?, sampleRate: Int): EqualizerDesign? =
+        gains?.let { EqualizerDesign.of(it, sampleRate) }?.takeUnless { it.isFlat }
 
     override fun onReset() {
         dsp = null
