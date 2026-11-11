@@ -16,6 +16,7 @@ import androidx.media3.extractor.mp4.FragmentedMp4Extractor
 import androidx.media3.extractor.text.SubtitleParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.BeforeClass
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
@@ -38,6 +39,22 @@ import kotlin.math.abs
  * Format.encoderPadding from the end. What is left must be exactly each track's own length.
  */
 class HlsGaplessSpikeTest {
+
+    companion object {
+        /**
+         * ParsableByteArray asks Build.FINGERPRINT whether it runs under Robolectric; the android.jar
+         * stub leaves it null, which Guava's Ascii.equalsIgnoreCase rejects. Give it a value.
+         */
+        @JvmStatic
+        @BeforeClass
+        fun stubBuildFingerprint() {
+            val field = android.os.Build::class.java.getField("FINGERPRINT")
+            val unsafe = sun.misc.Unsafe::class.java.getDeclaredField("theUnsafe")
+                .apply { isAccessible = true }.get(null) as sun.misc.Unsafe
+            @Suppress("DEPRECATION")
+            unsafe.putObject(unsafe.staticFieldBase(field), unsafe.staticFieldOffset(field), "jvm-unit-test")
+        }
+    }
 
     private class Extracted(val format: Format, val packetSamples: List<Int>) {
         val decodedSamples get() = packetSamples.sum()
