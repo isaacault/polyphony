@@ -230,6 +230,12 @@ fun PlaybackSettingsScreen(viewModel: PlaybackSettingsViewModel = hiltViewModel(
                 enabled = s.prefetchQueue,
                 onCheckedChange = { on -> viewModel.update { it.copy(prefetchOnMobileData = on) } },
             )
+            SwitchPreference(
+                title = stringResource(R.string.settings_playback_adaptive),
+                summary = stringResource(R.string.settings_playback_adaptive_summary),
+                checked = s.adaptiveStreaming,
+                onCheckedChange = { on -> viewModel.update { it.copy(adaptiveStreaming = on) } },
+            )
             PreferenceNote(text = stringResource(R.string.settings_playback_buffering_note))
         }
     }
