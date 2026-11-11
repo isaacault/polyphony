@@ -119,6 +119,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import java.util.concurrent.Executors
@@ -1254,6 +1255,7 @@ class PlaybackService : MediaLibraryService() {
         if (!enabled) return
         startRestore = scope.launch {
             val plan = loadRestorePlan() ?: return@launch
+            awaitRoutingState()
             // Something was put in the player while the file was read (a controller's play): it wins.
             if (player.mediaItemCount > 0) return@launch
             val restored = adoptRestored(plan)
@@ -1278,7 +1280,21 @@ class PlaybackService : MediaLibraryService() {
             )
         }
         val plan = loadRestorePlan() ?: return null
+        if (isForPlayback) awaitRoutingState()
         return if (isForPlayback) adoptRestored(plan) else restoredItems(plan)
+    }
+
+    /**
+     * Each song's stream is chosen when it's queued ([routeFor]), from the servers and the
+     * downloaded set in memory, which fill asynchronously after a start. A restored queue waits
+     * for them (briefly), or a downloaded song from continuo would stream, or a continuo song play
+     * as an ordinary stream.
+     */
+    private suspend fun awaitRoutingState() {
+        withTimeoutOrNull(ROUTING_STATE_WAIT_MS) {
+            downloadedIds = downloadRepository.downloadedTrackIds().first()
+            serverLookup.servers.first { it.isNotEmpty() }
+        }
     }
 
     // ---- session plumbing ----
@@ -1428,6 +1444,8 @@ class PlaybackService : MediaLibraryService() {
         /** A Play now song ahead of its download waits up to 3 minutes for it, every 3 s. */
         private const val PLAY_NOW_WAITS = 60
         private const val PLAY_NOW_WAIT_MS = 3_000L
+        /** How long a restored queue waits for the servers and the downloaded set ([awaitRoutingState]). */
+        private const val ROUTING_STATE_WAIT_MS = 2_000L
         /** How far ahead of the queue continuo hears the Play now order. */
         private const val PLAY_NOW_LOOKAHEAD = 50
         /** Adaptive songs continuo encodes ahead of the player (continuo's AHEAD). */
