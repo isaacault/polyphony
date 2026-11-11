@@ -135,4 +135,31 @@ interface DownloadRepository {
     suspend fun deleteRule(ruleId: String, removeFiles: Boolean)
     suspend fun evaluateRulesNow()
     val ruleEvaluationState: Flow<SyncState>
+    /** What the rules couldn't do as asked, shown on the Downloads screen (#17). */
+    val ruleReport: Flow<RuleReport> get() = flowOf(RuleReport())
+    /** The Downloads screen's note about the last eviction was read. */
+    fun dismissEviction() {}
+}
+
+/**
+ * Where the download rules didn't simply do what they say (#17): the user is told, rather than
+ * files going or staying silently. Kept from the last evaluation since the app started.
+ */
+data class RuleReport(
+    /**
+     * Rules that found no songs although they hold downloads: their playlist, album or artist is
+     * gone from the library (or the library is mid-sync). Their downloads are kept, not removed.
+     */
+    val emptyRules: Set<String> = emptySet(),
+    /** The storage cap's last removal, until it's dismissed. */
+    val eviction: Eviction? = null,
+) {
+    data class Eviction(
+        val atMs: Long,
+        /** What went, in the order it went. */
+        val trackIds: List<String>,
+        val limitMb: Long,
+        /** Least recently played first; otherwise oldest download first. */
+        val leastRecentlyPlayed: Boolean,
+    )
 }

@@ -68,6 +68,16 @@
     <string name="dl_rule_evaluating">Checking rules…</string>
     <string name="dl_rule_last_evaluated">Last checked %1$s</string>
     <string name="dl_rule_disabled">Disabled</string>
+    <string name="dl_rule_finds_nothing">Finds no songs on the server now (removed or renamed?). Its downloads are kept until you delete the rule.</string>
+    <plurals name="dl_evicted_title">
+        <item quantity="one">Removed %1$d song to stay under %2$s</item>
+        <item quantity="other">Removed %1$d songs to stay under %2$s</item>
+    </plurals>
+    <string name="dl_evicted_least_played">The least recently played went first; pinned downloads never go.</string>
+    <string name="dl_evicted_oldest">The oldest downloads went first; pinned downloads never go.</string>
+    <string name="dl_evicted_names">Removed: %1$s.</string>
+    <string name="dl_evicted_names_more">Removed: %1$s and %2$d more.</string>
+    <string name="dl_evicted_dismiss">Dismiss</string>
     <string name="dl_rule_quality_default">Default quality</string>
     <string name="dl_rule_max_tracks">Up to %1$d songs</string>
     <string name="dl_home_section">Downloaded</string>

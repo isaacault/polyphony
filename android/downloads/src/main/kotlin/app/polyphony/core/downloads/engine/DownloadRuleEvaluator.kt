@@ -6,6 +6,7 @@ import app.polyphony.core.domain.repository.DownloadRule
 import app.polyphony.core.domain.repository.DownloadRuleTarget
 import app.polyphony.core.domain.repository.DownloadStatus
 import app.polyphony.core.domain.repository.LibraryRepository
+import app.polyphony.core.domain.repository.RuleReport
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.SyncState
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
@@ -44,6 +46,10 @@ class DownloadRuleEvaluator @Inject constructor(
     private val mutex = Mutex()
     private val _state = MutableStateFlow(SyncState())
     val state: StateFlow<SyncState> = _state.asStateFlow()
+    private val _report = MutableStateFlow(RuleReport())
+    val report: StateFlow<RuleReport> = _report.asStateFlow()
+
+    fun dismissEviction() = _report.update { it.copy(eviction = null) }
 
     suspend fun evaluate(serverId: String) {
         mutex.withLock {
@@ -58,16 +64,14 @@ class DownloadRuleEvaluator @Inject constructor(
 
                 val current = downloadDao.getAllForServer(serverId).map { it.toDomain() }
                 val owning = current.mapNotNullTo(HashSet()) { it.ruleId }
-                val perRule = ArrayList<Pair<DownloadRule, List<Track>>>()
-                val held = HashSet<String>()
+                val found = LinkedHashMap<DownloadRule, List<Track>?>()
                 rules.forEachIndexed { index, rule ->
                     _state.value = _state.value.copy(progress = index.toFloat() / (rules.size + 1), phase = rule.target.label)
-                    val tracks = runCatching { tracksFor(rule) }.getOrNull()
-                    // A failed lookup, or nothing at all from a rule that owns downloads, is far
-                    // likelier a vanished target or a library mid-sync than a wish to delete them.
-                    if (tracks == null || (tracks.isEmpty() && rule.id in owning)) held += rule.id
-                    perRule += rule to tracks.orEmpty()
+                    found[rule] = runCatching { tracksFor(rule) }.getOrNull()
                 }
+                val perRule = found.map { (rule, tracks) -> rule to tracks.orEmpty() }
+                val (held, empty) = RuleDiff.holding(found.mapKeys { it.key.id }, owning)
+                _report.update { it.copy(emptyRules = empty) }
                 if (!isActive(serverId)) {
                     _state.value = _state.value.copy(status = SyncState.Status.IDLE, progress = null, phase = null)
                     return
@@ -100,6 +104,9 @@ class DownloadRuleEvaluator @Inject constructor(
                     if (evict.isNotEmpty()) {
                         engine.remove(evict)
                         notifications.evicted(evict.size, settings.maxStorageMb)
+                        _report.update {
+                            it.copy(eviction = RuleReport.Eviction(now, evict, settings.maxStorageMb, settings.evictLeastRecentlyPlayed))
+                        }
                     }
                 }
                 _state.value = SyncState(status = SyncState.Status.IDLE, lastSyncAt = now)

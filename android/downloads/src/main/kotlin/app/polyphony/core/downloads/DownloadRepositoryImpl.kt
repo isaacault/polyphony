@@ -11,6 +11,7 @@ import app.polyphony.core.domain.repository.LibrarySyncManager
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.StorageUsage
+import app.polyphony.core.domain.repository.RuleReport
 import app.polyphony.core.domain.repository.SyncState
 import app.polyphony.core.domain.repository.TransferRate
 import app.polyphony.core.downloads.db.DownloadDao
@@ -153,6 +154,8 @@ class DownloadRepositoryImpl @Inject constructor(
     }
 
     override val ruleEvaluationState: Flow<SyncState> = evaluator.state
+    override val ruleReport: Flow<RuleReport> = evaluator.report
+    override fun dismissEviction() = evaluator.dismissEviction()
 
     // ---- Triggers ----
 
