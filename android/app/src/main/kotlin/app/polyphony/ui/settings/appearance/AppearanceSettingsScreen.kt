@@ -154,6 +154,12 @@ fun AppearanceSettingsScreen(viewModel: AppearanceViewModel = hiltViewModel()) {
                 checked = s.pureBlack,
                 onCheckedChange = { on -> viewModel.update { it.copy(pureBlack = on) } },
             )
+            SwitchPreference(
+                title = stringResource(R.string.settings_appearance_reduce_artwork),
+                summary = stringResource(R.string.settings_appearance_reduce_artwork_summary),
+                checked = s.reduceImageDataOnMobile,
+                onCheckedChange = { on -> viewModel.update { it.copy(reduceImageDataOnMobile = on) } },
+            )
         }
 
         preferenceCategory(key = "player", titleRes = R.string.settings_appearance_player) {

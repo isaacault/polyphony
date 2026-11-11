@@ -4,10 +4,10 @@ import coil3.intercept.Interceptor
 import coil3.request.ImageResult
 
 /**
- * On mobile data, ask for smaller artwork: shrink the `size` of `getCoverArt` requests (stored
- * artwork URLs bake in 600 px), and give continuo's catalogue artwork (`/v1/artwork`) a `size`,
- * so the server sends a smaller image. Per request, without disturbing the cache of the full-size
- * variant.
+ * On mobile data or a stalling connection ([DataSaver]), ask for smaller artwork: shrink the
+ * `size` of `getCoverArt` requests (stored artwork URLs bake in 600 px) and Jellyfin's
+ * `maxWidth`/`maxHeight`, and give continuo's catalogue artwork (`/v1/artwork`) a `size`, so the
+ * server sends a smaller image. Per request, without disturbing the cache of the full-size variant.
  */
 class ArtworkSizeInterceptor : Interceptor {
     override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
@@ -20,8 +20,23 @@ class ArtworkSizeInterceptor : Interceptor {
     companion object {
         private val SIZE = Regex("size=(\\d+)")
 
+        /** Jellyfin's image sizes (`/Items/{id}/Images/Primary?maxWidth=600&maxHeight=600`). */
+        private val JELLYFIN_EDGE = Regex("(max(?:Width|Height))=(\\d+)")
+
         /** The URL with its cover `size` capped at [maxEdge], or null when it is not a shrinkable cover URL. */
         fun reducedUrl(url: String, maxEdge: Int): String? {
+            if (url.contains("/Images/")) {
+                var changed = false
+                val out = JELLYFIN_EDGE.replace(url) { m ->
+                    if ((m.groupValues[2].toIntOrNull() ?: 0) > maxEdge) {
+                        changed = true
+                        "${m.groupValues[1]}=$maxEdge"
+                    } else {
+                        m.value
+                    }
+                }
+                return out.takeIf { changed }
+            }
             if (url.contains("/v1/artwork?") && SIZE.find(url) == null) return "$url&size=$maxEdge"
             if (!url.contains("getCoverArt") && !url.contains("/v1/artwork?")) return null
             val match = SIZE.find(url) ?: return null

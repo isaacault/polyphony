@@ -95,6 +95,8 @@
     <string name="settings_appearance_accent_disabled">Turn off dynamic colour to choose an accent.</string>
     <string name="settings_appearance_pure_black">Pure black dark theme</string>
     <string name="settings_appearance_pure_black_summary">True black backgrounds for OLED screens</string>
+    <string name="settings_appearance_reduce_artwork">Smaller artwork on a slow connection</string>
+    <string name="settings_appearance_reduce_artwork_summary">On mobile data, and on any network while streaming keeps stalling, covers load at about half the size</string>
     <string name="settings_appearance_player">Player</string>
     <string name="settings_appearance_artwork_colors">Artwork colours in player</string>
     <string name="settings_appearance_artwork_colors_summary">Tint Now Playing with colours from the album art</string>

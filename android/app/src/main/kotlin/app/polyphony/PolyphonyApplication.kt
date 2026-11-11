@@ -14,6 +14,7 @@ import coil3.request.crossfade
 import app.polyphony.core.domain.repository.DownloadRepository
 import app.polyphony.core.domain.repository.NetworkMonitor
 import app.polyphony.core.domain.repository.SettingsRepository
+import app.polyphony.core.playback.engine.LatencyMonitor
 import app.polyphony.core.playback.transcode.TranscodeCapabilityProbe
 import app.polyphony.diagnostics.CrashRecorder
 import app.polyphony.image.ArtworkSizeInterceptor
@@ -24,6 +25,7 @@ import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -44,6 +46,7 @@ class PolyphonyApplication : Application(), Configuration.Provider, SingletonIma
 
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var networkMonitor: NetworkMonitor
+    @Inject lateinit var latencyMonitor: LatencyMonitor
 
     /** Keeps the continuo inbox poll scheduled while a continuo-linked server exists (#118). */
     @Inject lateinit var inboxScheduler: InboxScheduler
@@ -58,9 +61,14 @@ class PolyphonyApplication : Application(), Configuration.Provider, SingletonIma
         CrashRecorder.install(this)
         inboxScheduler.start(appScope)
         resumeShortcut.start(appScope)
-        // Smaller artwork whenever the network is metered (mobile data).
+        // Smaller artwork on mobile data, and on any network while streaming keeps stalling (#60).
         appScope.launch {
-            networkMonitor.state.map { it.isMetered }.distinctUntilChanged()
+            combine(
+                settingsRepository.settings.map { it.appearance.reduceImageDataOnMobile },
+                networkMonitor.state.map { it.isMetered },
+                latencyMonitor.degraded,
+            ) { enabled, metered, stalling -> DataSaver.shouldReduce(enabled, metered, stalling) }
+                .distinctUntilChanged()
                 .collect { DataSaver.reduceArtwork = it }
         }
     }

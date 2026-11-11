@@ -10,4 +10,10 @@ object DataSaver {
 
     /** Largest cover edge requested while the data saver is active (the stored default is 600). */
     const val MAX_EDGE_PX = 320
+
+    /**
+     * Smaller artwork when the setting is on and the connection is costly or poor: mobile data, or
+     * any network (Wi-Fi too) while streaming keeps stalling. From the connection as it is now.
+     */
+    fun shouldReduce(enabled: Boolean, metered: Boolean, stalling: Boolean): Boolean = enabled && (metered || stalling)
 }
