@@ -97,6 +97,9 @@ class LastFmClientTest {
         assertTrue(answer(200, """{"error":29,"message":"Rate limit exceeded"}""") is SubmitResult.Retry)
         assertTrue(answer(503, "<html>down</html>") is SubmitResult.Retry)
         assertTrue(answer(400, """{"error":6,"message":"Invalid parameters"}""") is SubmitResult.Rejected)
+        // A build with the wrong API secret: every request fails the same way, and no play is dropped for it.
+        assertTrue(answer(403, """{"error":13,"message":"Invalid method signature supplied"}""") is SubmitResult.Retry)
+        assertTrue(answer(400, """{"error":3,"message":"Invalid Method"}""") is SubmitResult.Retry)
         val accepted = answer(
             200,
             """{"scrobbles":{"scrobble":[
