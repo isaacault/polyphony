@@ -750,4 +750,33 @@ class ContinuoRequestRepositoryTest {
             assertEquals(400, e.code); assertEquals("Pass ids or all=true.", e.message)
         }
     }
+
+    @Test
+    fun `adaptive streams carry this install's bearer token, a fresh one when refused`() = runTest {
+        val repo = repo(FakeContinuo(), FakeServers(server))
+        assertEquals("Bearer at_1", repo.streamHeaders(server)["Authorization"])
+        assertEquals("Bearer at_1", repo.streamHeaders(server)["Authorization"])
+        assertEquals("Bearer at_2", repo.streamHeaders(server, refresh = true)["Authorization"])
+    }
+
+    @Test
+    fun `other servers get no stream headers and send no songs ahead`() = runTest {
+        val fake = FakeContinuo()
+        val plain = server.copy(options = emptyMap())
+        val repo = repo(fake, FakeServers(plain))
+        assertEquals(emptyMap<String, String>(), repo.streamHeaders(plain))
+        repo.streamUpcoming(plain, listOf("tr1"), 64, lowerToo = false)
+        assertEquals(0, fake.seen.size)
+    }
+
+    @Test
+    fun `the songs coming up go to continuo with the level playing now`() = runTest {
+        val fake = FakeContinuo().apply {
+            routes["POST /v1/stream/upcoming"] = { _, _ -> 200 to """{"encoding":[]}""" }
+        }
+        repo(fake, FakeServers(server)).streamUpcoming(server, listOf("tr1", "tr2"), 32, lowerToo = true)
+        val (req, body) = fake.seen.last { it.first.url.encodedPath == "/v1/stream/upcoming" }
+        assertEquals("POST", req.method)
+        assertEquals("""{"songs":["tr1","tr2"],"kbps":32,"lowerToo":true}""", body)
+    }
 }

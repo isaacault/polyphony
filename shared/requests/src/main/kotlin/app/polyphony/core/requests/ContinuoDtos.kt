@@ -117,6 +117,10 @@ internal data class TracklistDto(
 @Serializable
 internal data class CreateRequestBody(val kind: String, val musicBrainzReleaseGroupId: String)
 
+/** POST /v1/stream/upcoming (#185). */
+@Serializable
+internal data class StreamUpcomingBody(val songs: List<String>, val kbps: Int, val lowerToo: Boolean)
+
 @Serializable
 internal data class PlayNowBody(
     val musicBrainzRecordingId: String,
