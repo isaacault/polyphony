@@ -106,6 +106,9 @@ data class AlbumFtsEntity(
         Index(value = ["serverId", "albumSortKey"]),
         Index(value = ["serverId", "createdAt"]),
         Index(value = ["serverId", "playCount"]),
+        // The Songs tab's duration and rating sorts (v6; #9).
+        Index(value = ["serverId", "durationMs"]),
+        Index(value = ["serverId", "rating"]),
         Index(value = ["serverId", "genre"]),
         Index(value = ["serverId", "starred"]),
         Index(value = ["serverId", "syncGeneration"]),

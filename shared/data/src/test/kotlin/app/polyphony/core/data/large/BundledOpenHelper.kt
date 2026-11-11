@@ -40,12 +40,21 @@ import kotlin.concurrent.withLock
  * as `android.database.sqlite.SQLiteException`s carrying the SQLite message, which Room's `@Upsert`
  * reads to tell a primary-key conflict from other failures.
  */
-class BundledOpenHelperFactory : SupportSQLiteOpenHelper.Factory {
+class BundledOpenHelperFactory(
+    /**
+     * Runs on the empty database before Room sees it: an older schema with its `user_version`
+     * set, so Room upgrades it with the app's migrations and validates the result (MigrationsTest).
+     */
+    private val seed: ((SupportSQLiteDatabase) -> Unit)? = null,
+) : SupportSQLiteOpenHelper.Factory {
     override fun create(configuration: SupportSQLiteOpenHelper.Configuration): SupportSQLiteOpenHelper =
-        BundledOpenHelper(configuration)
+        BundledOpenHelper(configuration, seed)
 }
 
-private class BundledOpenHelper(private val configuration: SupportSQLiteOpenHelper.Configuration) : SupportSQLiteOpenHelper {
+private class BundledOpenHelper(
+    private val configuration: SupportSQLiteOpenHelper.Configuration,
+    private val seed: ((SupportSQLiteDatabase) -> Unit)?,
+) : SupportSQLiteOpenHelper {
     private var database: BundledDatabase? = null
 
     override val databaseName: String? get() = configuration.name
@@ -58,6 +67,7 @@ private class BundledOpenHelper(private val configuration: SupportSQLiteOpenHelp
         database?.let { return it }
         require(configuration.name == null) { "in-memory databases only" }
         val db = BundledDatabase(BundledSQLiteDriver().open(":memory:"))
+        seed?.invoke(db)
         val callback = configuration.callback
         callback.onConfigure(db)
         val current = db.version

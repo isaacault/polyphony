@@ -33,8 +33,13 @@ class QueryPlansTest {
     fun `songs tab sorts read an index`() {
         for (sort in TrackSort.entries) {
             val p = plan("songs $sort", SortQueries.tracks(sid, sort, ascending = true))
-            plan("songs $sort reversed", SortQueries.tracks(sid, sort, ascending = false))
-            if (sort in INDEXED_TRACK_SORTS) assertNoTableScan("songs $sort", p)
+            val reversed = plan("songs $sort reversed", SortQueries.tracks(sid, sort, ascending = false))
+            if (sort in INDEXED_TRACK_SORTS) {
+                assertNoTableScan("songs $sort", p)
+                // Read in index order, so the first screen comes without sorting all 60,000 songs.
+                assertFalse("songs $sort sorts every song: $p", p.sortsWholeResult())
+                assertFalse("songs $sort reversed sorts every song: $reversed", reversed.sortsWholeResult())
+            }
         }
         assertNoTableScan("A-Z keys", plan("songs A-Z keys TITLE", SortQueries.trackSortKeys(sid, TrackSort.TITLE, true)))
         plan("songs count", SortQueries.trackCount(sid, LibraryFilter.NONE))
@@ -128,6 +133,6 @@ class QueryPlansTest {
     }
 
     private companion object {
-        val INDEXED_TRACK_SORTS = setOf(TrackSort.TITLE, TrackSort.ARTIST, TrackSort.ALBUM, TrackSort.RECENTLY_ADDED, TrackSort.MOST_PLAYED)
+        val INDEXED_TRACK_SORTS = TrackSort.entries.toSet()
     }
 }
