@@ -143,8 +143,8 @@ class HlsGaplessSpikeTest {
             println("SPIKE $track: packets ${e.packetSamples.size} decoded ${e.decodedSamples} preSkip ${e.preSkipSamples} " +
                 "delay ${e.format.encoderDelay} padding ${e.format.encoderPadding} played ${played(e)} " +
                 "expected ${"%.2f".format(expected48k(track))}")
-            assertEquals("$track pre-skip", 312, e.preSkipSamples)
-            assertEquals("$track delay: the decoder owns pre-skip", 0, e.format.encoderDelay)
+            assertEquals("$track dOps pre-skip is zeroed, so the decoder skips nothing", 0, e.preSkipSamples)
+            assertEquals("$track delay comes from iTunSMPB", 312, e.format.encoderDelay)
             assertTrue("$track padding is stated", e.format.encoderPadding > 0)
             assertTrue("$track plays its own length", abs(played(e) - expected48k(track)) < 1.0)
         }
@@ -159,12 +159,15 @@ class HlsGaplessSpikeTest {
     }
 
     @Test
-    fun `without the stated padding each track ends with up to 20 ms of extra audio`() {
+    fun `ffmpeg's own init loses the start of every song in Media3 and keeps the tail`() {
+        // dOps is big-endian (ISO BMFF Opus); Media3 1.11.1 copies it into a little-endian
+        // OpusHead, so PreSkip 312 (0x0138) is read as 14337 (0x3801): ~0.3 s cut from each start.
         val e = extract("t1_opus64_plain_init.mp4", segments("t1_opus64"))
-        val extra = played(e) - expected48k("t1")
-        println("SPIKE plain t1: padding ${e.format.encoderPadding}, extra ${"%.1f".format(extra)} samples (${"%.1f".format(extra / 48)} ms)")
+        val diff = played(e) - expected48k("t1")
+        println("SPIKE plain t1: preSkip ${e.preSkipSamples} padding ${e.format.encoderPadding}, " +
+            "played ${"%.1f".format(diff)} samples (${"%.1f".format(diff / 48)} ms) off")
+        assertEquals(0x3801, e.preSkipSamples)
         assertEquals(0, e.format.encoderPadding)
-        assertTrue("ffmpeg alone leaves the tail in", extra > 100)
     }
 
     @Test
