@@ -9,7 +9,14 @@ import app.polyphony.core.domain.provider.ConnectRequest
 import app.polyphony.core.domain.provider.MediaProvider
 import app.polyphony.core.domain.provider.MediaProviderFactory
 import app.polyphony.core.domain.provider.ProviderException
+import app.polyphony.core.domain.provider.QuickConnectFactory
+import app.polyphony.core.domain.provider.QuickConnectSignIn
 import app.polyphony.core.network.ServerHttpClientFactory
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import org.jellyfin.sdk.model.api.AuthenticationResult
+import org.jellyfin.sdk.model.api.PublicSystemInfo
+import org.jellyfin.sdk.model.api.QuickConnectDto
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -40,11 +47,60 @@ import kotlin.time.Duration.Companion.seconds
 class JellyfinProviderFactory @Inject constructor(
     @ApplicationContext private val context: Context,
     private val httpClientFactory: ServerHttpClientFactory,
-) : MediaProviderFactory {
+) : MediaProviderFactory, QuickConnectFactory {
 
     override val type: ServerType = ServerType.JELLYFIN
 
     override suspend fun authenticate(request: ConnectRequest): Server = jellyfinCall {
+        val sign = signInTo(request)
+        val info = sign.api.systemApi.getPublicSystemInfo().content
+        val auth = try {
+            sign.api.authenticationApi.authenticateUserByName(request.username, request.password).content
+        } catch (e: Throwable) {
+            val mapped = e.toProviderException()
+            throw if (mapped is ProviderException.Unauthorized) {
+                ProviderException.Unauthorized("Invalid username or password", e)
+            } else mapped
+        }
+        serverFor(request, sign, info, auth)
+    }
+
+    override suspend fun startQuickConnect(request: ConnectRequest): QuickConnectSignIn = jellyfinCall {
+        val sign = signInTo(request)
+        val info = sign.api.systemApi.getPublicSystemInfo().content
+        if (!sign.api.authenticationApi.getQuickConnectEnabled().content) {
+            throw ProviderException.Unsupported("Quick Connect is turned off on this server")
+        }
+        val started = sign.api.authenticationApi.initiateQuickConnect().content
+        object : QuickConnectSignIn {
+            override val code: String = started.code
+
+            override suspend fun awaitServer(): Server = jellyfinCall {
+                while (true) {
+                    val state = try {
+                        sign.api.authenticationApi.getQuickConnectState(started.secret).content
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Throwable) {
+                        val mapped = e.toProviderException()
+                        // Jellyfin forgets a code that wasn't approved in time.
+                        throw if (mapped is ProviderException.NotFound || mapped is ProviderException.Unauthorized) {
+                            ProviderException.Unauthorized("The Quick Connect code expired", e)
+                        } else mapped
+                    }
+                    if (state.authenticated) break
+                    delay(QUICK_CONNECT_POLL_MS)
+                }
+                val auth = sign.api.authenticationApi.authenticateWithQuickConnect(QuickConnectDto(secret = started.secret)).content
+                serverFor(request, sign, info, auth)
+            }
+        }
+    }
+
+    /** A sign-in's address and client: a new device id, the server's own HTTP options. */
+    private class SignIn(val baseUrl: String, val deviceId: String, val api: ApiClient)
+
+    private fun signInTo(request: ConnectRequest): SignIn {
         val baseUrl = try {
             JellyfinUrlNormalizer.normalize(request.baseUrl, type.defaultPort ?: 8096)
         } catch (e: IllegalArgumentException) {
@@ -57,21 +113,16 @@ class JellyfinProviderFactory @Inject constructor(
             deviceId = deviceId,
             http = httpClientFactory.clientFor(request.options),
         )
+        return SignIn(baseUrl, deviceId, api)
+    }
 
-        val info = api.systemApi.getPublicSystemInfo().content
-        val auth = try {
-            api.authenticationApi.authenticateUserByName(request.username, request.password).content
-        } catch (e: Throwable) {
-            val mapped = e.toProviderException()
-            throw if (mapped is ProviderException.Unauthorized) {
-                ProviderException.Unauthorized("Invalid username or password", e)
-            } else mapped
-        }
+    private fun serverFor(request: ConnectRequest, sign: SignIn, info: PublicSystemInfo, auth: AuthenticationResult): Server {
+        val baseUrl = sign.baseUrl
         val token = auth.accessToken?.takeIf { it.isNotBlank() }
             ?: throw ProviderException.Unauthorized("Jellyfin did not return an access token")
         val user = auth.user ?: throw ProviderException.Unknown("Jellyfin did not return the user profile")
 
-        Server(
+        return Server(
             id = UUID.randomUUID().toString(),
             type = ServerType.JELLYFIN,
             name = request.name.ifBlank { info.serverName?.takeIf { it.isNotBlank() } ?: baseUrl.removePrefix("https://").removePrefix("http://") },
@@ -79,7 +130,7 @@ class JellyfinProviderFactory @Inject constructor(
             username = user.name ?: request.username,
             credential = token,
             userId = user.id.toString(),
-            deviceId = deviceId,
+            deviceId = sign.deviceId,
             options = request.options + (ServerOptions.SERVER_VERSION to listOfNotNull(info.productName ?: "Jellyfin", info.version).joinToString(" ")),
             createdAt = System.currentTimeMillis(),
         )
@@ -124,6 +175,8 @@ class JellyfinProviderFactory @Inject constructor(
         const val CLIENT_NAME = "Polyphony"
         const val CLIENT_VERSION = "0.1.0"
         val CLIENT_INFO = ClientInfo(name = CLIENT_NAME, version = CLIENT_VERSION)
+        /** How often a Quick Connect code is checked for approval, as Jellyfin's own clients do. */
+        const val QUICK_CONNECT_POLL_MS = 5_000L
     }
 }
 

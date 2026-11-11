@@ -4,10 +4,12 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
+import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.model.ServerOptions
 import app.polyphony.core.domain.model.ServerType
 import app.polyphony.core.domain.provider.ConnectRequest
 import app.polyphony.core.domain.provider.ProviderException
+import app.polyphony.core.domain.provider.QuickConnectFactory
 import app.polyphony.core.domain.repository.LibrarySyncManager
 import app.polyphony.core.domain.repository.ProviderRegistry
 import app.polyphony.core.domain.repository.ServerRepository
@@ -17,6 +19,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -57,6 +60,8 @@ data class ConnectFormState(
     val headers: List<HeaderRow> = emptyList(),
     val showAdvanced: Boolean = false,
     val isConnecting: Boolean = false,
+    /** The Quick Connect code to approve elsewhere, while a Quick Connect sign-in waits (#22). */
+    val quickConnectCode: String? = null,
     val error: ConnectError? = null,
 ) {
     val urlError: Boolean get() = error == ConnectError.InvalidUrl
@@ -116,39 +121,83 @@ class ConnectServerViewModel @Inject constructor(
         }
         _state.update { it.copy(isConnecting = true, error = null) }
         viewModelScope.launch {
-            try {
-                val firstServer = serverRepository.servers.first().isEmpty()
-                val options = buildMap {
-                    if (type == ServerType.SUBSONIC && form.legacyAuth) put(ServerOptions.LEGACY_AUTH, "true")
-                    if (form.trustSelfSigned) put(ServerOptions.TRUST_SELF_SIGNED, "true")
-                    val headers = form.headers.filter { it.name.isNotBlank() }
-                    if (headers.isNotEmpty()) {
-                        put(
-                            ServerOptions.CUSTOM_HEADERS,
-                            JsonObject(headers.associate { it.name.trim() to JsonPrimitive(it.value) }).toString(),
-                        )
-                    }
-                }
-                val request = ConnectRequest(
-                    type = type,
-                    name = form.name.trim().ifBlank { hostLabel(url) },
-                    baseUrl = url,
-                    username = form.username.trim(),
-                    password = form.password,
-                    options = options,
+            signIn { providerRegistry.factoryFor(type).authenticate(request(form, type, url)) }
+        }
+    }
+
+    /** Whether [type]'s servers can be signed in to by approving a code elsewhere (#22). */
+    fun offersQuickConnect(type: ServerType): Boolean = providerRegistry.factoryFor(type) is QuickConnectFactory
+
+    private var quickConnectJob: Job? = null
+
+    /**
+     * Signs in with Quick Connect: shows a code to approve on a device already signed in to the
+     * server, and finishes as a password sign-in does once it's approved.
+     */
+    fun quickConnect() {
+        val form = _state.value
+        val type = form.serverType ?: return
+        val factory = providerRegistry.factoryFor(type) as? QuickConnectFactory ?: return
+        val url = normalizeUrl(form.url)
+        if (url == null) {
+            _state.update { it.copy(error = ConnectError.InvalidUrl) }
+            return
+        }
+        _state.update { it.copy(isConnecting = true, error = null) }
+        quickConnectJob = viewModelScope.launch {
+            signIn {
+                val started = factory.startQuickConnect(request(form, type, url))
+                _state.update { it.copy(quickConnectCode = started.code) }
+                started.awaitServer()
+            }
+        }
+    }
+
+    fun cancelQuickConnect() {
+        quickConnectJob?.cancel()
+        quickConnectJob = null
+        _state.update { it.copy(isConnecting = false, quickConnectCode = null) }
+    }
+
+    private fun request(form: ConnectFormState, type: ServerType, url: String): ConnectRequest {
+        val options = buildMap {
+            if (type == ServerType.SUBSONIC && form.legacyAuth) put(ServerOptions.LEGACY_AUTH, "true")
+            if (form.trustSelfSigned) put(ServerOptions.TRUST_SELF_SIGNED, "true")
+            val headers = form.headers.filter { it.name.isNotBlank() }
+            if (headers.isNotEmpty()) {
+                put(
+                    ServerOptions.CUSTOM_HEADERS,
+                    JsonObject(headers.associate { it.name.trim() to JsonPrimitive(it.value) }).toString(),
                 )
-                val server = providerRegistry.factoryFor(type).authenticate(request)
-                serverRepository.add(server, makeActive = true)
-                settingsRepository.update { it.copy(onboardingComplete = true) }
-                syncScope.launch { runCatching { librarySyncManager.syncNow(full = true) } }
-                _state.update { it.copy(isConnecting = false) }
-                _events.send(ConnectEvent.Done(firstServer))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: ProviderException) {
-                _state.update { it.copy(isConnecting = false, error = e.toConnectError()) }
-            } catch (e: Exception) {
-                _state.update { it.copy(isConnecting = false, error = ConnectError.Unknown(e.message ?: e.javaClass.simpleName)) }
+            }
+        }
+        return ConnectRequest(
+            type = type,
+            name = form.name.trim().ifBlank { hostLabel(url) },
+            baseUrl = url,
+            username = form.username.trim(),
+            password = form.password,
+            options = options,
+        )
+    }
+
+    /** Runs a sign-in, then saves the server, makes it active and starts the first sync. */
+    private suspend fun signIn(authenticate: suspend () -> Server) {
+        try {
+            val firstServer = serverRepository.servers.first().isEmpty()
+            val server = authenticate()
+            serverRepository.add(server, makeActive = true)
+            settingsRepository.update { it.copy(onboardingComplete = true) }
+            syncScope.launch { runCatching { librarySyncManager.syncNow(full = true) } }
+            _state.update { it.copy(isConnecting = false, quickConnectCode = null) }
+            _events.send(ConnectEvent.Done(firstServer))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: ProviderException) {
+            _state.update { it.copy(isConnecting = false, quickConnectCode = null, error = e.toConnectError()) }
+        } catch (e: Exception) {
+            _state.update {
+                it.copy(isConnecting = false, quickConnectCode = null, error = ConnectError.Unknown(e.message ?: e.javaClass.simpleName))
             }
         }
     }
