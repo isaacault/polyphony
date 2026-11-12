@@ -1,5 +1,6 @@
 package app.polyphony.core.playback.stream
 
+import androidx.media3.common.PlaybackException
 import androidx.media3.datasource.HttpDataSource
 import java.io.IOException
 
@@ -23,15 +24,19 @@ object LoadFailures {
     fun isGone(httpStatus: Int?): Boolean = httpStatus == 404 || httpStatus == 410
 
     /**
-     * continuo answered and couldn't serve an adaptive stream (an error status, or playlists or
-     * segments that don't parse): the song's ordinary stream may play where this won't. Not when
-     * the connection failed, which the ordinary stream can't get round either: the adaptive stream
-     * already drops to the lowest level the connection carries, so it waits for the network.
+     * The failure is the connection (offline, or no answer in time), which the song's ordinary
+     * stream can't get round either: an adaptive stream already drops to the lowest level the
+     * connection carries, so it waits for the network. Anything else, online (an error status,
+     * a wrong content type, playlists or segments that don't parse, an unexpected I/O error) is
+     * continuo not serving it, and the ordinary stream may play where this won't.
      */
-    fun continuoCouldNotServe(errorCode: Int, httpStatus: Int?): Boolean =
-        httpStatus != null || errorCode in PARSING_ERRORS
+    fun connectionLost(errorCode: Int, online: Boolean): Boolean =
+        !online || errorCode in CONNECTION_ERRORS
 
-    private val PARSING_ERRORS = 3000..3999
+    private val CONNECTION_ERRORS = setOf(
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+    )
 
     private fun causes(error: Throwable?): Sequence<Throwable> =
         generateSequence(error) { e -> e.cause?.takeIf { it !== e } }.take(MAX_DEPTH)

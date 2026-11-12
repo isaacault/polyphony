@@ -32,15 +32,16 @@ class UnplayableTest {
         assertFalse(LoadFailures.isGone(null))
     }
 
-    @Test fun `an adaptive stream falls back only when continuo answered and couldn't serve it`() {
-        assertTrue("encode failed", LoadFailures.continuoCouldNotServe(PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS, 502))
-        assertTrue("token refused even renewed", LoadFailures.continuoCouldNotServe(PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS, 401))
-        assertTrue("playlist didn't parse", LoadFailures.continuoCouldNotServe(PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED, null))
-        assertTrue("segment didn't parse", LoadFailures.continuoCouldNotServe(PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED, null))
+    @Test fun `an adaptive stream waits only for a lost connection, and falls back otherwise`() {
         // A tunnel: the ordinary stream can't get through either, and would be heavier when it did.
-        assertFalse(LoadFailures.continuoCouldNotServe(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED, null))
-        assertFalse(LoadFailures.continuoCouldNotServe(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT, null))
-        assertFalse(LoadFailures.continuoCouldNotServe(PlaybackException.ERROR_CODE_IO_UNSPECIFIED, null))
+        assertTrue(LoadFailures.connectionLost(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED, online = true))
+        assertTrue(LoadFailures.connectionLost(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT, online = true))
+        assertTrue("offline, whatever the error", LoadFailures.connectionLost(PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS, online = false))
+        // Online, continuo answered and couldn't serve it.
+        assertFalse("an error status", LoadFailures.connectionLost(PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS, online = true))
+        assertFalse("a wrong content type", LoadFailures.connectionLost(PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE, online = true))
+        assertFalse("a playlist that doesn't parse", LoadFailures.connectionLost(PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED, online = true))
+        assertFalse("an unexpected I/O error", LoadFailures.connectionLost(PlaybackException.ERROR_CODE_IO_UNSPECIFIED, online = true))
     }
 
     @Test fun `skips at most once per song until something plays`() {
