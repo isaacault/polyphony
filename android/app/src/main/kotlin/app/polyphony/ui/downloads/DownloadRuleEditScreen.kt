@@ -86,6 +86,7 @@ fun DownloadRuleEditScreen(viewModel: DownloadRuleEditViewModel = hiltViewModel(
             ListOption(RuleTargetType.RECENTLY_ADDED, "Recently added albums"),
             ListOption(RuleTargetType.MOST_PLAYED, "Most played songs"),
             ListOption(RuleTargetType.RECENTLY_PLAYED, "Recently played songs"),
+            ListOption(RuleTargetType.SMART, "Smart playlist"),
         )
     }
     val maxOptions = remember {
@@ -120,6 +121,7 @@ fun DownloadRuleEditScreen(viewModel: DownloadRuleEditViewModel = hiltViewModel(
                             RuleTargetType.PLAYLIST -> R.string.dl_rule_pick_playlist
                             RuleTargetType.ALBUM -> R.string.dl_rule_pick_album
                             RuleTargetType.ARTIST -> R.string.dl_rule_pick_artist
+                            RuleTargetType.SMART -> R.string.dl_rule_pick_smart
                             else -> R.string.dl_rule_pick_genre
                         },
                     ),
@@ -182,6 +184,7 @@ fun DownloadRuleEditScreen(viewModel: DownloadRuleEditViewModel = hiltViewModel(
             RuleTargetType.PLAYLIST -> viewModel.playlists
             RuleTargetType.ALBUM -> viewModel.albums
             RuleTargetType.ARTIST -> viewModel.artists
+            RuleTargetType.SMART -> viewModel.smartPlaylists
             else -> viewModel.genres
         }.collectAsStateWithLifecycle()
         EntityPickerSheet(

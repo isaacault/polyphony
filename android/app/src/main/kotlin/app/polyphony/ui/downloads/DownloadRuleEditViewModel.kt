@@ -15,6 +15,7 @@ import app.polyphony.core.domain.repository.DownloadRuleTarget
 import app.polyphony.core.domain.repository.FeedbackRepository
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.ServerRepository
+import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.TranscodeProfileRepository
 import app.polyphony.core.domain.transcode.TranscodeProfile
 import app.polyphony.navigation.DownloadRuleEditRoute
@@ -35,8 +36,8 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
-enum class RuleTargetType { FAVORITES, PLAYLIST, ALBUM, ARTIST, GENRE, RECENTLY_ADDED, MOST_PLAYED, RECENTLY_PLAYED;
-    val needsEntity: Boolean get() = this == PLAYLIST || this == ALBUM || this == ARTIST || this == GENRE
+enum class RuleTargetType { FAVORITES, PLAYLIST, ALBUM, ARTIST, GENRE, RECENTLY_ADDED, MOST_PLAYED, RECENTLY_PLAYED, SMART;
+    val needsEntity: Boolean get() = this == PLAYLIST || this == ALBUM || this == ARTIST || this == GENRE || this == SMART
     val needsCount: Boolean get() = this == RECENTLY_ADDED || this == MOST_PLAYED || this == RECENTLY_PLAYED
 }
 
@@ -60,6 +61,7 @@ data class RuleDraft(
         RuleTargetType.RECENTLY_ADDED -> DownloadRuleTarget.RecentlyAdded(count)
         RuleTargetType.MOST_PLAYED -> DownloadRuleTarget.MostPlayed(count)
         RuleTargetType.RECENTLY_PLAYED -> DownloadRuleTarget.RecentlyPlayed(count)
+        RuleTargetType.SMART -> entityId?.let { DownloadRuleTarget.Smart(it, entityName.orEmpty()) }
     }
 
     companion object {
@@ -74,6 +76,7 @@ data class RuleDraft(
                 is DownloadRuleTarget.RecentlyAdded -> base.copy(type = RuleTargetType.RECENTLY_ADDED, count = t.albumCount)
                 is DownloadRuleTarget.MostPlayed -> base.copy(type = RuleTargetType.MOST_PLAYED, count = t.trackCount)
                 is DownloadRuleTarget.RecentlyPlayed -> base.copy(type = RuleTargetType.RECENTLY_PLAYED, count = t.trackCount)
+                is DownloadRuleTarget.Smart -> base.copy(type = RuleTargetType.SMART, entityId = t.playlistId, entityName = t.name)
             }
         }
     }
@@ -96,7 +99,13 @@ class DownloadRuleEditViewModel @Inject constructor(
     private val servers: ServerRepository,
     profileRepository: TranscodeProfileRepository,
     feedbackRepository: FeedbackRepository,
+    settingsRepository: SettingsRepository,
 ) : ViewModel() {
+
+    /** Smart playlists (#33), to keep one downloaded. */
+    val smartPlaylists: StateFlow<ImmutableList<PickableEntity>> = settingsRepository.settings
+        .map { s -> s.library.smartPlaylists.map { PickableEntity(it.id, it.name, null, null) }.toImmutableList() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), persistentListOf())
 
     /** The favourites rule reads as Top rated in Ratings mode. */
     val feedback: StateFlow<Feedback> = feedbackRepository.feedback

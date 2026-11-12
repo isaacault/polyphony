@@ -107,6 +107,7 @@
     <string name="dl_rule_pick_album">Choose an album</string>
     <string name="dl_rule_pick_artist">Choose an artist</string>
     <string name="dl_rule_pick_genre">Choose a genre</string>
+    <string name="dl_rule_pick_smart">Choose a smart playlist</string>
     <string name="dl_rule_pick_search">Search</string>
     <string name="dl_rule_nothing_selected">Nothing selected</string>
     <string name="dl_rule_count_albums">Number of albums</string>
