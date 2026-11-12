@@ -2,6 +2,7 @@ package app.polyphony.core.data.large
 
 import android.content.ContextWrapper
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import app.polyphony.core.data.db.Migrations
 import app.polyphony.core.data.db.PolyphonyDatabase
@@ -29,6 +30,8 @@ class MigrationsOnJvmTest {
             val db = Room.inMemoryDatabaseBuilder(EmptyContext, PolyphonyDatabase::class.java)
                 .openHelperFactory(BundledOpenHelperFactory { seed(it, from) })
                 .addMigrations(*Migrations.ALL)
+                // Room asks Android which journal mode suits the device unless told (TestDatabase).
+                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                 .allowMainThreadQueries()
                 .build()
             try {
