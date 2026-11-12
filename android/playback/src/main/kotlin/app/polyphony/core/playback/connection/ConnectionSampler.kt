@@ -28,7 +28,7 @@ import javax.inject.Singleton
  * [ConnectionSample] about every [WINDOW_MS] of playback, and at once when the network changes or
  * playback stops, stored through [ConnectionSampleRepository]. Fed by the playback service (whether
  * it is streaming, and stalls) and by the stream data sources ([MeteredDataSource], the stream
- * cache's listener). Nothing leaves the phone.
+ * cache's listener). Kept on the phone, and sent to the continuo streamed from ([ConnectionUploader]).
  */
 @Singleton
 class ConnectionSampler @Inject constructor(
@@ -37,6 +37,7 @@ class ConnectionSampler @Inject constructor(
     latencyMonitor: LatencyMonitor,
     private val streamResolver: StreamResolver,
     private val repository: ConnectionSampleRepository,
+    private val uploader: ConnectionUploader,
     private val clock: Clock,
     @PlaybackScope private val scope: CoroutineScope,
 ) {
@@ -155,7 +156,9 @@ class ConnectionSampler @Inject constructor(
                 "${sample.codec ?: "?"}${sample.maxBitrateKbps?.let { " $it" } ?: ""}, source ${sample.source}${if (sample.capped) ", capped" else ""}",
         )
         scope.launch(Dispatchers.IO) {
-            runCatching { repository.record(sample) }.onFailure { Log.w(TAG, "Couldn't store a connection sample: ${it.message}") }
+            runCatching { repository.record(sample) }
+                .onSuccess { uploader.onStored(sample.trigger) }
+                .onFailure { Log.w(TAG, "Couldn't store a connection sample: ${it.message}") }
         }
     }
 

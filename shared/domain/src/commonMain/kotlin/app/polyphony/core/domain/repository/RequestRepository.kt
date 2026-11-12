@@ -80,6 +80,13 @@ interface RequestRepository {
      */
     suspend fun scrobblePlayNow(server: Server, streamId: String, listenedAtMs: Long?): Set<app.polyphony.core.domain.model.ScrobbleService>
 
+    /**
+     * Sends this device's connection samples (#185, oldest first) to continuo, which keeps them per
+     * device. False when it doesn't take them (a continuo from before, or no device id); throws
+     * when it couldn't be reached, so they can be sent again.
+     */
+    suspend fun sendConnectionSamples(server: Server, samples: List<app.polyphony.core.domain.connection.ConnectionSample>): Boolean = false
+
     /** One of discovery's ListenBrainz playlists as songs; null when it's gone. */
     suspend fun discoveryPlaylist(server: Server, id: String): app.polyphony.core.domain.model.DiscoveryPlaylistPage?
 
