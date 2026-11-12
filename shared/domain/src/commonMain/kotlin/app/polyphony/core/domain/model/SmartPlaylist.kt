@@ -19,6 +19,8 @@ data class SmartPlaylist(
     /** The sort's natural direction (newest, most played, A to Z first), as on the Songs tab. */
     val ascending: Boolean = true,
     val limit: Int = 0,
+    /** Shown on Home, under "Smart playlists". */
+    val pinnedToHome: Boolean = false,
 ) {
     /** The rules that say something; an unfinished one (no value yet) narrows nothing. */
     val activeRules: List<SmartRule> get() = rules.filter { it.isValid }

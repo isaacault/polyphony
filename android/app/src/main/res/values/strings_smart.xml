@@ -23,6 +23,8 @@
     </plurals>
     <string name="smart_save">Save</string>
     <string name="smart_edit">Edit rules</string>
+    <string name="smart_pin">Pin to Home</string>
+    <string name="smart_unpin">Unpin from Home</string>
     <string name="smart_delete">Delete</string>
     <string name="smart_delete_title">Delete this smart playlist?</string>
     <string name="smart_delete_body">Only its rules go; the songs stay in your library.</string>
