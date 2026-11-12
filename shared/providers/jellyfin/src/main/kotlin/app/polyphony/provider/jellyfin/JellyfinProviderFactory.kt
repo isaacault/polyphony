@@ -76,19 +76,23 @@ class JellyfinProviderFactory @Inject constructor(
             override val code: String = started.code
 
             override suspend fun awaitServer(): Server = jellyfinCall {
+                var blips = 0
                 while (true) {
                     val state = try {
-                        sign.api.authenticationApi.getQuickConnectState(started.secret).content
+                        sign.api.authenticationApi.getQuickConnectState(started.secret).content.also { blips = 0 }
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Throwable) {
                         val mapped = e.toProviderException()
-                        // Jellyfin forgets a code that wasn't approved in time.
-                        throw if (mapped is ProviderException.NotFound || mapped is ProviderException.Unauthorized) {
-                            ProviderException.Unauthorized("The Quick Connect code expired", e)
-                        } else mapped
+                        // Jellyfin forgets a code that wasn't approved in time. Said as such, not as
+                        // "wrong password", which this sign-in never had.
+                        if (mapped is ProviderException.NotFound || mapped is ProviderException.Unauthorized) {
+                            throw ProviderException.Unknown("the Quick Connect code expired before it was approved; start again", e)
+                        }
+                        // A moment without the network doesn't end a sign-in that's waiting on a person.
+                        if (mapped is ProviderException.Network && ++blips < QUICK_CONNECT_BLIPS) null else throw mapped
                     }
-                    if (state.authenticated) break
+                    if (state?.authenticated == true) break
                     delay(QUICK_CONNECT_POLL_MS)
                 }
                 val auth = sign.api.authenticationApi.authenticateWithQuickConnect(QuickConnectDto(secret = started.secret)).content
@@ -177,6 +181,8 @@ class JellyfinProviderFactory @Inject constructor(
         val CLIENT_INFO = ClientInfo(name = CLIENT_NAME, version = CLIENT_VERSION)
         /** How often a Quick Connect code is checked for approval, as Jellyfin's own clients do. */
         const val QUICK_CONNECT_POLL_MS = 5_000L
+        /** Network failures in a row a waiting Quick Connect sign-in rides out. */
+        const val QUICK_CONNECT_BLIPS = 6
     }
 }
 
