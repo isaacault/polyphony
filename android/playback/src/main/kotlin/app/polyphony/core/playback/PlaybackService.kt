@@ -93,6 +93,7 @@ import app.polyphony.core.playback.session.SeekableStreamsPlayer
 import app.polyphony.core.playback.session.SessionExtras
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
+import app.polyphony.core.playback.stream.LoadFailurePolicy
 import app.polyphony.core.playback.stream.LoadFailures
 import app.polyphony.core.playback.stream.StreamCache
 import app.polyphony.core.playback.stream.StreamResolver
@@ -878,7 +879,7 @@ class PlaybackService : MediaLibraryService() {
                 delay(SLOW_RETRY_INTERVAL_MS)
                 if (player.playbackState != Player.STATE_IDLE || player.mediaItemCount == 0) return@launch
                 Log.i(TAG, "Slow retry ${attempt + 1}/$SLOW_RETRY_ATTEMPTS")
-                retryCount = MAX_LOAD_RETRIES // a failure here comes straight back to the slow loop
+                retryCount = LoadFailurePolicy.MAX_RETRIES // a failure here comes straight back to the slow loop
                 reloadCurrentItem()
             }
             Log.w(TAG, "Giving up after $SLOW_RETRY_ATTEMPTS slow retries")
@@ -1117,68 +1118,48 @@ class PlaybackService : MediaLibraryService() {
                 if (player.hasNextMediaItem()) { player.seekToNextMediaItem(); player.prepare(); player.play() }
                 return
             }
-            val status = LoadFailures.httpStatus(error)
-            // The source that failed, not how the song would be routed now (a download may have finished).
-            val adaptive = trackId in hlsSourced
-            // The server answers that the song isn't there (deleted since it was queued): waiting
-            // won't bring it, so after one retry (a server restarting can answer 404 for a moment)
-            // it's skipped. An adaptive stream's first tries the ordinary stream.
-            val retriedOnce = retryTrackId == trackId && retryCount >= 1
-            if (networkMonitor.state.value.isOnline && LoadFailures.isGone(status) && retriedOnce) {
-                if (adaptive && hlsFallback.add(trackId)) {
-                    Log.w(TAG, "continuo has no adaptive stream of ${player.currentMediaItem?.mediaMetadata?.title}; playing its ordinary stream")
-                    retryCount = 0
-                    reloadCurrentItem()
-                    return
-                }
-                skipUnplayable("\"${player.currentMediaItem?.mediaMetadata?.title}\" is gone from the server")
-                return
-            }
-            // Transient failures (network hand-over, server hiccup): retry the same stream with a
-            // short back-off before concluding anything about the server.
             if (retryTrackId != trackId) { retryTrackId = trackId; retryCount = 0 }
-            if (retryCount < MAX_LOAD_RETRIES) {
-                retryCount++
-                val delayMs = 1_500L * retryCount
-                Log.w(TAG, "Load failed (${error.errorCodeName}); retry $retryCount/$MAX_LOAD_RETRIES in $delayMs ms")
-                retryJob?.cancel()
-                retryJob = scope.launch {
-                    delay(delayMs)
-                    if (player.currentMediaItem?.mediaId == trackId && player.playbackState == Player.STATE_IDLE) reloadCurrentItem()
+            val failure = LoadFailurePolicy.Failure(
+                errorCode = error.errorCode,
+                httpStatus = LoadFailures.httpStatus(error),
+                online = networkMonitor.state.value.isOnline,
+                // The source that failed, not how the song would be routed now (a download may have finished).
+                adaptive = trackId in hlsSourced,
+                ordinaryTried = trackId in hlsFallback,
+                downloaded = trackId in downloadedIds,
+                retries = retryCount,
+                originalQualityLeft = streamResolver.canFallBackToOriginal(trackId),
+            )
+            val title = player.currentMediaItem?.mediaMetadata?.title
+            when (val action = LoadFailurePolicy.decide(failure)) {
+                is LoadFailurePolicy.Action.Retry -> {
+                    retryCount = action.attempt
+                    Log.w(TAG, "Load failed (${error.errorCodeName}); retry ${action.attempt}/${LoadFailurePolicy.MAX_RETRIES} in ${action.afterMs} ms")
+                    retryJob?.cancel()
+                    retryJob = scope.launch {
+                        delay(action.afterMs)
+                        if (player.currentMediaItem?.mediaId == trackId && player.playbackState == Player.STATE_IDLE) reloadCurrentItem()
+                    }
                 }
-                return
-            }
-            if (adaptive) {
-                // continuo answered but couldn't serve it, or the song was downloaded after it was
-                // queued: the ordinary path (which plays a download), from the same place.
-                val downloaded = trackId in downloadedIds
-                val connectionLost = LoadFailures.connectionLost(error.errorCode, networkMonitor.state.value.isOnline)
-                if ((downloaded || !connectionLost) && hlsFallback.add(trackId)) {
-                    Log.w(TAG, "Adaptive stream failed for ${player.currentMediaItem?.mediaMetadata?.title}; playing its ordinary stream")
+                LoadFailurePolicy.Action.PlayOrdinaryStream -> {
+                    hlsFallback.add(trackId)
+                    Log.w(TAG, "Adaptive stream failed for \"$title\"; playing its ordinary stream")
                     retryCount = 0
                     reloadCurrentItem()
-                    return
                 }
-                // The connection failed (a tunnel, no signal): the adaptive stream stays, at the
-                // lowest level while it keeps failing, and picks up when the network is back.
-                awaitingNetwork = true
-                Log.w(TAG, "Connection lost on an adaptive stream; will keep retrying \"${player.currentMediaItem?.mediaMetadata?.title}\"")
-                startSlowRetry()
-                return
-            }
-            if (streamResolver.markTranscodeFailure(trackId)) {
-                Log.w(TAG, "Retrying ${player.currentMediaItem?.mediaMetadata?.title} at original quality")
-                retryCount = 0
-                reloadCurrentItem()
-                return
-            }
-            if (!networkMonitor.state.value.isOnline || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
-                error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
-                error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
-            ) {
-                awaitingNetwork = true
-                Log.w(TAG, "Server or network unavailable; will keep retrying \"${player.currentMediaItem?.mediaMetadata?.title}\"")
-                startSlowRetry()
+                LoadFailurePolicy.Action.PlayOriginalQuality -> {
+                    streamResolver.markTranscodeFailure(trackId)
+                    Log.w(TAG, "Retrying \"$title\" at original quality")
+                    retryCount = 0
+                    reloadCurrentItem()
+                }
+                LoadFailurePolicy.Action.SkipGone -> skipUnplayable("\"$title\" is gone from the server")
+                LoadFailurePolicy.Action.WaitForNetwork -> {
+                    awaitingNetwork = true
+                    Log.w(TAG, "Server or network unavailable; will keep retrying \"$title\"")
+                    startSlowRetry()
+                }
+                LoadFailurePolicy.Action.Stop -> Unit
             }
         }
 
@@ -1579,7 +1560,6 @@ class PlaybackService : MediaLibraryService() {
 
     companion object {
         private const val TAG = "PlaybackService"
-        private const val MAX_LOAD_RETRIES = 2
         /** A Play now song ahead of its download waits up to 3 minutes for it, every 3 s. */
         private const val PLAY_NOW_WAITS = 60
         private const val PLAY_NOW_WAIT_MS = 3_000L

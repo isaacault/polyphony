@@ -269,9 +269,16 @@ class StreamResolver @Inject constructor(
      * stream, in which case it (and later tracks on that server/codec) will resolve to the original
      * file and the caller should re-prepare.
      */
-    fun markTranscodeFailure(trackId: String): Boolean {
+    /** Whether [markTranscodeFailure] would have something to fall back from (a transcoded stream). */
+    fun canFallBackToOriginal(trackId: String): Boolean {
         val applied = _applied.value[trackId] ?: return false
         if (applied.profile.isPassthrough || applied.reason == TranscodeDecision.Reason.DOWNLOADED) return false
+        return queueStore.get(trackId)?.serverId != null
+    }
+
+    fun markTranscodeFailure(trackId: String): Boolean {
+        if (!canFallBackToOriginal(trackId)) return false
+        val applied = _applied.value[trackId] ?: return false
         val serverId = queueStore.get(trackId)?.serverId ?: return false
         val first = fallbacks.markBroken(serverId, applied.profile.codec, trackId)
         if (first) android.util.Log.w("PolyphonyPlayback", "Transcoding to ${applied.profile.codec} failed on server $serverId; falling back to original quality for this session")
