@@ -22,6 +22,16 @@ internal object SmartPlaylistQueries {
         )
     }
 
+    /** The ids of the songs [tracks] finds, in its order: for counting what offline mode lets through. */
+    fun ids(serverId: String, playlist: SmartPlaylist, nowMs: Long): SimpleSQLiteQuery {
+        val where = where(playlist, nowMs)
+        val limit = if (playlist.limit > 0) " LIMIT ${playlist.limit}" else ""
+        return SimpleSQLiteQuery(
+            "SELECT id FROM tracks WHERE serverId = ?${where.sql} ORDER BY ${SortQueries.trackOrder(playlist.sort, playlist.ascending)}$limit",
+            where.args(serverId),
+        )
+    }
+
     /** How many songs [tracks] finds, without reading them (the editor counts as the rules change). */
     fun count(serverId: String, playlist: SmartPlaylist, nowMs: Long): SimpleSQLiteQuery {
         val where = where(playlist, nowMs)

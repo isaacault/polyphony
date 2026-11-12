@@ -66,20 +66,25 @@ class DownloadRuleEvaluator @Inject constructor(
 
                 val current = downloadDao.getAllForServer(serverId).map { it.toDomain() }
                 val owning = current.mapNotNullTo(HashSet()) { it.ruleId }
+                val syncBefore = librarySync.state.value
                 val found = LinkedHashMap<DownloadRule, List<Track>?>()
                 rules.forEachIndexed { index, rule ->
                     _state.value = _state.value.copy(progress = index.toFloat() / (rules.size + 1), phase = rule.target.label)
                     found[rule] = runCatching { tracksFor(rule) }.getOrNull()
                 }
                 val perRule = found.map { (rule, tracks) -> rule to tracks.orEmpty() }
-                // A smart playlist that still exists and matches nothing now is answered, not gone,
-                // unless the library itself may be partway (a sync running, or no songs yet).
-                val settledLibrary = !librarySync.state.value.isRunning &&
-                    library.tracksSlice(TrackSort.TITLE, ascending = true, offset = 0, limit = 1).isNotEmpty()
+                // The library may be partway (a sync running at any point of the reads, or never
+                // synced): any rule's answer may be missing songs, so nothing is removed this time.
+                // The sync's end evaluates the rules again.
+                val syncAfter = librarySync.state.value
+                val settledLibrary = !syncBefore.isRunning && !syncAfter.isRunning && syncAfter.lastSyncAt != null
+                // A smart playlist that still exists and matches nothing now is answered, not gone.
                 val smartIds = settingsRepository.current().library.smartPlaylists.mapTo(HashSet()) { it.id }
                 val mayBeEmpty = if (!settledLibrary) emptySet() else
                     rules.filter { (it.target as? DownloadRuleTarget.Smart)?.playlistId in smartIds }.mapTo(HashSet()) { it.id }
-                val (held, empty) = RuleDiff.holding(found.mapKeys { it.key.id }, owning, mayBeEmpty)
+                val holding = RuleDiff.holding(found.mapKeys { it.key.id }, owning, mayBeEmpty)
+                val empty = holding.empty
+                val held = if (settledLibrary) holding.held else rules.mapTo(HashSet()) { it.id }
                 _report.update { it.copy(emptyRules = empty) }
                 if (!isActive(serverId)) {
                     _state.value = _state.value.copy(status = SyncState.Status.IDLE, progress = null, phase = null)
