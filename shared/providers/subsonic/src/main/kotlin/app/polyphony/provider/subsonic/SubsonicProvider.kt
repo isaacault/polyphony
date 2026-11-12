@@ -48,6 +48,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import java.time.Year
 
 /**
@@ -334,6 +340,29 @@ internal class SubsonicProvider(
 
     override suspend fun reportPlayed(trackId: String, playedAtEpochMs: Long): Unit = subsonicCall {
         api.request("scrobble", mapOf("id" to trackId, "time" to playedAtEpochMs, "submission" to true))
+    }
+
+    override suspend fun bookmarks(): Map<String, Long> = subsonicCall {
+        val list = api.request("getBookmarks")["bookmarks"]?.jsonObject?.get("bookmark")
+        // One bookmark may come back as an object, several as an array.
+        val entries = when (list) {
+            is JsonArray -> list.map { it.jsonObject }
+            is JsonObject -> listOf(list)
+            else -> emptyList()
+        }
+        entries.mapNotNull { b ->
+            val id = b["entry"]?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
+            val position = b["position"]?.jsonPrimitive?.longOrNull
+            if (id != null && position != null) id to position else null
+        }.toMap()
+    }
+
+    override suspend fun saveBookmark(trackId: String, positionMs: Long): Unit = subsonicCall {
+        api.request("createBookmark", mapOf("id" to trackId, "position" to positionMs))
+    }
+
+    override suspend fun deleteBookmark(trackId: String): Unit = subsonicCall {
+        api.request("deleteBookmark", mapOf("id" to trackId))
     }
 
     // ------------------------------------------------------------------ URLs

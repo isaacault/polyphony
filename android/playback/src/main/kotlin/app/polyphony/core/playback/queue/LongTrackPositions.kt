@@ -8,19 +8,28 @@ package app.polyphony.core.playback.queue
 class LongTrackPositions {
     private val positions = LinkedHashMap<String, Long>()   // track id -> ms, least recently left first
 
+    /** What leaving a song did to its place, for the server's bookmark to follow. */
+    enum class Change { KEPT, FORGOTTEN, NONE }
+
     /** The song was left at [positionMs] of [durationMs] (paused, skipped, another one chosen). */
-    fun left(trackId: String, positionMs: Long, durationMs: Long) {
-        if (durationMs < LONG_MS) return
-        positions.remove(trackId)
+    fun left(trackId: String, positionMs: Long, durationMs: Long): Change {
+        if (durationMs < LONG_MS) return Change.NONE
+        val had = positions.remove(trackId) != null
         if (remembers(positionMs, durationMs)) {
             positions[trackId] = positionMs
             while (positions.size > MAX) positions.remove(positions.keys.first())
+            return Change.KEPT
         }
+        return if (had) Change.FORGOTTEN else Change.NONE
     }
 
-    /** Played to its end: next time it starts from the beginning. */
-    fun finished(trackId: String) {
-        positions.remove(trackId)
+    /** Played to its end: next time it starts from the beginning. True when it had a place. */
+    fun finished(trackId: String): Boolean = positions.remove(trackId) != null
+
+    /** The server's bookmarks (track id to ms), for songs with no place on this phone. */
+    fun merge(bookmarks: Map<String, Long>) {
+        for ((id, ms) in bookmarks) if (id !in positions && ms >= MARGIN_MS) positions[id] = ms
+        while (positions.size > MAX) positions.remove(positions.keys.first())
     }
 
     /** Where to start [trackId] when it's chosen, or null for its beginning. */
