@@ -48,6 +48,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import app.polyphony.core.ui.util.formatDuration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -265,12 +267,30 @@ fun NowPlayingScreen(
                         )
                     }
                     val slider: @Composable () -> Unit = {
-                        PlayerSlider(
-                            position = position,
-                            onSeek = viewModel::seekTo,
-                            modifier = Modifier.padding(horizontal = 20.dp),
-                            downloaded = playNowStatus[track.id]?.let { (it.percent / 100.0).toFloat() },
-                        )
+                        Column {
+                            PlayerSlider(
+                                position = position,
+                                onSeek = viewModel::seekTo,
+                                modifier = Modifier.padding(horizontal = 20.dp),
+                                downloaded = playNowStatus[track.id]?.let { (it.percent / 100.0).toFloat() },
+                            )
+                            // A long song picked up where it was left (#37), for the first minute or so.
+                            val resumedAt = playback.resumedAtMs?.takeIf { playback.resumedTrackId == track.id }
+                            if (resumedAt != null && position.positionMs in (resumedAt - 5_000)..(resumedAt + 60_000)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 20.dp),
+                                ) {
+                                    Text(
+                                        stringResource(R.string.player_resumed_at, formatDuration(resumedAt)),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    TextButton(onClick = { viewModel.seekTo(0) }) { Text(stringResource(R.string.player_start_over)) }
+                                }
+                            }
+                        }
                     }
                     val controls: @Composable () -> Unit = {
                         PlayerControls(

@@ -110,4 +110,6 @@
     <string name="cast_connected_to">Connected to %1$s</string>
     <string name="cast_connecting">Connecting…</string>
     <string name="cast_unavailable">Casting isn’t available on this device</string>
+    <string name="player_resumed_at">Picked up where you left off, at %1$s</string>
+    <string name="player_start_over">Start over</string>
 </resources>

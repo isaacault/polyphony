@@ -74,6 +74,7 @@ import app.polyphony.core.playback.engine.TranscodeDecisionEngine
 import app.polyphony.core.playback.queue.MediaItemFactory
 import app.polyphony.core.playback.queue.QueueShuffleOrder
 import app.polyphony.core.playback.queue.PendingShuffleOrder
+import app.polyphony.core.playback.queue.LongTrackPositions
 import app.polyphony.core.playback.queue.QueuePersistence
 import app.polyphony.core.playback.queue.QueueRestore
 import app.polyphony.core.playback.queue.QueueSnapshot
@@ -288,6 +289,7 @@ class PlaybackService : MediaLibraryService() {
         startCollectors()
         if (settings.equalizer.mode == EqualizerMode.SYSTEM) openAudioEffectSession()
         restoreQueueOnStart(initial.playback.rememberQueue)
+        scope.launch { queuePersistence.loadLongPositions()?.let(longPositions::load) }
         crossfader.start()
     }
 
@@ -997,6 +999,34 @@ class PlaybackService : MediaLibraryService() {
 
     // ---- player events ----
 
+    // ---- long songs' places (#37) ----
+
+    private val longPositions = LongTrackPositions()
+    /** The long song just resumed and where (song id, ms), for Now Playing's "Start over". */
+    private var resumed: Pair<String, Long>? = null
+
+    private fun durationOf(item: MediaItem): Long = queueStore.get(item.mediaId)?.durationMs ?: 0L
+
+    private fun saveLongPositions() {
+        val text = longPositions.serialize()
+        scope.launch { queuePersistence.saveLongPositions(text) }
+    }
+
+    /** A long song chosen (not reached by playing on) resumes where it was left. */
+    private fun resumeLongTrack(item: MediaItem?, reason: Int) {
+        val before = resumed
+        resumed = null
+        val chosen = reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED || reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK
+        if (item != null && chosen && player.currentPosition < RESUME_ONLY_FROM_MS) {
+            longPositions.resumeAt(item.mediaId, durationOf(item))?.let { at ->
+                Log.i(TAG, "Resuming \"${item.mediaMetadata.title}\" at ${at / 1000} s")
+                player.seekTo(at)
+                resumed = item.mediaId to at
+            }
+        }
+        if (resumed != before) publishExtras()
+    }
+
     private val playerListener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
             Log.e(TAG, "Player error ${error.errorCodeName} on ${engine.currentTarget.key}: ${error.message}", error.cause)
@@ -1103,9 +1133,29 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             if (isPlaying) { slowRetryJob?.cancel(); awaitingNetwork = false; restoredShuffle = null; unplayableSkips.onPlaying() }
+            // Paused: a long song keeps its place (#37).
+            val item = player.currentMediaItem
+            if (!isPlaying && item != null && player.playbackState == Player.STATE_READY) {
+                longPositions.left(item.mediaId, player.currentPosition, durationOf(item))
+                saveLongPositions()
+            }
+        }
+
+        override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+            // Leaving a song: a long one keeps its place, or forgets it when it played to its end.
+            val old = oldPosition.mediaItem ?: return
+            if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) {
+                longPositions.finished(old.mediaId)
+            } else if (old.mediaId != newPosition.mediaItem?.mediaId) {
+                longPositions.left(old.mediaId, oldPosition.positionMs, durationOf(old))
+            } else {
+                return
+            }
+            saveLongPositions()
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            resumeLongTrack(mediaItem, reason)
             if (mediaItem?.mediaId != retryTrackId) { retryTrackId = null; retryCount = 0 }
             // Only the current song's period and the next one's (preloading) can still re-open a stream.
             val next = player.nextMediaItemIndex.takeIf { it != C.INDEX_UNSET }?.let { player.getMediaItemAt(it).mediaId }
@@ -1331,6 +1381,8 @@ class PlaybackService : MediaLibraryService() {
             putString(SessionExtras.QUEUE_TITLE, queueTitle)
             putString(SessionExtras.PLAY_CONTEXT, PlayContextCodec.encode(playContext))
             putLong(SessionExtras.SLEEP_TIMER_ENDS_AT, sleepTimer.endsAtEpochMs.value ?: -1L)
+            putString(SessionExtras.RESUMED_TRACK_ID, resumed?.first)
+            putLong(SessionExtras.RESUMED_AT_MS, resumed?.second ?: -1L)
             putInt(SessionExtras.AUDIO_SESSION_ID, audioSessionId)
             putBoolean(SessionExtras.LATENCY_DEGRADED, latencyMonitor.degraded.value)
             putString(SessionExtras.DECISION_PROFILE_ID, decision.profile.id)
@@ -1472,6 +1524,8 @@ class PlaybackService : MediaLibraryService() {
         private const val PLAY_NOW_WAIT_MS = 3_000L
         /** How long a restored queue waits for the servers and the downloaded set ([awaitRoutingState]). */
         private const val ROUTING_STATE_WAIT_MS = 2_000L
+        /** A long song resumes only when chosen from its start, not when a place was asked for. */
+        private const val RESUME_ONLY_FROM_MS = 5_000L
         /** How far ahead of the queue continuo hears the Play now order. */
         private const val PLAY_NOW_LOOKAHEAD = 50
         /** Adaptive songs continuo encodes ahead of the player (continuo's AHEAD). */
