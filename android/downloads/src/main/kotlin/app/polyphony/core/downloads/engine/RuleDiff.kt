@@ -19,8 +19,11 @@ data class EnqueueItem(val track: Track, val ruleId: String, val profileId: Stri
 data class Plan(
     val enqueue: List<EnqueueItem> = emptyList(),
     val remove: List<String> = emptyList(),
-    /** Existing downloads whose owning rule should change (trackId → ruleId). */
-    val retag: List<Pair<String, String>> = emptyList(),
+    /**
+     * Existing downloads whose rule should change (trackId → ruleId). A pinned one is tied to the
+     * rule that also wants it, and untied (null) once no rule does: it stays either way (#17).
+     */
+    val retag: List<Pair<String, String?>> = emptyList(),
 ) {
     val isEmpty: Boolean get() = enqueue.isEmpty() && remove.isEmpty() && retag.isEmpty()
 }
@@ -106,7 +109,7 @@ object RuleDiff {
     ): Plan {
         val byId = current.associateBy { it.trackId }
         val enqueue = ArrayList<EnqueueItem>()
-        val retag = ArrayList<Pair<String, String>>()
+        val retag = ArrayList<Pair<String, String?>>()
 
         for ((trackId, want) in desired) {
             val have = byId[trackId]
@@ -119,13 +122,18 @@ object RuleDiff {
                 DownloadStatus.COMPLETED, DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING -> {
                     if (want.qualityRank > haveRank) {
                         enqueue += EnqueueItem(want.track, want.ruleId, want.profileId)
-                    } else if (!have.pinned && have.ruleId != want.ruleId) {
+                    } else if (have.ruleId != want.ruleId) {
                         retag += trackId to want.ruleId
                     }
                 }
                 DownloadStatus.FAILED -> enqueue += EnqueueItem(want.track, want.ruleId, want.profileId)
                 DownloadStatus.PAUSED -> Unit
             }
+        }
+
+        // A pinned download no rule wants any more is the user's alone again; a held rule's stays tied.
+        for (have in current) {
+            if (have.pinned && have.ruleId != null && have.trackId !in desired && have.ruleId !in held) retag += have.trackId to null
         }
 
         val remove = if (removeWhenRuleNoLongerMatches) {

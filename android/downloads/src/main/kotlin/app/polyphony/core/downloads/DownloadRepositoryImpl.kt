@@ -140,8 +140,10 @@ class DownloadRepositoryImpl @Inject constructor(
     override suspend fun deleteRule(ruleId: String, removeFiles: Boolean) {
         val rule = ruleDao.get(ruleId)
         if (removeFiles) {
-            val owned = dao.getForRule(ruleId).filter { !it.pinned }.map { it.trackId }
-            engine.remove(owned)
+            // Pinned songs the rule also wanted are kept, and no longer shown as the rule's.
+            val owned = dao.getForRule(ruleId)
+            engine.remove(owned.filter { !it.pinned }.map { it.trackId })
+            owned.filter { it.pinned }.forEach { dao.setRule(it.trackId, null) }
         } else {
             dao.getForRule(ruleId).forEach { dao.setRule(it.trackId, null) }
         }

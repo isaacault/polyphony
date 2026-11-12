@@ -42,6 +42,10 @@ data class DownloadedAlbumGroup(
     val artworkUrl: String?,
     val tracks: ImmutableList<Track>,
     val sizeBytes: Long,
+    /** Some of its songs were downloaded by hand (pinned): no rule removes them (#17). */
+    val pinned: Boolean = false,
+    /** The rules that want its songs, by name; with [pinned], both keep them. */
+    val rules: ImmutableList<String> = persistentListOf(),
 ) {
     val key: String get() = albumId ?: "album:$albumName"
     val trackIds: List<String> get() = tracks.map { it.id }
@@ -124,6 +128,7 @@ class DownloadsViewModel @Inject constructor(
             .sortedWith(compareBy<DownloadedTrack> { statusOrder(it.status) }.thenByDescending { it.createdAt })
             .map { ActiveDownloadItem(it, tracks[it.trackId]) }
         val completed = list.filter { it.isComplete }
+        val ruleNames = rules.associate { it.id to it.target.label }
         val groups = completed
             .groupBy { tracks[it.trackId]?.albumId ?: ("album:" + (tracks[it.trackId]?.albumName ?: "Unknown album")) }
             .map { (_, items) ->
@@ -137,6 +142,9 @@ class DownloadsViewModel @Inject constructor(
                     artworkUrl = first?.artworkUrl,
                     tracks = groupTracks.toImmutableList(),
                     sizeBytes = items.sumOf { it.sizeBytes },
+                    pinned = items.any { it.pinned },
+                    rules = items.mapNotNull { it.ruleId }.distinct()
+                        .mapNotNull { id -> ruleNames[id] }.sorted().toImmutableList(),
                 )
             }
             .sortedBy { it.albumName.lowercase() }
