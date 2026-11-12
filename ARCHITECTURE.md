@@ -96,7 +96,10 @@ settings ──▶│ TranscodePolicy│   │ NetworkState │   │ OutputTarg
 - **Adaptive latency**: the `LatencyMonitor` in `android:playback` counts rebuffer events (and long
   stalls) in a sliding window. Crossing the threshold sets `latencyDegraded = true`, which makes
   the resolver cap quality with the high-latency profile. It auto-recovers after a quiet period
-  or when the user taps "Restore quality". Network changes reset it.
+  online or when the user taps "Restore quality". A new connection (another kind, another
+  tariff) resets it; the same one coming and going doesn't, and losing the network mid-stream
+  trips it (`LatencyMonitor.networkChange`), so a road trip's dead zones keep the low level and
+  the fetching ahead instead of resetting them at every drop.
 - **Connection samples** (#185): while the phone streams, `ConnectionSampler` (android:playback)
   turns stream reads (timed at the HTTP source under the stream cache; cache and download reads
   counted apart), stalls and the latency cap into a `ConnectionSample` (shared:domain) every 30 s
