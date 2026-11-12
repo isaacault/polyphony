@@ -60,6 +60,12 @@ class LoadFailurePolicyTest {
         assertEquals(Action.PlayOrdinaryStream, decide(failure(adaptive = true, retries = 2, online = false, downloaded = true)))
     }
 
+    @Test fun `a lost connection never blames the transcoding`() {
+        // A tunnel would otherwise mark the server's transcode broken: lossless over mobile data all session.
+        assertEquals(Action.WaitForNetwork, decide(failure(retries = 2, originalQualityLeft = true, online = false)))
+        assertEquals(Action.WaitForNetwork, decide(failure(retries = 2, originalQualityLeft = true, errorCode = noConnection, httpStatus = null)))
+    }
+
     @Test fun `a transcoded song tries original quality, then waits on the server`() {
         assertEquals(Action.PlayOriginalQuality, decide(failure(retries = 2, originalQualityLeft = true)))
         assertEquals(Action.WaitForNetwork, decide(failure(retries = 2)))

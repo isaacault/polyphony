@@ -580,7 +580,9 @@ class PlaybackService : MediaLibraryService() {
             var lastOnline: NetworkState? = null
             var wasOnline = true
             networkMonitor.state.collect { state ->
-                val streaming = player.playWhenReady && player.currentMediaItem != null && !player.isRemotePlayback()
+                // Streaming over the network: not a download playing, which a dead zone doesn't touch.
+                val current = player.currentMediaItem
+                val streaming = player.playWhenReady && current != null && !player.isRemotePlayback() && current.mediaId !in downloadedIds
                 when (LatencyMonitor.networkChange(lastOnline, wasOnline, state, streaming)) {
                     LatencyMonitor.NetworkChange.NEW_CONNECTION -> latencyMonitor.reset()
                     LatencyMonitor.NetworkChange.LOST -> {
@@ -961,11 +963,18 @@ class PlaybackService : MediaLibraryService() {
      * skip per song until something plays ([unplayableSkips]).
      */
     private fun skipToNextOnPhone(trackId: String) {
-        val candidates = upcomingIndices(OFFLINE_LOOKAHEAD).map { it to player.getMediaItemAt(it).mediaId }
+        // Judged as each would load: an adaptive song from what was fetched ahead of it, any other
+        // from a download or a complete copy in the stream cache.
+        val candidates = upcomingIndices(OFFLINE_LOOKAHEAD).map { index ->
+            val item = player.getMediaItemAt(index)
+            Triple(index, item.mediaId, routeFor(item) == AdaptiveStreaming.Route.HLS)
+        }
         scope.launch {
             val next = withContext(Dispatchers.IO) {
-                candidates.firstOrNull { (_, id) -> id in prefetcher.fetchedHls || streamResolver.isOnPhone(id) }
-            } ?: return@launch
+                candidates.firstOrNull { (_, id, adaptive) ->
+                    if (adaptive) id in prefetcher.fetchedHls else streamResolver.isOnPhone(id)
+                }
+            }?.let { (index, id, _) -> index to id } ?: return@launch
             // Still stuck on the same song, and nothing else moved on meanwhile.
             if (player.currentMediaItem?.mediaId != trackId || player.playbackState != Player.STATE_IDLE) return@launch
             if (next.first >= player.mediaItemCount || player.getMediaItemAt(next.first).mediaId != next.second) return@launch
