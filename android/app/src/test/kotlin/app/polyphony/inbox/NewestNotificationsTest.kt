@@ -61,7 +61,7 @@ class NewestNotificationsTest {
         override suspend fun startLastFm(server: Server): Pair<String, String> = error("unused")
         override suspend fun finishLastFm(server: Server, token: String): app.polyphony.core.domain.model.ScrobbleLinks = error("unused")
         override suspend fun unlinkScrobbler(server: Server, service: String): app.polyphony.core.domain.model.ScrobbleLinks = error("unused")
-        override suspend fun scrobblePlayNow(server: Server, streamId: String, listenedAtMs: Long?) = Unit
+        override suspend fun scrobblePlayNow(server: Server, streamId: String, listenedAtMs: Long?) = emptySet<app.polyphony.core.domain.model.ScrobbleService>()
         override suspend fun discoveryPlaylist(server: Server, id: String): app.polyphony.core.domain.model.DiscoveryPlaylistPage? = error("unused")
         override suspend fun singleSongAlbums(server: Server): Set<String>? = error("unused")
         override suspend fun discover(server: Server): app.polyphony.core.domain.model.Discovery? = error("unused")

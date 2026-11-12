@@ -73,8 +73,12 @@ interface RequestRepository {
 
     suspend fun unlinkScrobbler(server: Server, service: String): app.polyphony.core.domain.model.ScrobbleLinks
 
-    /** Scrobble a Play now song: a finished listen at [listenedAtMs], or (null) playing now. */
-    suspend fun scrobblePlayNow(server: Server, streamId: String, listenedAtMs: Long?)
+    /**
+     * Scrobble a Play now song: a finished listen at [listenedAtMs], or (null) playing now. The
+     * services continuo reached for it (empty from a continuo that can't say); throws when continuo
+     * couldn't be asked or failed, so a finished listen can be sent again.
+     */
+    suspend fun scrobblePlayNow(server: Server, streamId: String, listenedAtMs: Long?): Set<app.polyphony.core.domain.model.ScrobbleService>
 
     /** One of discovery's ListenBrainz playlists as songs; null when it's gone. */
     suspend fun discoveryPlaylist(server: Server, id: String): app.polyphony.core.domain.model.DiscoveryPlaylistPage?

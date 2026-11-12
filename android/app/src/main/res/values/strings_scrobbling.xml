@@ -5,7 +5,7 @@
     <string name="phone_scrobbling_off">Off. Send plays straight to ListenBrainz or Last.fm</string>
     <string name="phone_scrobbling_on">On: %1$s</string>
     <string name="phone_scrobbling_privacy">Off until you connect an account. Then the songs you play (title, artist, album, length and when) go from this phone to the services you connect. It\'s the only thing Polyphony sends anywhere but your own server.</string>
-    <string name="phone_scrobbling_twice">If your server already scrobbles to the same account (Navidrome: Personal; continuo: Play now songs), connect it in one place only, or plays count twice.</string>
+    <string name="phone_scrobbling_twice">A play your server already scrobbled to a service isn\'t sent there again from this phone. Without continuo, Navidrome can\'t say what it scrobbles to: connect each service in one place only (Navidrome: Personal), or plays count twice.</string>
     <string name="phone_scrobbling_connect">Connect</string>
     <string name="phone_scrobbling_connecting">Connecting…</string>
     <string name="phone_scrobbling_connected_as">Connected as %1$s</string>

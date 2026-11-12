@@ -261,10 +261,7 @@ class PlaybackService : MediaLibraryService() {
                 if (duration == C.TIME_UNSET || duration <= 0 || !player.isPlaying) null else duration - player.currentPosition
             },
         )
-        reporter = PlaybackReporter(scope, serverLookup, libraryRepository, scrobbler) { serverId, streamId, listenedAtMs ->
-            val server = serverLookup.providerFor(serverId)?.server ?: return@PlaybackReporter
-            if (requestRepository.supports(server)) requestRepository.scrobblePlayNow(server, streamId, listenedAtMs)
-        }.also {
+        reporter = PlaybackReporter(scope, libraryRepository, scrobbler).also {
             it.enabled = settings.scrobble
             it.threshold = settings.scrobbleThreshold
         }

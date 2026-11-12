@@ -5,9 +5,12 @@ import app.polyphony.core.domain.model.ScrobbleService
 import app.polyphony.core.scrobble.lastfm.LastFmClient
 import app.polyphony.core.scrobble.lastfm.LastFmConfig
 import app.polyphony.core.scrobble.listenbrainz.ListenBrainzClient
+import app.polyphony.core.scrobble.queue.PendingServerPlay
 import app.polyphony.core.scrobble.queue.QueuedScrobble
 import app.polyphony.core.scrobble.queue.ScrobbleDrainer
 import app.polyphony.core.scrobble.queue.ScrobbleQueue
+import app.polyphony.core.scrobble.server.ServerAnswer
+import app.polyphony.core.scrobble.server.ServerPlays
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -38,7 +41,36 @@ class ScrobbleDrainerTest {
         override suspend fun recordFailure(ids: Collection<Long>) {
             items.replaceAll { if (it.id in ids) it.copy(attempts = it.attempts + 1) else it }
         }
+
+        val serverPlays = mutableListOf<PendingServerPlay>()
+
+        fun played(trackId: String, attempts: Int = 0, listenable: Boolean = true) {
+            val id = nextId++
+            val scrobble = Scrobble("Artist $id", "Track $id", listenedAtMs = id * 1_000_000, durationMs = 200_000).takeIf { listenable }
+            serverPlays += PendingServerPlay(id, "navidrome", trackId, id * 1_000_000, scrobble, attempts)
+        }
+
+        override suspend fun oldestServerPlays(limit: Int) = serverPlays.sortedBy { it.id }.take(limit)
+        override suspend fun serverPlayFailed(id: Long) {
+            serverPlays.replaceAll { if (it.id == id) it.copy(attempts = it.attempts + 1) else it }
+        }
+        override suspend fun release(play: PendingServerPlay, services: Set<ScrobbleService>) {
+            serverPlays.removeAll { it.id == play.id }
+            play.scrobble?.let { scrobble -> services.forEach { items += QueuedScrobble(nextId++, it, scrobble) } }
+        }
     }
+
+    /** The server's answer per track id, and the plays it was told of, in order. */
+    private class FakeServer(val answer: (String) -> ServerAnswer) : ServerPlays {
+        val told = mutableListOf<String>()
+        override suspend fun played(serverId: String, trackId: String, playedAtMs: Long): ServerAnswer {
+            told += trackId
+            return answer(trackId)
+        }
+        override suspend fun nowPlaying(serverId: String, trackId: String) = emptySet<ScrobbleService>()
+    }
+
+    private fun accepting(service: ScrobbleService) = ScriptedClient(service, 50) { SubmitResult.Accepted() }
 
     /** Answers each submission with [answer] and keeps the batches it was given. */
     private class ScriptedClient(
@@ -161,5 +193,63 @@ class ScrobbleDrainerTest {
         assertEquals(ScrobbleDrainer.Outcome.DONE, ScrobbleDrainer(queue, listOf(LastFmClient(http, LastFmConfig("k", "s")))).drain())
         assertTrue(queue.items.isEmpty())
         assertTrue(http.requests.isEmpty())
+    }
+
+    @Test
+    fun `a service the server scrobbled to doesn't hear the play from the phone too`() = runTest {
+        val queue = FakeQueue(lb, fm).apply { played("song"); played("pn-stream") }
+        val server = FakeServer { id ->
+            // Navidrome scrobbles library songs to ListenBrainz; continuo reached both for Play now.
+            if (id == "song") ServerAnswer.Took(setOf(ScrobbleService.LISTENBRAINZ))
+            else ServerAnswer.Took(setOf(ScrobbleService.LISTENBRAINZ, ScrobbleService.LASTFM))
+        }
+        val lbClient = accepting(ScrobbleService.LISTENBRAINZ)
+        val fmClient = accepting(ScrobbleService.LASTFM)
+        assertEquals(ScrobbleDrainer.Outcome.DONE, ScrobbleDrainer(queue, listOf(lbClient, fmClient), server = server).drain())
+        assertEquals(listOf("song", "pn-stream"), server.told)
+        assertTrue(queue.serverPlays.isEmpty())
+        assertTrue("ListenBrainz had both from the server", lbClient.batches.isEmpty())
+        assertEquals(listOf("Track 1"), fmClient.batches.flatten().map { it.track })
+    }
+
+    @Test
+    fun `offline, plays wait for the server with their time, and the phone's accounts wait with them`() = runTest {
+        val queue = FakeQueue(lb).apply { played("a"); played("b") }
+        val server = FakeServer { ServerAnswer.Later }
+        val lbClient = accepting(ScrobbleService.LISTENBRAINZ)
+        assertEquals(ScrobbleDrainer.Outcome.RETRY, ScrobbleDrainer(queue, listOf(lbClient), server = server).drain())
+        assertEquals("stops at the first: the rest would fail the same way", listOf("a"), server.told)
+        assertEquals(listOf(1, 0), queue.serverPlays.map { it.attempts })
+        assertTrue(lbClient.batches.isEmpty())
+
+        // Back online: both reach the server, oldest first, then the phone's account.
+        val online = FakeServer { ServerAnswer.Took(emptySet()) }
+        assertEquals(ScrobbleDrainer.Outcome.DONE, ScrobbleDrainer(queue, listOf(lbClient), server = online).drain())
+        assertEquals(listOf("a", "b"), online.told)
+        assertEquals(listOf(1_000_000L, 2_000_000L), lbClient.batches.flatten().map { it.listenedAtMs })
+    }
+
+    @Test
+    fun `a play the server won't take, or keeps failing, still goes to the phone's accounts`() = runTest {
+        val queue = FakeQueue(lb).apply {
+            played("gone")
+            played("stuck", attempts = ScrobbleDrainer.MAX_ATTEMPTS - 1)
+            played("anonymous", listenable = false)
+        }
+        val server = FakeServer { id -> if (id == "gone" || id == "anonymous") ServerAnswer.Never else ServerAnswer.Later }
+        val lbClient = accepting(ScrobbleService.LISTENBRAINZ)
+        assertEquals(ScrobbleDrainer.Outcome.DONE, ScrobbleDrainer(queue, listOf(lbClient), server = server).drain())
+        assertTrue(queue.serverPlays.isEmpty())
+        assertEquals("a song without an artist can't be a listen", listOf("Track 1", "Track 2"), lbClient.batches.flatten().map { it.track })
+    }
+
+    @Test
+    fun `a service this build can't send to isn't queued`() = runTest {
+        val queue = FakeQueue(lb, fm).apply { played("song") }
+        val lbClient = accepting(ScrobbleService.LISTENBRAINZ)
+        // No Last.fm client: a build without the Last.fm key.
+        ScrobbleDrainer(queue, listOf(lbClient), server = FakeServer { ServerAnswer.Took(emptySet()) }).drain()
+        assertEquals(1, lbClient.batches.flatten().size)
+        assertTrue("nothing left waiting for Last.fm", queue.items.isEmpty())
     }
 }

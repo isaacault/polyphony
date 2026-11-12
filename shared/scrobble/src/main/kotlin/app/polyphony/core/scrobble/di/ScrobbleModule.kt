@@ -16,6 +16,8 @@ import app.polyphony.core.scrobble.lastfm.LastFmConfig
 import app.polyphony.core.scrobble.listenbrainz.ListenBrainzClient
 import app.polyphony.core.scrobble.queue.RoomScrobbleQueue
 import app.polyphony.core.scrobble.queue.ScrobbleDrainer
+import app.polyphony.core.scrobble.server.ServerPlays
+import app.polyphony.core.scrobble.server.ServerReports
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -55,8 +57,13 @@ object ScrobbleProvidesModule {
     fun provideLastFm(http: HttpTransport, config: LastFmConfig): LastFmClient = LastFmClient(http, config)
 
     @Provides
-    fun provideDrainer(queue: RoomScrobbleQueue, listenBrainz: ListenBrainzClient, lastFm: LastFmClient, config: LastFmConfig): ScrobbleDrainer =
-        ScrobbleDrainer(queue, listOfNotNull(listenBrainz, lastFm.takeIf { config.available }))
+    fun provideDrainer(
+        queue: RoomScrobbleQueue,
+        listenBrainz: ListenBrainzClient,
+        lastFm: LastFmClient,
+        config: LastFmConfig,
+        server: ServerPlays,
+    ): ScrobbleDrainer = ScrobbleDrainer(queue, listOfNotNull(listenBrainz, lastFm.takeIf { config.available }), server = server)
 }
 
 @Module
@@ -65,4 +72,5 @@ abstract class ScrobbleBindsModule {
     @Binds abstract fun bindRepository(impl: ScrobbleRepositoryImpl): ScrobbleRepository
     @Binds abstract fun bindScrobbler(impl: ScrobbleRepositoryImpl): Scrobbler
     @Binds abstract fun bindAccounts(impl: ScrobbleRepositoryImpl): ScrobbleAccounts
+    @Binds abstract fun bindServerPlays(impl: ServerReports): ServerPlays
 }

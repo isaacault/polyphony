@@ -5,27 +5,24 @@ import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.playback.ScrobbleRule
 import app.polyphony.core.domain.repository.LibraryRepository
 import app.polyphony.core.domain.repository.Scrobbler
-import app.polyphony.core.playback.engine.ServerLookup
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
  * Scrobbling: "now playing" when a track starts, "played" once per play when [ScrobbleRule] says
- * it counts, counting only time actually spent playing. A Play now
- * song (continuo#12) isn't a Navidrome song, so it goes to [playNow] instead (continuo scrobbles
- * it to the account's linked ListenBrainz and Last.fm): stream id, and when it was listened to
- * (null: it's playing now).
+ * it counts, counting only time actually spent playing. Both go to [scrobbler], which tells the
+ * server when [enabled] (Navidrome for a library song, continuo for a Play now song, continuo#12)
+ * and this phone's own ListenBrainz and Last.fm accounts for whatever the server didn't scrobble
+ * itself; a counted play waits on the phone, with its time, while there's no network.
  *
- * The same moments go to [scrobbler], this phone's own ListenBrainz and Last.fm accounts, whatever
- * [enabled] (the server's reporting) says: connecting an account there is its own opt-in.
+ * A library song's play also goes into this phone's history at once; a Play now song isn't in the
+ * library.
  */
 class PlaybackReporter(
     private val scope: CoroutineScope,
-    private val serverLookup: ServerLookup,
     private val libraryRepository: LibraryRepository,
     private val scrobbler: Scrobbler = Scrobbler.NONE,
-    private val playNow: suspend (serverId: String, streamId: String, listenedAtMs: Long?) -> Unit = { _, _, _ -> },
 ) {
     @Volatile var enabled: Boolean = true
     @Volatile var threshold: Float = 0.5f
@@ -41,13 +38,8 @@ class PlaybackReporter(
         reported = false
         startedAt = System.currentTimeMillis()
         val reportable = current ?: return
-        scope.launch(Dispatchers.IO) { runCatching { scrobbler.nowPlaying(reportable) } }
-        if (!enabled) return
-        val stream = PlayNowIds.streamId(reportable.id)
-        scope.launch(Dispatchers.IO) {
-            if (stream != null) runCatching { playNow(reportable.serverId, stream, null) }
-            else runCatching { serverLookup.awaitProvider(reportable.serverId)?.reportNowPlaying(reportable.id) }
-        }
+        val toServer = enabled
+        scope.launch(Dispatchers.IO) { runCatching { scrobbler.nowPlaying(reportable, toServer) } }
     }
 
     /** Called about once a second while playing, with the elapsed interval. */
@@ -58,15 +50,10 @@ class PlaybackReporter(
         if (ScrobbleRule.counts(playedMs, track.durationMs, threshold)) {
             reported = true
             val playedAt = startedAt
-            val stream = PlayNowIds.streamId(track.id)
+            val toServer = enabled
             scope.launch(Dispatchers.IO) {
-                runCatching { scrobbler.played(track, playedAt) }
-                if (stream != null) {
-                    if (enabled) runCatching { playNow(track.serverId, stream, playedAt) }
-                    return@launch
-                }
-                runCatching { libraryRepository.recordPlay(track, playedAt) }
-                if (enabled) runCatching { serverLookup.awaitProvider(track.serverId)?.reportPlayed(track.id, playedAt) }
+                if (PlayNowIds.streamId(track.id) == null) runCatching { libraryRepository.recordPlay(track, playedAt) }
+                runCatching { scrobbler.played(track, playedAt, toServer) }
             }
         }
     }
