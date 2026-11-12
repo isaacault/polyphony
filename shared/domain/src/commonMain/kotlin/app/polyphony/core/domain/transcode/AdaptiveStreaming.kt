@@ -41,9 +41,13 @@ object AdaptiveStreaming {
     fun ceilingKbps(profile: TranscodeProfile): Int =
         if (profile.maxBitrateKbps > 0) rungAtOrBelow(profile.maxBitrateKbps) else LADDER.last()
 
-    /** The highest rung to play now: the rules' ceiling, or the lowest rung while the connection keeps failing. */
-    fun capKbps(profile: TranscodeProfile, degraded: Boolean): Int =
-        if (degraded) LADDER.first() else ceilingKbps(profile)
+    /**
+     * The highest rung to play now: the rules' ceiling, or the lowest rung while the connection
+     * keeps failing. Not while there's no network at all: nothing is fetched then, and what plays
+     * is whatever level the stream cache holds (a song fetched ahead before the connection turned).
+     */
+    fun capKbps(profile: TranscodeProfile, degraded: Boolean, online: Boolean = true): Int =
+        if (degraded && online) LADDER.first() else ceilingKbps(profile)
 
     fun rungAtOrBelow(kbps: Int): Int = LADDER.lastOrNull { it <= kbps } ?: LADDER.first()
 

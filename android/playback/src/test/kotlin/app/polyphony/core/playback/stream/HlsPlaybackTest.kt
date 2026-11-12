@@ -179,6 +179,21 @@ class HlsPlaybackTest {
         assertTrue(requests.isEmpty())
     }
 
+    @Test fun `offline, a song fetched ahead at another level plays at that level`() {
+        // Fetched at 64 while the connection was fine; then no network, and the player, going by
+        // the last throughput it saw, would pick 256.
+        val sources = sources()
+        val fetchFactory = CacheDataSource.Factory().setCache(cache).setUpstreamDataSourceFactory(sources.network)
+        val base = sources.streams.masterUrl(continuo, "tr1").removeSuffix("master.m3u8")
+        runBlocking { QueuePrefetcher.fetchHls(fetchFactory, QueuePrefetcher.Hls(base, 64)) {} }
+        server.close()
+
+        val played = play(capKbps = 256, sources = sources, online = false, loadErrorsExpected = true)
+
+        assertEquals("played what the cache holds", listOf(64), played.rungs)
+        assertTrue(played.audio.all { it.encoderDelay == 312 && it.encoderPadding == 607 })
+    }
+
     // ---- helpers ----
 
     private fun sources() = HlsDataSources(
@@ -208,12 +223,12 @@ class HlsPlaybackTest {
     )
 
     /** Plays [songs] (tr1 alone by default) to the end as adaptive streams capped at [capKbps]. */
-    private fun play(capKbps: Int, sources: HlsDataSources = sources(), songs: List<String> = listOf("tr1")): Played {
+    private fun play(capKbps: Int, sources: HlsDataSources = sources(), songs: List<String> = listOf("tr1"), online: Boolean = true, loadErrorsExpected: Boolean = false): Played {
         val selector = DefaultTrackSelector(context).apply {
             setParameters(buildUponParameters().forAdaptiveStreams(capKbps))
         }
         val player: ExoPlayer = TestExoPlayerBuilder(context)
-            .setMediaSourceFactory(sources.mediaSourceFactory())
+            .setMediaSourceFactory(sources.mediaSourceFactory(online = { online }))
             .setTrackSelector(selector)
             .setBandwidthMeter(meter)
             .build()
@@ -244,7 +259,9 @@ class HlsPlaybackTest {
             player.setMediaItems(songs.map { MediaItem.Builder().setUri(MediaItemFactory.uriFor("srv", it)).setMediaId(it).build() })
             player.prepare()
             player.play()
-            TestPlayerRunHelper.advance(player).untilState(Player.STATE_ENDED)
+            val run = TestPlayerRunHelper.advance(player)
+            // Offline, the renditions that can't connect are set aside through non-fatal load errors.
+            (if (loadErrorsExpected) run.ignoringNonFatalErrors() else run).untilState(Player.STATE_ENDED)
         } finally {
             player.release()
         }

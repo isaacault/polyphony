@@ -75,6 +75,13 @@ class AdaptiveStreamingTest {
     }
 
     @Test
+    fun `offline there's no stalling cap, what the cache holds plays`() {
+        val high = TranscodeProfile.ORIGINAL
+        assertEquals(32, AdaptiveStreaming.capKbps(high, degraded = true, online = true))
+        assertEquals(256, AdaptiveStreaming.capKbps(high, degraded = true, online = false))
+    }
+
+    @Test
     fun `an adaptive song shows the rung playing, or its cap until there is one`() {
         assertEquals(64, AdaptiveStreaming.profile(capKbps = 128, playingKbps = 64).maxBitrateKbps)
         assertEquals(128, AdaptiveStreaming.profile(capKbps = 128).maxBitrateKbps)
