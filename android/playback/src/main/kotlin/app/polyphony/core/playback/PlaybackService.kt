@@ -759,20 +759,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /** The queue's items after the current song, in play order (shuffle and repeat-all included). */
-    private fun upcomingItems(max: Int): List<MediaItem> {
-        val timeline = localPlayer.currentTimeline
-        if (timeline.isEmpty) return emptyList()
-        val repeat = if (localPlayer.repeatMode == Player.REPEAT_MODE_ONE) Player.REPEAT_MODE_OFF else localPlayer.repeatMode
-        var index = localPlayer.currentMediaItemIndex
-        val seen = hashSetOf(index)
-        val out = mutableListOf<MediaItem>()
-        while (out.size < max) {
-            index = timeline.getNextWindowIndex(index, repeat, localPlayer.shuffleModeEnabled)
-            if (index == C.INDEX_UNSET || !seen.add(index)) break
-            out += localPlayer.getMediaItemAt(index)
-        }
-        return out
-    }
+    private fun upcomingItems(max: Int): List<MediaItem> = upcomingIndices(max).map(localPlayer::getMediaItemAt)
 
     /** The queue after the current song, in play order, as [PrefetchPlan] and the fetching see it. */
     private fun upcomingSongs(max: Int): List<Pair<PrefetchPlan.Upcoming, QueuePrefetcher.Song>> {
@@ -959,6 +946,47 @@ class PlaybackService : MediaLibraryService() {
         Log.w(TAG, "$why; skipping to the next song")
         player.seekToNextMediaItem()
         player.prepare()
+    }
+
+    /**
+     * No network, and [trackId] isn't on the phone: the music goes on with the next song in play
+     * order that is (downloaded, complete in the stream cache, or an adaptive song fetched ahead),
+     * as on a road through dead zones. The song left stays in the queue, to go back to. At most one
+     * skip per song until something plays ([unplayableSkips]).
+     */
+    private fun skipToNextOnPhone(trackId: String) {
+        val candidates = upcomingIndices(OFFLINE_LOOKAHEAD).map { it to player.getMediaItemAt(it).mediaId }
+        scope.launch {
+            val next = withContext(Dispatchers.IO) {
+                candidates.firstOrNull { (_, id) -> id in prefetcher.fetchedHls || streamResolver.isOnPhone(id) }
+            } ?: return@launch
+            // Still stuck on the same song, and nothing else moved on meanwhile.
+            if (player.currentMediaItem?.mediaId != trackId || player.playbackState != Player.STATE_IDLE) return@launch
+            if (next.first >= player.mediaItemCount || player.getMediaItemAt(next.first).mediaId != next.second) return@launch
+            if (!unplayableSkips.allow(player.mediaItemCount)) return@launch
+            Log.i(TAG, "Offline, and this song isn't on the phone; playing the next one that is")
+            slowRetryJob?.cancel()
+            awaitingNetwork = false
+            player.seekTo(next.first, 0)
+            player.prepare()
+            player.play()
+        }
+    }
+
+    /** The queue's indices after the current song, in play order (shuffle and repeat-all included). */
+    private fun upcomingIndices(max: Int): List<Int> {
+        val timeline = localPlayer.currentTimeline
+        if (timeline.isEmpty) return emptyList()
+        val repeat = if (localPlayer.repeatMode == Player.REPEAT_MODE_ONE) Player.REPEAT_MODE_OFF else localPlayer.repeatMode
+        var index = localPlayer.currentMediaItemIndex
+        val seen = hashSetOf(index)
+        val out = mutableListOf<Int>()
+        while (out.size < max) {
+            index = timeline.getNextWindowIndex(index, repeat, localPlayer.shuffleModeEnabled)
+            if (index == C.INDEX_UNSET || !seen.add(index)) break
+            out += index
+        }
+        return out
     }
 
     private fun refreshUpcomingItems() {
@@ -1177,6 +1205,7 @@ class PlaybackService : MediaLibraryService() {
                     awaitingNetwork = true
                     Log.w(TAG, "Server or network unavailable; will keep retrying \"$title\"")
                     startSlowRetry()
+                    if (!failure.online) skipToNextOnPhone(trackId)
                 }
                 LoadFailurePolicy.Action.Stop -> Unit
             }
@@ -1586,6 +1615,8 @@ class PlaybackService : MediaLibraryService() {
         private const val ROUTING_STATE_WAIT_MS = 2_000L
         /** A long song resumes only when chosen from its start, not when a place was asked for. */
         private const val RESUME_ONLY_FROM_MS = 5_000L
+        /** How far ahead in the queue an offline skip looks for a song on the phone. */
+        private const val OFFLINE_LOOKAHEAD = 50
         /** How far ahead of the queue continuo hears the Play now order. */
         private const val PLAY_NOW_LOOKAHEAD = 50
         /** Adaptive songs continuo encodes ahead of the player (continuo's AHEAD). */
