@@ -6,6 +6,7 @@ import app.polyphony.core.domain.repository.DownloadRule
 import app.polyphony.core.domain.repository.DownloadRuleTarget
 import app.polyphony.core.domain.repository.DownloadStatus
 import app.polyphony.core.domain.repository.LibraryRepository
+import app.polyphony.core.domain.repository.LibrarySyncManager
 import app.polyphony.core.domain.repository.RuleReport
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.domain.repository.SettingsRepository
@@ -41,6 +42,7 @@ class DownloadRuleEvaluator @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val profileRepository: TranscodeProfileRepository,
     private val notifications: DownloadNotifications,
+    private val librarySync: LibrarySyncManager,
     private val json: Json,
 ) {
     private val mutex = Mutex()
@@ -70,9 +72,13 @@ class DownloadRuleEvaluator @Inject constructor(
                     found[rule] = runCatching { tracksFor(rule) }.getOrNull()
                 }
                 val perRule = found.map { (rule, tracks) -> rule to tracks.orEmpty() }
-                // A smart playlist that still exists and matches nothing now is answered, not gone.
+                // A smart playlist that still exists and matches nothing now is answered, not gone,
+                // unless the library itself may be partway (a sync running, or no songs yet).
+                val settledLibrary = !librarySync.state.value.isRunning &&
+                    library.tracksSlice(TrackSort.TITLE, ascending = true, offset = 0, limit = 1).isNotEmpty()
                 val smartIds = settingsRepository.current().library.smartPlaylists.mapTo(HashSet()) { it.id }
-                val mayBeEmpty = rules.filter { (it.target as? DownloadRuleTarget.Smart)?.playlistId in smartIds }.mapTo(HashSet()) { it.id }
+                val mayBeEmpty = if (!settledLibrary) emptySet() else
+                    rules.filter { (it.target as? DownloadRuleTarget.Smart)?.playlistId in smartIds }.mapTo(HashSet()) { it.id }
                 val (held, empty) = RuleDiff.holding(found.mapKeys { it.key.id }, owning, mayBeEmpty)
                 _report.update { it.copy(emptyRules = empty) }
                 if (!isActive(serverId)) {
