@@ -50,6 +50,9 @@ interface LibraryRepository {
     /** A smart playlist's songs on the active server (#33), live: they follow syncs, plays and ratings. */
     fun smartPlaylistTracks(playlist: SmartPlaylist): Flow<List<Track>>
 
+    /** How many songs [smartPlaylistTracks] finds, counted without reading them. */
+    fun smartPlaylistCount(playlist: SmartPlaylist): Flow<Int>
+
     /**
      * Every track on the active server, paged straight out of the cache. Use this for the Songs tab
      * and anything else that can show tens of thousands of rows: it never materialises the whole

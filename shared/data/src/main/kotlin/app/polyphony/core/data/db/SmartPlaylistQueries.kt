@@ -22,6 +22,13 @@ internal object SmartPlaylistQueries {
         )
     }
 
+    /** How many songs [tracks] finds, without reading them (the editor counts as the rules change). */
+    fun count(serverId: String, playlist: SmartPlaylist, nowMs: Long): SimpleSQLiteQuery {
+        val where = where(playlist, nowMs)
+        val limit = if (playlist.limit > 0) " LIMIT ${playlist.limit}" else ""
+        return SimpleSQLiteQuery("SELECT COUNT(*) FROM (SELECT 1 FROM tracks WHERE serverId = ?${where.sql}$limit)", where.args(serverId))
+    }
+
     /** ` AND (…)` for the playlist's rules, joined by AND or OR; nothing when no rule says anything. */
     fun where(playlist: SmartPlaylist, nowMs: Long): FilterClause {
         val parts = ArrayList<String>()

@@ -219,8 +219,7 @@ fun SmartPlaylistScreen(viewModel: SmartPlaylistViewModel = hiltViewModel()) {
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
-                    viewModel.delete()
-                    navigator.back()
+                    viewModel.delete { navigator.back() }
                 }) { Text(stringResource(R.string.smart_delete)) }
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(android.R.string.cancel)) } },
