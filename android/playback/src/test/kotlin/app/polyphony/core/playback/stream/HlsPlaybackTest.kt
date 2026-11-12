@@ -115,6 +115,21 @@ class HlsPlaybackTest {
         assertEquals(listOf(256), played.rungs)
     }
 
+    @Test fun `an album plays on, the next song fetched before the first ends, trims on both`() {
+        val played = play(capKbps = 256, songs = listOf("tr1", "tr2"))
+
+        val transition = checkNotNull(played.requestsAtTransition) { "never moved on to the second song" }
+        val firstOfSecond = requests.indexOfFirst { it.url.encodedPath.startsWith("/v1/stream/tr2/") }
+        assertTrue("the second song was asked for", firstOfSecond >= 0)
+        // Gapless needs the next song ready at the join: it's loaded while the first still plays.
+        assertTrue("tr2's first request ($firstOfSecond) came before the move ($transition)", firstOfSecond < transition)
+        assertTrue(requests.any { it.url.encodedPath == "/v1/stream/tr2/256/1.m4s" })
+        // Every song reached the renderer with continuo's trims.
+        assertTrue(played.audio.isNotEmpty())
+        assertTrue(played.audio.all { it.encoderDelay == 312 && it.encoderPadding == 607 })
+        println("states: ${played.states}")
+    }
+
     @Test fun `the rules' cap keeps every segment at or below its rung`() {
         play(capKbps = 64)
 
@@ -183,10 +198,17 @@ class HlsPlaybackTest {
      * What a song's playing showed: the formats the audio renderer got (the trims), and the rungs
      * played in turn, read from the downstream formats as PlaybackService reads them.
      */
-    private class Played(val audio: List<Format>, val rungs: List<Int?>)
+    private class Played(
+        val audio: List<Format>,
+        val rungs: List<Int?>,
+        /** Every playback state the player went through, in order. */
+        val states: List<Int>,
+        /** How many requests had been made when the player moved on to the next song. */
+        val requestsAtTransition: Int?,
+    )
 
-    /** Plays song tr1 to its end as an adaptive stream capped at [capKbps]. */
-    private fun play(capKbps: Int, sources: HlsDataSources = sources()): Played {
+    /** Plays [songs] (tr1 alone by default) to the end as adaptive streams capped at [capKbps]. */
+    private fun play(capKbps: Int, sources: HlsDataSources = sources(), songs: List<String> = listOf("tr1")): Played {
         val selector = DefaultTrackSelector(context).apply {
             setParameters(buildUponParameters().forAdaptiveStreams(capKbps))
         }
@@ -197,7 +219,17 @@ class HlsPlaybackTest {
             .build()
         val formats = CopyOnWriteArrayList<Format>()
         val downstream = CopyOnWriteArrayList<Format>()
+        val states = CopyOnWriteArrayList<Int>()
+        var requestsAtTransition: Int? = null
         player.addAnalyticsListener(object : AnalyticsListener {
+            override fun onPlaybackStateChanged(eventTime: AnalyticsListener.EventTime, state: Int) {
+                states += state
+            }
+
+            override fun onMediaItemTransition(eventTime: AnalyticsListener.EventTime, mediaItem: MediaItem?, reason: Int) {
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) requestsAtTransition = requests.size
+            }
+
             override fun onAudioInputFormatChanged(
                 eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: DecoderReuseEvaluation?,
             ) {
@@ -209,14 +241,14 @@ class HlsPlaybackTest {
             }
         })
         try {
-            player.setMediaItem(MediaItem.Builder().setUri(MediaItemFactory.uriFor("srv", "tr1")).setMediaId("tr1").build())
+            player.setMediaItems(songs.map { MediaItem.Builder().setUri(MediaItemFactory.uriFor("srv", it)).setMediaId(it).build() })
             player.prepare()
             player.play()
             TestPlayerRunHelper.advance(player).untilState(Player.STATE_ENDED)
         } finally {
             player.release()
         }
-        return Played(formats, downstream.map { AdaptiveStreaming.rungForBandwidth(it.bitrate) }.distinct())
+        return Played(formats, downstream.map { AdaptiveStreaming.rungForBandwidth(it.bitrate) }.distinct(), states, requestsAtTransition)
     }
 
     /** The rung each media segment was fetched at, in order. */
@@ -227,7 +259,8 @@ class HlsPlaybackTest {
     private fun answer(request: RecordedRequest): MockResponse {
         requests += request
         if (request.headers["Authorization"] != "Bearer $validToken") return MockResponse.Builder().code(401).build()
-        val path = request.url.encodedPath.removePrefix("/v1/stream/tr1/")
+        // Any song answers with the same fixture song: /v1/stream/<song>/<path>.
+        val path = request.url.encodedPath.removePrefix("/v1/stream/").substringAfter('/')
         val parts = path.split('/')
         return when {
             path == "master.m3u8" -> text(MASTER)
