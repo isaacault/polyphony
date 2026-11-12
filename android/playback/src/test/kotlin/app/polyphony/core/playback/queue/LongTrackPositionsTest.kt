@@ -33,6 +33,23 @@ class LongTrackPositionsTest {
         assertNull(p.resumeAt("set", hour))
     }
 
+    @Test fun `what changed is said, for the server's bookmark`() {
+        val p = LongTrackPositions()
+        assertEquals(LongTrackPositions.Change.KEPT, p.left("mix", 34 * 60_000L, hour))
+        assertEquals(LongTrackPositions.Change.FORGOTTEN, p.left("mix", 10_000L, hour))
+        assertEquals(LongTrackPositions.Change.NONE, p.left("mix", 10_000L, hour))
+        assertEquals(LongTrackPositions.Change.NONE, p.left("song", 60_000L, 4 * 60_000L))
+    }
+
+    @Test fun `the server's bookmarks fill in, without overriding this phone's places`() {
+        val p = LongTrackPositions()
+        p.left("mix", 34 * 60_000L, hour)
+        p.merge(mapOf("mix" to 5 * 60_000L, "set" to 12 * 60_000L, "barely" to 2_000L))
+        assertEquals(34 * 60_000L, p.resumeAt("mix", hour))
+        assertEquals(12 * 60_000L, p.resumeAt("set", hour))
+        assertNull(p.resumeAt("barely", hour))
+    }
+
     @Test fun `the newest hundred are kept, and survive a restart`() {
         val p = LongTrackPositions()
         for (i in 0..LongTrackPositions.MAX) p.left("t$i", 5 * 60_000L + i, hour)

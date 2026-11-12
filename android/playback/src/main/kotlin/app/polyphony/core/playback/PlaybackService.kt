@@ -291,7 +291,7 @@ class PlaybackService : MediaLibraryService() {
         startCollectors()
         if (settings.equalizer.mode == EqualizerMode.SYSTEM) openAudioEffectSession()
         restoreQueueOnStart(initial.playback.rememberQueue)
-        scope.launch { queuePersistence.loadLongPositions()?.let(longPositions::load) }
+        scope.launch { loadLongPositions() }
         crossfader.start()
     }
 
@@ -1019,11 +1019,51 @@ class PlaybackService : MediaLibraryService() {
         scope.launch { queuePersistence.saveLongPositions(text) }
     }
 
-    /** A long song chosen (not reached by playing on) resumes where it was left. */
+    /**
+     * The server's bookmark follows a long song's place, so the listener's other devices (and
+     * this one after a reinstall) pick up there too. Best effort: the place on the phone stands.
+     */
+    private fun mirrorBookmark(item: MediaItem, change: LongTrackPositions.Change, positionMs: Long) {
+        if (change == LongTrackPositions.Change.NONE || PlayNowIds.streamId(item.mediaId) != null) return
+        val serverId = MediaItemFactory.serverIdFrom(item) ?: return
+        scope.launch(Dispatchers.IO) {
+            val provider = serverLookup.providerFor(serverId) ?: return@launch
+            runCatching {
+                if (change == LongTrackPositions.Change.KEPT) provider.saveBookmark(item.mediaId, positionMs)
+                else provider.deleteBookmark(item.mediaId)
+            }
+        }
+    }
+
+    /** This phone's places, then the servers' bookmarks for songs it has none for. */
+    private suspend fun loadLongPositions() {
+        queuePersistence.loadLongPositions()?.let(longPositions::load)
+        for (serverId in serverLookup.knownServerIds().orEmpty()) {
+            val provider = serverLookup.awaitProvider(serverId) ?: continue
+            val marks = withContext(Dispatchers.IO) { runCatching { provider.bookmarks() }.getOrDefault(emptyMap()) }
+            longPositions.merge(marks)
+        }
+    }
+
+    /** The song playing before the last change of song, to tell a reload of it from a new choice. */
+    private var lastSongId: String? = null
+
+    /**
+     * A long song chosen (not reached by playing on) resumes where it was left. Not a crossfade
+     * moving on to it (a seek, but the crossfader's), and not the same song reloaded (a retry, a
+     * changed quality), which would undo a "Start over".
+     */
     private fun resumeLongTrack(item: MediaItem?, reason: Int) {
         val before = resumed
+        val reloaded = item != null && item.mediaId == lastSongId
+        lastSongId = item?.mediaId
+        if (reloaded) return
         resumed = null
-        val chosen = reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED || reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK
+        val chosen = when (reason) {
+            Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED -> true
+            Player.MEDIA_ITEM_TRANSITION_REASON_SEEK -> item != null && !crossfader.movedOnTo(item.mediaId)
+            else -> false
+        }
         if (item != null && chosen && player.currentPosition < RESUME_ONLY_FROM_MS) {
             longPositions.resumeAt(item.mediaId, durationOf(item))?.let { at ->
                 Log.i(TAG, "Resuming \"${item.mediaMetadata.title}\" at ${at / 1000} s")
@@ -1147,7 +1187,8 @@ class PlaybackService : MediaLibraryService() {
             // Paused: a long song keeps its place (#37).
             val item = player.currentMediaItem
             if (!isPlaying && item != null && player.playbackState == Player.STATE_READY) {
-                longPositions.left(item.mediaId, player.currentPosition, durationOf(item))
+                val at = player.currentPosition
+                mirrorBookmark(item, longPositions.left(item.mediaId, at, durationOf(item)), at)
                 saveLongPositions()
             }
         }
@@ -1156,9 +1197,12 @@ class PlaybackService : MediaLibraryService() {
             // Leaving a song: a long one keeps its place, or forgets it when it played to its end.
             val old = oldPosition.mediaItem ?: return
             if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) {
-                longPositions.finished(old.mediaId)
+                if (longPositions.finished(old.mediaId)) mirrorBookmark(old, LongTrackPositions.Change.FORGOTTEN, 0L)
             } else if (old.mediaId != newPosition.mediaItem?.mediaId) {
-                longPositions.left(old.mediaId, oldPosition.positionMs, durationOf(old))
+                mirrorBookmark(old, longPositions.left(old.mediaId, oldPosition.positionMs, durationOf(old)), oldPosition.positionMs)
+            } else if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                // A seek within it is where it is now ("Start over" forgets the place).
+                mirrorBookmark(old, longPositions.left(old.mediaId, newPosition.positionMs, durationOf(old)), newPosition.positionMs)
             } else {
                 return
             }
@@ -1181,6 +1225,12 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_ENDED && player.repeatMode == Player.REPEAT_MODE_OFF) recordContextProgress(finished = true)
+            // The queue's last song played to its end (no change of song says so).
+            val item = player.currentMediaItem
+            if (playbackState == Player.STATE_ENDED && item != null && longPositions.finished(item.mediaId)) {
+                mirrorBookmark(item, LongTrackPositions.Change.FORGOTTEN, 0L)
+                saveLongPositions()
+            }
         }
 
         override fun onEvents(p: Player, events: Player.Events) {

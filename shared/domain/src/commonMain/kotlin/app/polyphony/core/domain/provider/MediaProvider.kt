@@ -87,6 +87,13 @@ interface MediaProvider {
     suspend fun reportNowPlaying(trackId: String)
     suspend fun reportPlayed(trackId: String, playedAtEpochMs: Long)
 
+    // ---- bookmarks: where long songs were left (#37), shared with the listener's other devices ----
+
+    /** The account's bookmarks: track id to position (ms). Empty where the server has none. */
+    suspend fun bookmarks(): Map<String, Long> = emptyMap()
+    suspend fun saveBookmark(trackId: String, positionMs: Long) {}
+    suspend fun deleteBookmark(trackId: String) {}
+
     // ---- URLs ----
     /** Build the stream URL for [track] honouring [profile]. Pure; must not perform I/O. */
     fun streamRequest(track: Track, profile: TranscodeProfile): StreamRequest

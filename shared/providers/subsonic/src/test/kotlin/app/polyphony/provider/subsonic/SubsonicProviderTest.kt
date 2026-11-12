@@ -353,4 +353,31 @@ class SubsonicProviderTest {
         assertTrue(artists[0].starred)
         assertEquals("https://img/beck.jpg", artists[1].artworkUrl)
     }
+
+    @Test
+    fun `bookmarks are read, saved and deleted`() = runTest {
+        val fake = FakeServer()
+        fake.on(
+            "getBookmarks",
+            ok(""""bookmarks":{"bookmark":[{"position":2040000,"username":"alice","entry":{"id":"tr-9","isDir":false,"title":"Mix"}},""" +
+                """{"position":61000,"entry":{"id":"tr-1","isDir":false,"title":"Set"}}]}"""),
+        )
+        fake.on("createBookmark", ok())
+        fake.on("deleteBookmark", ok())
+        val provider = fake.provider()
+
+        assertEquals(mapOf("tr-9" to 2_040_000L, "tr-1" to 61_000L), provider.bookmarks())
+        provider.saveBookmark("tr-9", 1_234_000L)
+        assertEquals("tr-9", fake.lastRequest("createBookmark").queryParameter("id"))
+        assertEquals("1234000", fake.lastRequest("createBookmark").queryParameter("position"))
+        provider.deleteBookmark("tr-9")
+        assertEquals("tr-9", fake.lastRequest("deleteBookmark").queryParameter("id"))
+    }
+
+    @Test
+    fun `one bookmark comes back as an object`() = runTest {
+        val fake = FakeServer()
+        fake.on("getBookmarks", ok(""""bookmarks":{"bookmark":{"position":90000,"entry":{"id":"tr-2"}}}"""))
+        assertEquals(mapOf("tr-2" to 90_000L), fake.provider().bookmarks())
+    }
 }

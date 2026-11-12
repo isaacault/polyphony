@@ -57,6 +57,11 @@ class Crossfader(
     private var fadingSince = 0L
     /** The main player's change of song is ours, not the user's. */
     private var movingOn = false
+    /** The song a crossfade last moved the main player on to, until [movedOnTo] reads it. */
+    private var handedOverTo: String? = null
+
+    /** True once, right after the crossfade moved the player on to [mediaId] (not the listener choosing it). */
+    fun movedOnTo(mediaId: String): Boolean = (handedOverTo == mediaId).also { handedOverTo = null }
 
     private val listener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -152,6 +157,7 @@ class Crossfader(
         f.play()
         mainVolume.fade = 0f
         movingOn = true
+        handedOverTo = next.mediaId
         main.seekTo(toIndex, 0)
         fadingSince = SystemClock.elapsedRealtime()
         stage = Stage.FADING
