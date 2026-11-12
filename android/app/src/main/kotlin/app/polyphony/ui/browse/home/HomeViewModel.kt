@@ -74,7 +74,14 @@ class HomeViewModel @Inject constructor(
     feedbackRepository: FeedbackRepository,
     downloads: DownloadRepository,
     private val singles: app.polyphony.ui.common.SingleSongAlbums,
+    settings: app.polyphony.core.domain.repository.SettingsRepository,
 ) : ViewModel() {
+
+    /** Smart playlists pinned to Home (#33). */
+    val pinnedSmartPlaylists: StateFlow<List<app.polyphony.core.domain.model.SmartPlaylist>> = settings.settings
+        .map { s -> s.library.smartPlaylists.filter { it.pinnedToHome } }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** The liked shelf reads "Top rated" in Ratings mode. */
     val feedback: StateFlow<Feedback> = feedbackRepository.feedback

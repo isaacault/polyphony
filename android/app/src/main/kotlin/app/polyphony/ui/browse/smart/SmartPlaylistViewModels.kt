@@ -74,6 +74,12 @@ class SmartPlaylistViewModel @Inject constructor(
     fun delete() {
         viewModelScope.launch { settings.updateSmartPlaylists { list -> list.filterNot { it.id == id } } }
     }
+
+    fun togglePinnedToHome() {
+        viewModelScope.launch {
+            settings.updateSmartPlaylists { list -> list.map { if (it.id == id) it.copy(pinnedToHome = !it.pinnedToHome) else it } }
+        }
+    }
 }
 
 /** A smart playlist being made or changed, with how many songs its rules find as they change. */

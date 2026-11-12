@@ -18,6 +18,8 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -149,6 +151,12 @@ fun SmartPlaylistScreen(viewModel: SmartPlaylistViewModel = hiltViewModel()) {
                 actions = {
                     val p = playlist
                     if (p != null) {
+                        IconButton(onClick = viewModel::togglePinnedToHome) {
+                            Icon(
+                                if (p.pinnedToHome) Icons.Rounded.PushPin else Icons.Outlined.PushPin,
+                                contentDescription = stringResource(if (p.pinnedToHome) R.string.smart_unpin else R.string.smart_pin),
+                            )
+                        }
                         IconButton(onClick = { navigator.openSmartPlaylistEditor(p.id) }) {
                             Icon(Icons.Rounded.Edit, contentDescription = stringResource(R.string.smart_edit))
                         }

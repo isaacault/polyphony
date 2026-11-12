@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -90,6 +91,7 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
     val titleRecentlyAdded = stringResource(R.string.browse_home_recently_added)
     val titleMostPlayed = stringResource(R.string.browse_home_most_played)
     val feedback by viewModel.feedback.collectAsStateWithLifecycle()
+    val pinnedSmart by viewModel.pinnedSmartPlaylists.collectAsStateWithLifecycle()
     val titleFavorites = stringResource(if (feedback.usesRatings) R.string.feedback_top_rated else R.string.browse_home_favorites)
 
     Scaffold(
@@ -161,6 +163,15 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                                 onSeeAll = navigator::openDownloads,
                                 seeAllLabel = stringResource(R.string.dl_see_all),
                             )
+                        }
+                    }
+
+                    if (pinnedSmart.isNotEmpty()) {
+                        item(key = "smart-header") { SectionHeader(title = stringResource(R.string.smart_section)) }
+                        item(key = "smart") {
+                            HorizontalCarousel(items = pinnedSmart, key = { "s-" + it.id }) { playlist ->
+                                SmartPlaylistCard(playlist, onClick = { navigator.openSmartPlaylist(playlist.id) })
+                            }
                         }
                     }
 
@@ -274,6 +285,39 @@ private fun ServerChip(state: HomeUiState, onClick: () -> Unit) {
         leadingIcon = { Icon(Icons.Rounded.Dns, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize)) },
         shape = MaterialTheme.shapes.small,
     )
+}
+
+/** A pinned smart playlist (#33): its name and rules, a tap from its songs. */
+@Composable
+private fun SmartPlaylistCard(playlist: app.polyphony.core.domain.model.SmartPlaylist, onClick: () -> Unit) {
+    androidx.compose.material3.Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier
+            .width(Dimens.carouselArtwork * 1.4f)
+            .clickable(onClick = onClick),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Icon(
+                androidx.compose.material.icons.Icons.Rounded.AutoAwesome,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Text(
+                playlist.name,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                app.polyphony.ui.browse.smart.describe(playlist),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.albumShelf(
