@@ -5,6 +5,7 @@ import android.util.Log
 import app.polyphony.core.domain.connection.ConnectionSample
 import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.repository.ConnectionSampleRepository
+import app.polyphony.core.domain.repository.NetworkMonitor
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.ServerRepository
 import app.polyphony.core.playback.di.PlaybackScope
@@ -13,7 +14,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
@@ -75,7 +79,9 @@ class ConnectionUploads(
 /**
  * Runs [ConnectionUploads] after a sample is stored ([ConnectionSampler]): at most every
  * [MIN_GAP_MS] while playing, and at once when playback stops. The samples go only to the user's
- * own continuo.
+ * own continuo, and only off metered networks (#60): they're kept for two weeks, so they wait for
+ * Wi-Fi rather than spend mobile data or compete with the music on a weak link. Getting onto an
+ * unmetered network sends what waited.
  */
 @Singleton
 class ConnectionUploader @Inject constructor(
@@ -83,6 +89,7 @@ class ConnectionUploader @Inject constructor(
     serverRepository: ServerRepository,
     samples: ConnectionSampleRepository,
     requests: RequestRepository,
+    private val networkMonitor: NetworkMonitor,
     private val clock: Clock,
     @PlaybackScope private val scope: CoroutineScope,
 ) {
@@ -103,9 +110,19 @@ class ConnectionUploader @Inject constructor(
     private val running = AtomicBoolean(false)
     @Volatile private var lastRunMs = 0L
 
-    fun onStored(trigger: ConnectionSample.Trigger) {
+    init {
+        scope.launch {
+            networkMonitor.state.map { it.isOnline && !it.isMetered }.distinctUntilChanged().filter { it }.collect { run(force = true) }
+        }
+    }
+
+    fun onStored(trigger: ConnectionSample.Trigger) = run(force = trigger == ConnectionSample.Trigger.STOPPED)
+
+    private fun run(force: Boolean) {
         val now = clock.nowMs()
-        if (trigger != ConnectionSample.Trigger.STOPPED && now - lastRunMs < MIN_GAP_MS) return
+        val network = networkMonitor.state.value
+        if (!network.isOnline || network.isMetered) return
+        if (!force && now - lastRunMs < MIN_GAP_MS) return
         if (!running.compareAndSet(false, true)) return
         lastRunMs = now
         scope.launch(Dispatchers.IO) {
