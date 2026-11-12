@@ -46,6 +46,8 @@ class PolyphonyNavigator(val navController: NavHostController) {
     fun openPlaylist(playlistId: String) = navController.navigate(PlaylistRoute(playlistId), singleTop)
     fun openGenre(genre: String) = navController.navigate(GenreRoute(genre), singleTop)
     fun openFavorites() = navController.navigate(FavoritesRoute, singleTop)
+    fun openSmartPlaylist(id: String) = navController.navigate(SmartPlaylistRoute(id), singleTop)
+    fun openSmartPlaylistEditor(id: String?) = navController.navigate(SmartPlaylistEditRoute(id), singleTop)
     fun openAlbumList(kind: AlbumListKind) = navController.navigate(AlbumListRoute(kind.name), singleTop)
     fun openDownloads() = navController.navigate(DownloadsRoute, singleTop)
     fun openRequests(focusId: Long? = null) = navController.navigate(RequestsRoute(focusId), singleTop)

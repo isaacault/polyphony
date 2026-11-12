@@ -23,6 +23,8 @@ sealed interface Route
 @Serializable data class PlaylistRoute(val playlistId: String) : Route
 @Serializable data class GenreRoute(val genre: String) : Route
 @Serializable data object FavoritesRoute : Route
+@Serializable data class SmartPlaylistRoute(val id: String) : Route
+@Serializable data class SmartPlaylistEditRoute(val id: String? = null) : Route
 /** "See all" lists from the Home screen; [kind] is an [AlbumListKind] name. */
 @Serializable data class AlbumListRoute(val kind: String) : Route
 @Serializable data object DownloadsRoute : Route

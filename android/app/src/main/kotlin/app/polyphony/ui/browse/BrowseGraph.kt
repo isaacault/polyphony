@@ -20,12 +20,16 @@ import app.polyphony.navigation.PolyphonyNavigator
 import app.polyphony.navigation.RemovedAlbumsRoute
 import app.polyphony.navigation.RequestsRoute
 import app.polyphony.navigation.SearchRoute
+import app.polyphony.navigation.SmartPlaylistEditRoute
+import app.polyphony.navigation.SmartPlaylistRoute
 import app.polyphony.ui.browse.album.AlbumScreen
 import app.polyphony.ui.browse.albumlist.AlbumListScreen
 import app.polyphony.ui.browse.artist.ArtistScreen
 import app.polyphony.ui.browse.catalog.CatalogAlbumScreen
 import app.polyphony.ui.browse.catalog.CatalogArtistScreen
 import app.polyphony.ui.browse.favorites.FavoritesScreen
+import app.polyphony.ui.browse.smart.SmartPlaylistEditScreen
+import app.polyphony.ui.browse.smart.SmartPlaylistScreen
 import app.polyphony.ui.browse.genre.GenreScreen
 import app.polyphony.ui.browse.home.HomeScreen
 import app.polyphony.ui.browse.library.LibraryScreen
@@ -49,6 +53,8 @@ fun NavGraphBuilder.browseGraph(navigator: PolyphonyNavigator) {
     composable<PlaylistRoute> { PlaylistScreen() }
     composable<GenreRoute> { GenreScreen() }
     composable<FavoritesRoute> { FavoritesScreen() }
+    composable<SmartPlaylistRoute> { SmartPlaylistScreen() }
+    composable<SmartPlaylistEditRoute> { SmartPlaylistEditScreen() }
     composable<AlbumListRoute> { AlbumListScreen() }
     composable<DownloadsRoute> { DownloadsScreen() }
     composable<RequestsRoute> { RequestsScreen() }

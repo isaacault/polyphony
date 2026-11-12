@@ -13,12 +13,21 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.clickable
+import app.polyphony.core.domain.model.SmartPlaylist
+import app.polyphony.ui.browse.smart.describe
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -333,16 +342,20 @@ internal fun PlaylistsTab(vm: LibraryViewModel) {
     val grid by vm.playlistsGrid.collectAsStateWithLifecycle()
     val filter by vm.playlistFilter.collectAsStateWithLifecycle()
     val columns by vm.gridColumns.collectAsStateWithLifecycle()
+    val smart by vm.smartPlaylists.collectAsStateWithLifecycle()
     var showCreate by remember { mutableStateOf(false) }
+    var showNewMenu by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             LibraryFilterRow(filter, feedback.filterFields(LibraryFilter.fieldsFor(ItemKind.PLAYLIST)) - FilterField.GENRE, vm::setPlaylistFilter)
             val playlistCount = playlists?.let { pluralStringResource(R.plurals.browse_count_playlists, it.size, it.size) }
             val list = playlists
+            // Smart playlists (#33) come first, unless a filter is narrowing the server's.
+            val smartShown = if (filter.isActive) emptyList() else smart
             when {
                 list == null -> LoadingPlaceholder(PlaceholderStyle.LIST)
                 list.isEmpty() && filter.isActive -> NoFilterMatches { vm.setPlaylistFilter(LibraryFilter.NONE) }
-                list.isEmpty() -> EmptyState(
+                list.isEmpty() && smartShown.isEmpty() -> EmptyState(
                     title = stringResource(R.string.browse_empty_playlists),
                     body = stringResource(R.string.browse_empty_playlists_hint),
                     actionLabel = stringResource(R.string.browse_action_new_playlist),
@@ -355,12 +368,24 @@ internal fun PlaylistsTab(vm: LibraryViewModel) {
                     horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
                     verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
                 ) {
+                    if (smartShown.isNotEmpty()) {
+                        item(key = "smart-header", span = { GridItemSpan(maxLineSpan) }) { SmartSectionHeader() }
+                        gridItems(smartShown, key = { "smart-" + it.id }, span = { GridItemSpan(maxLineSpan) }, contentType = { "smart" }) { p ->
+                            SmartPlaylistRow(p, onClick = { navigator.openSmartPlaylist(p.id) })
+                        }
+                    }
                     gridItems(list, key = { it.id }, contentType = { "playlist" }) { playlist ->
                         PlaylistCard(playlist = playlist, onClick = { navigator.openPlaylist(playlist.id) })
                     }
                     if (playlistCount != null) item(key = "footer", span = { GridItemSpan(maxLineSpan) }) { CountFooter(playlistCount) }
                 }
                 else -> LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = listContentPadding(top = 4.dp, extraBottom = 96.dp)) {
+                    if (smartShown.isNotEmpty()) {
+                        item(key = "smart-header") { SmartSectionHeader() }
+                        items(smartShown, key = { "smart-" + it.id }, contentType = { "smart" }) { p ->
+                            SmartPlaylistRow(p, onClick = { navigator.openSmartPlaylist(p.id) })
+                        }
+                    }
                     items(list, key = { it.id }, contentType = { "playlist" }) { playlist ->
                         PlaylistRow(playlist = playlist, onClick = { navigator.openPlaylist(playlist.id) })
                     }
@@ -368,14 +393,27 @@ internal fun PlaylistsTab(vm: LibraryViewModel) {
                 }
             }
         }
-        FloatingActionButton(
-            onClick = { showCreate = true },
-            modifier = Modifier
+        // New: a playlist on the server, or a smart playlist on the phone.
+        Box(
+            Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
                 .padding(bottom = LocalContentBottomPadding.current),
         ) {
-            Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.browse_action_new_playlist))
+            FloatingActionButton(onClick = { showNewMenu = true }) {
+                Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.browse_action_new_playlist))
+            }
+            DropdownMenu(expanded = showNewMenu, onDismissRequest = { showNewMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.browse_title_new_playlist)) },
+                    onClick = { showNewMenu = false; showCreate = true },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.smart_new)) },
+                    leadingIcon = { Icon(Icons.Rounded.AutoAwesome, contentDescription = null) },
+                    onClick = { showNewMenu = false; navigator.openSmartPlaylistEditor(null) },
+                )
+            }
         }
     }
     if (showCreate) {
@@ -387,6 +425,26 @@ internal fun PlaylistsTab(vm: LibraryViewModel) {
             onDismiss = { showCreate = false },
         )
     }
+}
+
+@Composable
+private fun SmartSectionHeader() {
+    Text(
+        stringResource(R.string.smart_section),
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun SmartPlaylistRow(playlist: SmartPlaylist, onClick: () -> Unit) {
+    ListItem(
+        headlineContent = { Text(playlist.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        supportingContent = { Text(describe(playlist), maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        leadingContent = { Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+        modifier = Modifier.clickable(onClick = onClick),
+    )
 }
 
 /** Empty state for a list whose filters hide everything: says so, and offers to clear them. */
