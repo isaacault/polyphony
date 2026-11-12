@@ -70,7 +70,10 @@ class DownloadRuleEvaluator @Inject constructor(
                     found[rule] = runCatching { tracksFor(rule) }.getOrNull()
                 }
                 val perRule = found.map { (rule, tracks) -> rule to tracks.orEmpty() }
-                val (held, empty) = RuleDiff.holding(found.mapKeys { it.key.id }, owning)
+                // A smart playlist that still exists and matches nothing now is answered, not gone.
+                val smartIds = settingsRepository.current().library.smartPlaylists.mapTo(HashSet()) { it.id }
+                val mayBeEmpty = rules.filter { (it.target as? DownloadRuleTarget.Smart)?.playlistId in smartIds }.mapTo(HashSet()) { it.id }
+                val (held, empty) = RuleDiff.holding(found.mapKeys { it.key.id }, owning, mayBeEmpty)
                 _report.update { it.copy(emptyRules = empty) }
                 if (!isActive(serverId)) {
                     _state.value = _state.value.copy(status = SyncState.Status.IDLE, progress = null, phase = null)

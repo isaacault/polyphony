@@ -132,4 +132,15 @@ class RuleDiffTest {
         // A failed lookup says nothing about the rule; a new rule has nothing to keep.
         assertEquals(setOf("deleted playlist"), holding.empty)
     }
+
+    @Test
+    fun `a smart playlist matching nothing now lets its downloads go`() {
+        val holding = RuleDiff.holding(
+            found = mapOf("smart, nothing new" to emptyList()),
+            owning = setOf("smart, nothing new"),
+            mayBeEmpty = setOf("smart, nothing new"),
+        )
+        assertEquals(emptySet<String>(), holding.held)
+        assertEquals(emptySet<String>(), holding.empty)
+    }
 }

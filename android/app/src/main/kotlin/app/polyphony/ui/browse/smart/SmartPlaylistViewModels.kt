@@ -71,8 +71,12 @@ class SmartPlaylistViewModel @Inject constructor(
         if (list.isNotEmpty()) playback.playTracks(list, 0, shuffle, playlist.value?.name)
     }
 
-    fun delete() {
-        viewModelScope.launch { settings.updateSmartPlaylists { list -> list.filterNot { it.id == id } } }
+    /** Deletes it, then [onDone] (leaving the screen only once it is written). */
+    fun delete(onDone: () -> Unit) {
+        viewModelScope.launch {
+            settings.updateSmartPlaylists { list -> list.filterNot { it.id == id } }
+            onDone()
+        }
     }
 
     fun togglePinnedToHome() {
@@ -104,8 +108,7 @@ class SmartPlaylistEditViewModel @Inject constructor(
     /** Songs the rules find now (null while counting), a moment after each change. */
     val matches: StateFlow<Int?> = _draft
         .mapLatest { delay(COUNT_AFTER_MS); it }
-        .flatMapLatest { library.smartPlaylistTracks(it) }
-        .map { it.size }
+        .flatMapLatest { library.smartPlaylistCount(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {

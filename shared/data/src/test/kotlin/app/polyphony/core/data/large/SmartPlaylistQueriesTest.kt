@@ -85,6 +85,15 @@ class SmartPlaylistQueriesTest {
         assertEquals(db.longValue("SELECT COUNT(*) FROM tracks WHERE serverId = ? AND (lastPlayedAt IS NULL OR lastPlayedAt < ?)", sid, cutoff), got)
     }
 
+    @Test fun `the count is the songs found, limit included`() {
+        val jazz = playlist(SmartRule(SmartField.GENRE, SmartOp.IS, "jazz"))
+        assertEquals(ids(jazz).size.toLong(), db.longValueOf(SmartPlaylistQueries.count(sid, jazz, now)))
+        assertEquals(10L, db.longValueOf(SmartPlaylistQueries.count(sid, jazz.copy(limit = 10), now)))
+    }
+
+    private fun app.polyphony.core.data.db.PolyphonyDatabase.longValueOf(query: SimpleSQLiteQuery): Long =
+        openHelper.readableDatabase.query(query).use { it.moveToFirst(); it.getLong(0) }
+
     @Test fun `sort and limit are the Songs tab's`() {
         val p = playlist(SmartRule(SmartField.RATING, SmartOp.AT_LEAST, "1")).copy(sort = TrackSort.RATING, limit = 25)
         val all = ids(SortQueries.tracks(sid, TrackSort.RATING, ascending = true)).filter { id -> tracks.first { it.id == id }.rating >= 1 }

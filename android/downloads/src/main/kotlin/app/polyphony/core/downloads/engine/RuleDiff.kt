@@ -35,8 +35,9 @@ object RuleDiff {
      * downloads, is far likelier a vanished playlist, album or artist (or a library mid-sync) than
      * a wish to delete them all.
      */
-    fun holding(found: Map<String, List<Track>?>, owning: Set<String>): Holding {
-        val empty = found.filter { (id, tracks) -> tracks != null && tracks.isEmpty() && id in owning }.keys
+    fun holding(found: Map<String, List<Track>?>, owning: Set<String>, mayBeEmpty: Set<String> = emptySet()): Holding {
+        // [mayBeEmpty]: rules for which no songs is an answer (a smart playlist's rules matching none now).
+        val empty = found.filter { (id, tracks) -> tracks != null && tracks.isEmpty() && id in owning && id !in mayBeEmpty }.keys
         val failed = found.filterValues { it == null }.keys
         return Holding(held = failed + empty, empty = empty)
     }

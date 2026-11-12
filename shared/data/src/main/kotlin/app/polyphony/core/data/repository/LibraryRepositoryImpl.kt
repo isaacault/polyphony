@@ -270,6 +270,11 @@ class LibraryRepositoryImpl @Inject constructor(
             trackDao.observeSorted(SmartPlaylistQueries.tracks(sid, playlist, System.currentTimeMillis())).mapEach(TrackEntity::toDomain)
         }.offline(OfflineIndex::trackIds, Track::id, indexFor(LibraryFilter.NONE))
 
+    override fun smartPlaylistCount(playlist: SmartPlaylist): Flow<Int> =
+        activeServerId.flatMapLatest { sid ->
+            if (sid == null) flowOf(0) else trackDao.observeCountOf(SmartPlaylistQueries.count(sid, playlist, System.currentTimeMillis()))
+        }.distinctUntilChanged()
+
     override fun pagedTracks(sort: TrackSort, ascending: Boolean, filter: LibraryFilter): Flow<PagingData<Track>> {
         val f = filter.restrictedTo(ItemKind.TRACK)
         return combine(activeServerId, indexFor(f)) { sid, index -> sid to index }
