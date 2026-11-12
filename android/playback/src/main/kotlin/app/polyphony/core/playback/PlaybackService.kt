@@ -582,7 +582,8 @@ class PlaybackService : MediaLibraryService() {
             networkMonitor.state.collect { state ->
                 // Streaming over the network: not a download playing, which a dead zone doesn't touch.
                 val current = player.currentMediaItem
-                val streaming = player.playWhenReady && current != null && !player.isRemotePlayback() && current.mediaId !in downloadedIds
+                val streaming = player.playWhenReady && current != null && !player.isRemotePlayback() &&
+                    (current.mediaId !in downloadedIds || current.mediaId in hlsSourced)
                 when (LatencyMonitor.networkChange(lastOnline, wasOnline, state, streaming)) {
                     LatencyMonitor.NetworkChange.NEW_CONNECTION -> latencyMonitor.reset()
                     LatencyMonitor.NetworkChange.LOST -> {
@@ -964,7 +965,9 @@ class PlaybackService : MediaLibraryService() {
         // from a download or a complete copy in the stream cache.
         val candidates = upcomingIndices(OFFLINE_LOOKAHEAD).map { index ->
             val item = player.getMediaItemAt(index)
-            Triple(index, item.mediaId, routeFor(item) == AdaptiveStreaming.Route.HLS)
+            // A song that already has its source loads from it (one downloaded since keeps its HLS).
+            val adaptive = item.mediaId in hlsSourced || routeFor(item) == AdaptiveStreaming.Route.HLS
+            Triple(index, item.mediaId, adaptive)
         }
         scope.launch {
             val next = withContext(Dispatchers.IO) {
