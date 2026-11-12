@@ -389,4 +389,25 @@ class DlnaPlaybackEngineTest {
         assertTrue("b's position runs from its real start: $later", later in 8_000L..14_000L)
         assertEquals("never cued again", 0, t.calls.count { it == "setUri:b" || it == "setUri:c" })
     }
+
+    @Test
+    fun `the Yamaha's old clock past a short next song's length doesn't skip the songs after it`() = runTest {
+        // A long song, then short ones: for the 3 s it names the next song early, its clock still
+        // counts the long one, past the short ones' ends. That must not read as each of them ending
+        // in turn (1, 5, 9 on the RX-V483: every hand-off went four songs on).
+        val (t, e) = fixture(durations = mapOf("a" to 120_000, "b" to 30_000, "c" to 30_000, "d" to 30_000, "e" to 30_000, "f" to 30_000)) {
+            namesNextEarlyMs = 3_000
+            reportsItemId = true
+        }
+        e.start("a", "b", "c", "d", "e", "f")
+        advanceTimeBy(118_500) // a's clock at 118.5 s: b is named
+        assertEquals(1, e.state.value.currentIndex)
+        advanceTimeBy(6_000)   // a has ended and b plays, from 0
+        assertEquals("still on b", 1, e.state.value.currentIndex)
+        assertEquals("only c armed after b: ${t.calls}", listOf("setNext:b", "setNext:c"), t.calls.filter { it.startsWith("setNext") })
+        advanceTimeBy(15_000)
+        assertEquals("b plays on", 1, e.state.value.currentIndex)
+        advanceTimeBy(15_000)  // b has ended: c, and nothing skipped
+        assertEquals(2, e.state.value.currentIndex)
+    }
 }
