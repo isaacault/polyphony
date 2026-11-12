@@ -10,5 +10,9 @@ interface ConnectionSampleRepository {
     /** Every sample kept, oldest first. */
     suspend fun all(): List<ConnectionSample>
 
+    /** [serverId]'s samples that ended after [afterMs], oldest first, at most [limit]: what's left to send it. */
+    suspend fun forServerAfter(serverId: String, afterMs: Long, limit: Int): List<ConnectionSample> =
+        all().filter { it.serverId == serverId && it.endedAtMs > afterMs }.take(limit)
+
     suspend fun clear()
 }

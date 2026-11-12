@@ -37,6 +37,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
+/** Connection samples are sent whole, defaults and all, so continuo never has to guess one. */
+private val SAMPLES_JSON = Json { encodeDefaults = true }
+
 class ContinuoRequestRepository internal constructor(
     private val client: ContinuoClient,
     private val signOutTimeoutMs: Long = SIGN_OUT_TIMEOUT_MS,
@@ -118,6 +121,20 @@ class ContinuoRequestRepository internal constructor(
         if (reply.code == 405) return emptySet()
         if (reply.code !in 200..299) throw client.serverError(reply, "scrobble failed")
         return runCatching { scrobbleServices(client.decode(ScrobbleSentDto.serializer(), reply.body).sent) }.getOrDefault(emptySet())
+    }
+
+    override suspend fun sendConnectionSamples(server: Server, samples: List<app.polyphony.core.domain.connection.ConnectionSample>): Boolean {
+        val device = server.options[app.polyphony.core.domain.model.ServerOptions.CONTINUO_DEVICE_ID]?.takeIf { it.isNotBlank() } ?: return false
+        if (samples.isEmpty()) return true
+        val body = SAMPLES_JSON.encodeToString(
+            app.polyphony.core.domain.connection.ConnectionSampleBatch.serializer(),
+            app.polyphony.core.domain.connection.ConnectionSampleBatch(samples),
+        )
+        val reply = client.post(server, "/v1/devices/${URLEncoder.encode(device, "UTF-8")}/connection", body)
+        // 404/405: a continuo without the endpoint (or that no longer knows this device).
+        if (reply.code == 404 || reply.code == 405) return false
+        if (reply.code !in 200..299) throw client.serverError(reply, "connection samples refused")
+        return true
     }
 
     override suspend fun discoveryPlaylist(server: Server, id: String): app.polyphony.core.domain.model.DiscoveryPlaylistPage? {

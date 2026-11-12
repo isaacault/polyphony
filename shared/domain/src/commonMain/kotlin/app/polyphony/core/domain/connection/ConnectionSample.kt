@@ -76,8 +76,8 @@ data class ConnectionSample(
 }
 
 /**
- * The body of a future `POST /v1/devices/{deviceId}/connection` (#185): the samples not sent yet,
- * oldest first. Nothing sends it yet.
+ * The body of `POST /v1/devices/{deviceId}/connection` (#185): the samples not sent yet, oldest
+ * first, to the continuo they were streamed from.
  */
 @Serializable
 data class ConnectionSampleBatch(val samples: List<ConnectionSample>)

@@ -26,6 +26,9 @@ class ConnectionSampleRepositoryImpl @Inject constructor(
 
     override suspend fun all(): List<ConnectionSample> = dao.all().map { it.toDomain() }
 
+    override suspend fun forServerAfter(serverId: String, afterMs: Long, limit: Int): List<ConnectionSample> =
+        dao.forServerAfter(serverId, afterMs, limit).map { it.toDomain() }
+
     override suspend fun clear() = dao.deleteAll()
 }
 

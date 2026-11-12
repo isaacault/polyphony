@@ -13,6 +13,9 @@ interface ConnectionSampleDao {
     @Query("SELECT * FROM connection_samples ORDER BY endedAtMs ASC")
     suspend fun all(): List<ConnectionSampleEntity>
 
+    @Query("SELECT * FROM connection_samples WHERE serverId = :serverId AND endedAtMs > :afterMs ORDER BY endedAtMs ASC LIMIT :limit")
+    suspend fun forServerAfter(serverId: String, afterMs: Long, limit: Int): List<ConnectionSampleEntity>
+
     /** The SQL twin of `ConnectionRetention.retain`: drop samples that ended before [cutoffMs]… */
     @Query("DELETE FROM connection_samples WHERE endedAtMs < :cutoffMs")
     suspend fun deleteEndedBefore(cutoffMs: Long)
