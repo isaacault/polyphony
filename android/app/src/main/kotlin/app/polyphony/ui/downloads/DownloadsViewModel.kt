@@ -166,6 +166,7 @@ class DownloadsViewModel @Inject constructor(
     fun pauseAll() = viewModelScope.launch { runCatching { downloads.pauseAll() } }
     fun resumeAll() = viewModelScope.launch { runCatching { downloads.resumeAll() } }
     fun retryFailed() = viewModelScope.launch { runCatching { downloads.retryFailed() } }
+    fun retry(trackId: String) = viewModelScope.launch { runCatching { downloads.retry(trackId) } }
     fun remove(trackIds: List<String>) = viewModelScope.launch { runCatching { downloads.remove(trackIds) } }
     fun removeAll() = viewModelScope.launch { runCatching { downloads.removeAll() } }
     fun evaluateNow() = viewModelScope.launch { runCatching { downloads.evaluateRulesNow() } }

@@ -331,7 +331,12 @@ private fun ActiveTab(state: DownloadsUiState, vm: DownloadsViewModel, onTrackOp
                 )
             }
             else -> items(state.active, key = { it.id }, contentType = { "active" }) { item ->
-                ActiveRow(item, onRemove = { vm.remove(listOf(item.id)) }, onOptions = { item.track?.let(onTrackOptions) })
+                ActiveRow(
+                    item,
+                    onRemove = { vm.remove(listOf(item.id)) },
+                    onRetry = { vm.retry(item.id) },
+                    onOptions = { item.track?.let(onTrackOptions) },
+                )
             }
         }
     }
@@ -353,7 +358,7 @@ private fun TransferRateLine(vm: DownloadsViewModel) {
 }
 
 @Composable
-private fun ActiveRow(item: ActiveDownloadItem, onRemove: () -> Unit, onOptions: () -> Unit) {
+private fun ActiveRow(item: ActiveDownloadItem, onRemove: () -> Unit, onRetry: () -> Unit, onOptions: () -> Unit) {
     val d = item.download
     val statusText = when (d.status) {
         DownloadStatus.QUEUED -> stringResource(R.string.dl_status_queued)
@@ -387,8 +392,16 @@ private fun ActiveRow(item: ActiveDownloadItem, onRemove: () -> Unit, onOptions:
                 }
             },
             trailingContent = {
-                IconButton(onClick = onRemove) {
-                    Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.dl_action_cancel_download))
+                Row {
+                    // A failed one says why above, and can be tried again on its own (#18).
+                    if (d.status == DownloadStatus.FAILED) {
+                        IconButton(onClick = onRetry) {
+                            Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.dl_action_retry_one))
+                        }
+                    }
+                    IconButton(onClick = onRemove) {
+                        Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.dl_action_cancel_download))
+                    }
                 }
             },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
