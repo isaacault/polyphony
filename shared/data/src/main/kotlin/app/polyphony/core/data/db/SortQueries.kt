@@ -173,7 +173,7 @@ internal object SortQueries {
         )
     }
 
-    private fun trackOrder(sort: TrackSort, ascending: Boolean): String {
+    fun trackOrder(sort: TrackSort, ascending: Boolean): String {
         val (primary, naturalAsc) = when (sort) {
             TrackSort.TITLE -> "titleSortKey" to true
             TrackSort.ARTIST -> "artistSortKey" to true
