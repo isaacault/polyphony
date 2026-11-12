@@ -271,10 +271,13 @@ class LibraryRepositoryImpl @Inject constructor(
         }.offline(OfflineIndex::trackIds, Track::id, indexFor(LibraryFilter.NONE))
 
     override fun smartPlaylistCount(playlist: SmartPlaylist): Flow<Int> =
-        // Offline mode narrows the list to downloads, which only the list itself can count.
+        // Offline mode narrows the list to downloads: the matching ids (not whole songs) against them.
         offlineIndex.map { it != null }.distinctUntilChanged().flatMapLatest { offline ->
             if (offline) {
-                smartPlaylistTracks(playlist).map { it.size }
+                val ids = activeServerId.flatMapLatest { sid ->
+                    if (sid == null) flowOf(emptyList()) else trackDao.observeIds(SmartPlaylistQueries.ids(sid, playlist, System.currentTimeMillis()))
+                }
+                combine(ids, offlineIndex) { list, index -> index?.let { i -> list.count { it in i.trackIds } } ?: list.size }
             } else {
                 activeServerId.flatMapLatest { sid ->
                     if (sid == null) flowOf(0) else trackDao.observeCountOf(SmartPlaylistQueries.count(sid, playlist, System.currentTimeMillis()))
