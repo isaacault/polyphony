@@ -50,6 +50,34 @@ class LongTrackPositionsTest {
         assertNull(p.resumeAt("barely", hour))
     }
 
+    @Test fun `a place forgotten here isn't brought back by a bookmark the server still has`() {
+        val p = LongTrackPositions()
+        p.left("mix", 34 * 60_000L, hour)
+        p.finished("mix")
+        p.merge(mapOf("mix" to 34 * 60_000L))   // the delete failed, offline
+        assertNull(p.resumeAt("mix", hour))
+        val restarted = LongTrackPositions().apply { load(p.serialize()) }
+        restarted.merge(mapOf("mix" to 34 * 60_000L))
+        assertNull("still after a restart", restarted.resumeAt("mix", hour))
+        restarted.bookmarkDeleted("mix")
+        restarted.merge(mapOf("mix" to 20 * 60_000L))   // left on another device since
+        assertEquals(20 * 60_000L, restarted.resumeAt("mix", hour))
+    }
+
+    @Test fun `the phone's own places outlast the server's bookmarks`() {
+        val p = LongTrackPositions()
+        p.left("mine", 30 * 60_000L, hour)
+        p.merge((1..150).associate { "server$it" to 5 * 60_000L })
+        assertEquals(30 * 60_000L, p.resumeAt("mine", hour))
+    }
+
+    @Test fun `a short song never resumes, whatever a bookmark says`() {
+        val p = LongTrackPositions()
+        p.merge(mapOf("song" to 90_000L))
+        assertNull(p.resumeAt("song", 4 * 60_000L))
+        assertNull("length unknown", p.resumeAt("song", 0L))
+    }
+
     @Test fun `the newest hundred are kept, and survive a restart`() {
         val p = LongTrackPositions()
         for (i in 0..LongTrackPositions.MAX) p.left("t$i", 5 * 60_000L + i, hour)
