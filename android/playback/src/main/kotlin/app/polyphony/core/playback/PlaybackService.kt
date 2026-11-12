@@ -196,6 +196,8 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var trackSelector: DefaultTrackSelector
     /** Songs whose adaptive stream failed this session: they play their ordinary stream instead. */
     private val hlsFallback: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    /** Songs whose media source is HLS, as created ([AdaptiveMediaSourceFactory]). */
+    private val hlsSourced: MutableSet<String> = ConcurrentHashMap.newKeySet()
     /** Downloaded songs, kept current, so choosing a song's stream ([routeFor]) never waits on the database. */
     @Volatile private var downloadedIds: Set<String> = emptySet()
 
@@ -365,7 +367,12 @@ class PlaybackService : MediaLibraryService() {
         }
         hlsNetwork = hlsSources.network
         val hls = hlsSources.mediaSourceFactory()
-        mediaSourceFactory = AdaptiveMediaSourceFactory(DefaultMediaSourceFactory(resolving), hls, ::routeFor)
+        mediaSourceFactory = AdaptiveMediaSourceFactory(DefaultMediaSourceFactory(resolving), hls) { item ->
+            // What each song's source actually is: a song downloaded since keeps the HLS source it got.
+            routeFor(item).also { route ->
+                if (route == AdaptiveStreaming.Route.HLS) hlsSourced += item.mediaId else hlsSourced -= item.mediaId
+            }
+        }
         trackSelector = newTrackSelector()
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(30_000, 120_000, 2_500, 5_000)
@@ -1071,10 +1078,13 @@ class PlaybackService : MediaLibraryService() {
                 return
             }
             val status = LoadFailures.httpStatus(error)
-            val adaptive = isAdaptive(player.currentMediaItem)
+            // The source that failed, not how the song would be routed now (a download may have finished).
+            val adaptive = trackId in hlsSourced
             // The server answers that the song isn't there (deleted since it was queued): waiting
-            // won't bring it, so no retries. An adaptive stream's first tries the ordinary stream.
-            if (networkMonitor.state.value.isOnline && LoadFailures.isGone(status)) {
+            // won't bring it, so after one retry (a server restarting can answer 404 for a moment)
+            // it's skipped. An adaptive stream's first tries the ordinary stream.
+            val retriedOnce = retryTrackId == trackId && retryCount >= 1
+            if (networkMonitor.state.value.isOnline && LoadFailures.isGone(status) && retriedOnce) {
                 if (adaptive && hlsFallback.add(trackId)) {
                     Log.w(TAG, "continuo has no adaptive stream of ${player.currentMediaItem?.mediaMetadata?.title}; playing its ordinary stream")
                     retryCount = 0
@@ -1102,7 +1112,8 @@ class PlaybackService : MediaLibraryService() {
                 // continuo answered but couldn't serve it, or the song was downloaded after it was
                 // queued: the ordinary path (which plays a download), from the same place.
                 val downloaded = trackId in downloadedIds
-                if ((downloaded || LoadFailures.continuoCouldNotServe(error.errorCode, status)) && hlsFallback.add(trackId)) {
+                val connectionLost = LoadFailures.connectionLost(error.errorCode, networkMonitor.state.value.isOnline)
+                if ((downloaded || !connectionLost) && hlsFallback.add(trackId)) {
                     Log.w(TAG, "Adaptive stream failed for ${player.currentMediaItem?.mediaMetadata?.title}; playing its ordinary stream")
                     retryCount = 0
                     reloadCurrentItem()
