@@ -10,6 +10,7 @@ import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import app.polyphony.core.domain.model.Server
 import app.polyphony.core.domain.repository.RequestRepository
@@ -144,8 +145,41 @@ class HlsDataSources(
     val network: DataSource.Factory =
         RefreshingAuthDataSource.Factory(ResolvingDataSource.Factory(network, resolver), serverFor, streams)
 
-    /** Adaptive songs' media sources: the master playlist's CODECS let them prepare without a segment. */
-    fun mediaSourceFactory(): HlsMediaSource.Factory = HlsMediaSource.Factory(player).setAllowChunklessPreparation(true)
+    /**
+     * Adaptive songs' media sources: the master playlist's CODECS let them prepare without a
+     * segment, and offline ([online] false) a rendition that can't load gives way to another
+     * ([OfflineRenditionFallback]).
+     */
+    fun mediaSourceFactory(online: () -> Boolean = { true }): HlsMediaSource.Factory =
+        HlsMediaSource.Factory(player)
+            .setAllowChunklessPreparation(true)
+            .setLoadErrorHandlingPolicy(OfflineRenditionFallback(online))
+}
+
+/**
+ * Offline, only what's in the stream cache plays, and a song fetched ahead may be there at
+ * another level than the one the player picks (fetched before the connection turned flaky, at
+ * the level playing then). A rendition that can't connect is set aside for a minute, so the
+ * player moves on to another, until it finds the one in the cache. Online, Media3's own handling
+ * (retries, then the error PlaybackService decides on).
+ */
+class OfflineRenditionFallback(private val online: () -> Boolean) : DefaultLoadErrorHandlingPolicy() {
+    override fun getFallbackSelectionFor(
+        fallbackOptions: LoadErrorHandlingPolicy.FallbackOptions,
+        loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo,
+    ): LoadErrorHandlingPolicy.FallbackSelection? {
+        val e = loadErrorInfo.exception
+        val couldNotConnect = e is HttpDataSource.HttpDataSourceException &&
+            e !is HttpDataSource.InvalidResponseCodeException && e !is HttpDataSource.InvalidContentTypeException
+        if (!online() && couldNotConnect && fallbackOptions.isFallbackAvailable(LoadErrorHandlingPolicy.FALLBACK_TYPE_TRACK)) {
+            return LoadErrorHandlingPolicy.FallbackSelection(LoadErrorHandlingPolicy.FALLBACK_TYPE_TRACK, SET_ASIDE_MS)
+        }
+        return super.getFallbackSelectionFor(fallbackOptions, loadErrorInfo)
+    }
+
+    private companion object {
+        const val SET_ASIDE_MS = 60_000L
+    }
 }
 
 /**

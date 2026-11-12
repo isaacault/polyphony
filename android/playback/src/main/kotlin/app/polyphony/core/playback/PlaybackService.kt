@@ -368,7 +368,7 @@ class PlaybackService : MediaLibraryService() {
             streamResolver.recordAdaptive(trackId, currentCapKbps())
         }
         hlsNetwork = hlsSources.network
-        val hls = hlsSources.mediaSourceFactory()
+        val hls = hlsSources.mediaSourceFactory(online = { networkMonitor.state.value.isOnline })
         mediaSourceFactory = AdaptiveMediaSourceFactory(DefaultMediaSourceFactory(resolving), hls) { item ->
             // What each song's source actually is: a song downloaded since keeps the HLS source it got.
             routeFor(item).also { route ->
@@ -483,7 +483,7 @@ class PlaybackService : MediaLibraryService() {
     /** The highest rung adaptive streams may play now: the rules' ceiling, the lowest while the connection keeps failing. */
     private fun currentCapKbps(): Int {
         val decision = engine.localDecision()
-        return AdaptiveStreaming.capKbps(decision.profile, decision.cappedByLatency || latencyMonitor.degraded.value)
+        return AdaptiveStreaming.capKbps(decision.profile, decision.cappedByLatency || latencyMonitor.degraded.value, networkMonitor.state.value.isOnline)
     }
 
     private fun newTrackSelector(): DefaultTrackSelector = DefaultTrackSelector(this).apply {
@@ -541,6 +541,7 @@ class PlaybackService : MediaLibraryService() {
         scope.launch { engine.decision.collect(::onDecisionChanged) }
         scope.launch {
             networkMonitor.state.map { it.isOnline }.distinctUntilChanged().collect { online ->
+                applyAudioCap()   // offline, no cap: whatever level the cache holds plays
                 if (online && awaitingNetwork) {
                     awaitingNetwork = false
                     retryCount = 0
