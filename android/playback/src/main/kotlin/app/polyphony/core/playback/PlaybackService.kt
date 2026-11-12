@@ -52,6 +52,7 @@ import app.polyphony.core.domain.repository.Scrobbler
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.repository.DownloadRepository
 import app.polyphony.core.domain.transcode.AdaptiveStreaming
+import app.polyphony.core.domain.transcode.NetworkState
 import app.polyphony.core.domain.transcode.TranscodeDecision
 import app.polyphony.core.playback.stream.AdaptiveMediaSourceFactory
 import app.polyphony.core.playback.stream.ContinuoStreams
@@ -572,8 +573,25 @@ class PlaybackService : MediaLibraryService() {
         historyJob = scope.launch(Dispatchers.IO) {
             for (entry in historyWrites) runCatching { listeningHistory.record(entry) }.onFailure { Log.w(TAG, "History write failed: ${it.message}") }
         }
+        // A new connection is judged afresh; the same one coming and going (a tunnel, a rural road)
+        // says it keeps failing, so it stays degraded rather than resetting each time (#185).
         scope.launch {
-            networkMonitor.state.map { it.kind to it.isMetered }.distinctUntilChanged().drop(1).collect { latencyMonitor.reset() }
+            var lastOnline: NetworkState? = null
+            var wasOnline = true
+            networkMonitor.state.collect { state ->
+                val streaming = player.playWhenReady && player.currentMediaItem != null && !player.isRemotePlayback()
+                when (LatencyMonitor.networkChange(lastOnline, wasOnline, state, streaming)) {
+                    LatencyMonitor.NetworkChange.NEW_CONNECTION -> latencyMonitor.reset()
+                    LatencyMonitor.NetworkChange.LOST -> {
+                        Log.i(TAG, "The network went away mid-stream; the connection counts as failing")
+                        latencyMonitor.onConnectionLost()
+                    }
+                    LatencyMonitor.NetworkChange.BACK -> latencyMonitor.onConnectionBack()
+                    LatencyMonitor.NetworkChange.NOTHING -> Unit
+                }
+                if (state.isOnline) lastOnline = state
+                wasOnline = state.isOnline
+            }
         }
         scope.launch {
             networkMonitor.state.map { it.kind }.distinctUntilChanged().drop(1).collect { dlnaManager.onNetworkChanged() }

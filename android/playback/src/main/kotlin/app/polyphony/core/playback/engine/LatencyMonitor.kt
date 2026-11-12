@@ -3,6 +3,7 @@ package app.polyphony.core.playback.engine
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import app.polyphony.core.domain.transcode.AdaptiveLatencySettings
+import app.polyphony.core.domain.transcode.NetworkState
 import app.polyphony.core.playback.util.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,8 +19,8 @@ import javax.inject.Singleton
  * playWhenReady, not caused by a seek or item change). The monitor trips when
  * [AdaptiveLatencySettings.stallThreshold] stalls start within [AdaptiveLatencySettings.windowSeconds],
  * or a single stall lasts at least [AdaptiveLatencySettings.longStallMs]. It recovers after
- * [AdaptiveLatencySettings.recoverAfterSeconds] without stalls (0 = manual), on [reset], or on
- * network change.
+ * [AdaptiveLatencySettings.recoverAfterSeconds] online without stalls (0 = manual), on [reset], or on
+ * a new connection ([networkChange]); losing the network while streaming counts as degraded.
  */
 @Singleton
 class LatencyMonitor @Inject constructor(private val clock: Clock) {
@@ -70,6 +71,30 @@ class LatencyMonitor @Inject constructor(private val clock: Clock) {
         }
     }
 
+    /** No network at all, while streaming: the connection coming and going (#185). */
+    private var offline = false
+
+    /**
+     * The network went away while music was streaming: the surest sign the connection keeps
+     * failing (a tunnel, a rural road), so the connection counts as degraded at once, and stays so
+     * while it's away.
+     */
+    fun onConnectionLost(nowMs: Long = clock.nowMs()) {
+        synchronized(lock) {
+            offline = true
+            lastStallActivityMs = nowMs
+            if (settings.enabled) _degraded.value = true
+        }
+    }
+
+    /** The same connection is back: recovery counts from now (time offline isn't time without stalls). */
+    fun onConnectionBack(nowMs: Long = clock.nowMs()) {
+        synchronized(lock) {
+            offline = false
+            lastStallActivityMs = nowMs
+        }
+    }
+
     /** Call periodically (a few times a minute) to apply long-stall and recovery rules. */
     fun tick(nowMs: Long = clock.nowMs()) {
         synchronized(lock) {
@@ -81,6 +106,7 @@ class LatencyMonitor @Inject constructor(private val clock: Clock) {
                 }
                 return
             }
+            if (offline) return
             if (_degraded.value && settings.recoverAfterSeconds > 0) {
                 if (nowMs - lastStallActivityMs >= settings.recoverAfterSeconds * 1000L) {
                     clearLocked()
@@ -95,10 +121,30 @@ class LatencyMonitor @Inject constructor(private val clock: Clock) {
     }
 
     private fun clearLocked() {
+        offline = false
         stallStarts.clear()
         ongoingStallStart = null
         longStallCounted = false
         _degraded.value = false
+    }
+
+    /** What a change of network means for the monitor (PlaybackService feeds it [NetworkMonitor]'s states). */
+    enum class NetworkChange { NEW_CONNECTION, LOST, BACK, NOTHING }
+
+    companion object {
+        /**
+         * [current], after [lastOnline] (the last state with a network, null before any): another
+         * kind of connection or another tariff is a new one, judged afresh; losing the network
+         * while [streaming], or getting the same one back, is the same connection coming and
+         * going, which says it keeps failing.
+         */
+        fun networkChange(lastOnline: NetworkState?, wasOnline: Boolean, current: NetworkState, streaming: Boolean): NetworkChange = when {
+            !current.isOnline -> if (wasOnline && streaming) NetworkChange.LOST else NetworkChange.NOTHING
+            lastOnline == null -> NetworkChange.NOTHING
+            current.kind != lastOnline.kind || current.isMetered != lastOnline.isMetered -> NetworkChange.NEW_CONNECTION
+            !wasOnline -> NetworkChange.BACK
+            else -> NetworkChange.NOTHING
+        }
     }
 
     private fun prune(nowMs: Long) {

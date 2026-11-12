@@ -1,6 +1,8 @@
 package app.polyphony.core.playback.engine
 
 import app.polyphony.core.domain.transcode.AdaptiveLatencySettings
+import app.polyphony.core.domain.transcode.NetworkKind
+import app.polyphony.core.domain.transcode.NetworkState
 import app.polyphony.core.playback.util.Clock
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -108,5 +110,42 @@ class LatencyMonitorTest {
         assertFalse(m.degraded.value)
         m.stall(clock, 100)
         assertTrue(m.degraded.value)
+    }
+
+    @Test
+    fun `losing the network mid-stream counts as failing, and time offline isn't recovery`() {
+        val clock = FakeClock()
+        val m = monitor(clock, AdaptiveLatencySettings(recoverAfterSeconds = 600))
+        m.onConnectionLost(clock.now)
+        assertTrue(m.degraded.value)
+        clock.advance(30 * 60_000L)   // half an hour of cached songs in a dead zone
+        m.tick(clock.now)
+        assertTrue("still degraded while offline", m.degraded.value)
+        m.onConnectionBack(clock.now)
+        clock.advance(9 * 60_000L)
+        m.tick(clock.now)
+        assertTrue("recovery counts from the network's return", m.degraded.value)
+        clock.advance(2 * 60_000L)
+        m.tick(clock.now)
+        assertFalse(m.degraded.value)
+    }
+
+    private val cellular = NetworkState(NetworkKind.CELLULAR, isMetered = true)
+    private val wifi = NetworkState(NetworkKind.WIFI, isMetered = false)
+
+    @Test
+    fun `the same connection coming and going isn't a new one`() {
+        assertEquals(LatencyMonitor.NetworkChange.LOST, LatencyMonitor.networkChange(cellular, true, NetworkState.OFFLINE, streaming = true))
+        assertEquals("not streaming, nothing to judge", LatencyMonitor.NetworkChange.NOTHING, LatencyMonitor.networkChange(cellular, true, NetworkState.OFFLINE, streaming = false))
+        assertEquals(LatencyMonitor.NetworkChange.BACK, LatencyMonitor.networkChange(cellular, false, cellular, streaming = true))
+        assertEquals(LatencyMonitor.NetworkChange.NOTHING, LatencyMonitor.networkChange(cellular, true, cellular.copy(estimatedRttMs = 80), streaming = true))
+    }
+
+    @Test
+    fun `another kind of connection, or another tariff, is judged afresh`() {
+        assertEquals(LatencyMonitor.NetworkChange.NEW_CONNECTION, LatencyMonitor.networkChange(cellular, true, wifi, streaming = true))
+        assertEquals("back on Wi-Fi after a dead zone", LatencyMonitor.NetworkChange.NEW_CONNECTION, LatencyMonitor.networkChange(cellular, false, wifi, streaming = true))
+        assertEquals(LatencyMonitor.NetworkChange.NEW_CONNECTION, LatencyMonitor.networkChange(wifi, true, wifi.copy(isMetered = true), streaming = true))
+        assertEquals("the first network seen", LatencyMonitor.NetworkChange.NOTHING, LatencyMonitor.networkChange(null, true, wifi, streaming = true))
     }
 }
