@@ -134,6 +134,12 @@ settings ──▶│ TranscodePolicy│   │ NetworkState │   │ OutputTarg
 - `LibrarySyncManager` pulls artists → albums → tracks → playlists → starred into Room, in pages,
   on first connect and periodically (WorkManager, Wi-Fi-only by default). Detail screens call
   `refreshX` to pick up changes immediately.
+- Smart playlists (#33) are rules kept with the settings (`SmartPlaylist` in shared:domain,
+  `LibrarySettings.smartPlaylists`), not on any server: `SmartPlaylistQueries` (shared:data) turns
+  them into one query over `tracks` on the active server, with every value bound and only
+  whitelisted columns and operators. `LibraryRepository.smartPlaylistTracks` observes it, so the
+  list follows syncs, plays and ratings. A download rule can keep one on the phone
+  (`DownloadRuleTarget.Smart`).
 - Credentials live in the app-private Room database. Subsonic uses salted token auth; Jellyfin
   stores the access token obtained at login.
 - Scrobbling from the phone (opt-in, the only traffic that leaves the user's own server): the

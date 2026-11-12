@@ -3,6 +3,7 @@ package app.polyphony.core.domain.repository
 import app.polyphony.core.domain.model.AlbumSort
 import app.polyphony.core.domain.model.ArtistSort
 import app.polyphony.core.domain.model.Feedback
+import app.polyphony.core.domain.model.SmartPlaylist
 import app.polyphony.core.domain.model.FeedbackMode
 import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.model.TrackSort
@@ -158,4 +159,6 @@ data class LibrarySettings(
     val feedbackMode: FeedbackMode = FeedbackMode.FAVOURITES,
     /** Ratings mode: the least a song needs to be Top rated. */
     val topRatedMinimum: Int = Feedback.DEFAULT_TOP_RATED,
+    /** Rule-based playlists over the library on the phone (#33), in the order they were made. */
+    val smartPlaylists: List<SmartPlaylist> = emptyList(),
 )

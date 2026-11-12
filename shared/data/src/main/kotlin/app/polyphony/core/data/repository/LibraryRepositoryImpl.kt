@@ -8,6 +8,7 @@ import androidx.paging.filter
 import androidx.paging.map
 import app.polyphony.core.data.db.PolyphonyDatabase
 import app.polyphony.core.data.db.SearchQueries
+import app.polyphony.core.data.db.SmartPlaylistQueries
 import app.polyphony.core.data.db.SortQueries
 import app.polyphony.core.data.db.entity.AlbumEntity
 import app.polyphony.core.data.db.entity.ArtistEntity
@@ -36,6 +37,7 @@ import app.polyphony.core.domain.model.Lyrics
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.SearchResults
 import app.polyphony.core.domain.model.Track
+import app.polyphony.core.domain.model.SmartPlaylist
 import app.polyphony.core.domain.model.TrackSort
 import app.polyphony.core.domain.model.LetterIndex
 import app.polyphony.core.domain.model.LibraryFilter
@@ -261,6 +263,12 @@ class LibraryRepositoryImpl @Inject constructor(
         return scopedList { sid -> trackDao.observeSorted(SortQueries.tracks(sid, sort, ascending, f)).mapEach(TrackEntity::toDomain) }
             .offline(OfflineIndex::trackIds, Track::id, indexFor(f))
     }
+
+    override fun smartPlaylistTracks(playlist: SmartPlaylist): Flow<List<Track>> =
+        // "Added within 30 days" is measured from when the list is opened (or the library changes).
+        scopedList { sid ->
+            trackDao.observeSorted(SmartPlaylistQueries.tracks(sid, playlist, System.currentTimeMillis())).mapEach(TrackEntity::toDomain)
+        }.offline(OfflineIndex::trackIds, Track::id, indexFor(LibraryFilter.NONE))
 
     override fun pagedTracks(sort: TrackSort, ascending: Boolean, filter: LibraryFilter): Flow<PagingData<Track>> {
         val f = filter.restrictedTo(ItemKind.TRACK)

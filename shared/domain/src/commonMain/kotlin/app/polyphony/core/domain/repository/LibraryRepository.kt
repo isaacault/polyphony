@@ -11,6 +11,7 @@ import app.polyphony.core.domain.model.LibraryFilter
 import app.polyphony.core.domain.model.Lyrics
 import app.polyphony.core.domain.model.Playlist
 import app.polyphony.core.domain.model.SearchResults
+import app.polyphony.core.domain.model.SmartPlaylist
 import app.polyphony.core.domain.model.Track
 import app.polyphony.core.domain.model.TrackSort
 import androidx.paging.PagingData
@@ -45,6 +46,9 @@ interface LibraryRepository {
 
     // ---- Tracks ----
     fun tracks(sort: TrackSort = TrackSort.TITLE, ascending: Boolean = true, filter: LibraryFilter = LibraryFilter.NONE): Flow<List<Track>>
+
+    /** A smart playlist's songs on the active server (#33), live: they follow syncs, plays and ratings. */
+    fun smartPlaylistTracks(playlist: SmartPlaylist): Flow<List<Track>>
 
     /**
      * Every track on the active server, paged straight out of the cache. Use this for the Songs tab
