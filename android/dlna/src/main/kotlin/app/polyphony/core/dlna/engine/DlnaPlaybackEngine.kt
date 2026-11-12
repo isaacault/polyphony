@@ -839,6 +839,11 @@ class DlnaPlaybackEngine<T : Any>(
         if (p.trackUri != null && sameUrl(p.trackUri, armed.url) && !sameUrl(p.trackUri, current.url)) return "uri"
         val itemId = p.trackItemId
         if (itemId != null && itemId == armed.uid.toString() && itemId != current.uid.toString()) return "track metadata"
+        // Just after the renderer named the song it's moving to, its clock still counts the old
+        // one: past a short new song's end, that would read as it ending too, and each poll would
+        // move on again (1, 5, 9 on the RX-V483). Until the grace is over, only a URI or item id
+        // says it moved on.
+        if (now < handoffPositionUntil) return null
         if (sinceCommand <= SETTLE_MS || transportNow != TransportState.PLAYING || !s0.isPlayingNow) return null
         if (stale) {
             return if (s0.durationMs > 0 && clockPosition(s0, now) >= s0.durationMs + CLOCK_GRACE_MS) REASON_CLOCK else null
