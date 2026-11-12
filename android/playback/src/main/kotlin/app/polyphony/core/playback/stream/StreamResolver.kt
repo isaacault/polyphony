@@ -12,6 +12,7 @@ import app.polyphony.core.domain.repository.NetworkMonitor
 import app.polyphony.core.domain.repository.RequestRepository
 import app.polyphony.core.domain.repository.SettingsRepository
 import app.polyphony.core.domain.transcode.AdaptiveStreaming
+import app.polyphony.core.domain.transcode.AudioCodec
 import app.polyphony.core.domain.transcode.LossySourceRule
 import app.polyphony.core.domain.transcode.TranscodeProfile
 import app.polyphony.core.domain.transcode.TranscodeDecision
@@ -264,24 +265,26 @@ class StreamResolver @Inject constructor(
             .build()
     }
 
+    /** Whether [markTranscodeFailure] would have something to fall back from (a transcoded stream). */
+    fun canFallBackToOriginal(trackId: String): Boolean = transcodedOn(trackId) != null
+
+    /** The server and codec [trackId] is transcoded to, or null when it isn't (original, downloaded). */
+    private fun transcodedOn(trackId: String): Pair<String, AudioCodec>? {
+        val applied = _applied.value[trackId] ?: return null
+        if (applied.profile.isPassthrough || applied.reason == TranscodeDecision.Reason.DOWNLOADED) return null
+        val serverId = queueStore.get(trackId)?.serverId ?: return null
+        return serverId to applied.profile.codec
+    }
+
     /**
      * Called by the service when a load fails. Returns true when the failing item was a transcoded
      * stream, in which case it (and later tracks on that server/codec) will resolve to the original
      * file and the caller should re-prepare.
      */
-    /** Whether [markTranscodeFailure] would have something to fall back from (a transcoded stream). */
-    fun canFallBackToOriginal(trackId: String): Boolean {
-        val applied = _applied.value[trackId] ?: return false
-        if (applied.profile.isPassthrough || applied.reason == TranscodeDecision.Reason.DOWNLOADED) return false
-        return queueStore.get(trackId)?.serverId != null
-    }
-
     fun markTranscodeFailure(trackId: String): Boolean {
-        if (!canFallBackToOriginal(trackId)) return false
-        val applied = _applied.value[trackId] ?: return false
-        val serverId = queueStore.get(trackId)?.serverId ?: return false
-        val first = fallbacks.markBroken(serverId, applied.profile.codec, trackId)
-        if (first) android.util.Log.w("PolyphonyPlayback", "Transcoding to ${applied.profile.codec} failed on server $serverId; falling back to original quality for this session")
+        val (serverId, codec) = transcodedOn(trackId) ?: return false
+        val first = fallbacks.markBroken(serverId, codec, trackId)
+        if (first) android.util.Log.w("PolyphonyPlayback", "Transcoding to $codec failed on server $serverId; falling back to original quality for this session")
         return true
     }
 

@@ -55,7 +55,9 @@ object LoadFailurePolicy {
             val lost = LoadFailures.connectionLost(f.errorCode, f.online)
             return if ((f.downloaded || !lost) && !f.ordinaryTried) Action.PlayOrdinaryStream else Action.WaitForNetwork
         }
-        if (f.originalQualityLeft) return Action.PlayOriginalQuality
+        // Original quality only when the server answered: a lost connection says nothing about its
+        // transcoding, and marking it broken would send lossless over mobile data all session.
+        if (f.originalQualityLeft && !LoadFailures.connectionLost(f.errorCode, f.online)) return Action.PlayOriginalQuality
         return if (!f.online || f.errorCode in WAIT_FOR) Action.WaitForNetwork else Action.Stop
     }
 
