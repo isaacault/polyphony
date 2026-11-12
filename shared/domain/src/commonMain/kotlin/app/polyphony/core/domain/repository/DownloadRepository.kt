@@ -55,6 +55,8 @@ sealed interface DownloadRuleTarget {
     @Serializable data class RecentlyAdded(val albumCount: Int) : DownloadRuleTarget { override val label get() = "Last $albumCount albums added" }
     @Serializable data class MostPlayed(val trackCount: Int) : DownloadRuleTarget { override val label get() = "Top $trackCount most played" }
     @Serializable data class RecentlyPlayed(val trackCount: Int) : DownloadRuleTarget { override val label get() = "Last $trackCount played" }
+    /** A smart playlist (#33); one that was deleted finds nothing, and its downloads are kept. */
+    @Serializable data class Smart(val playlistId: String, val name: String) : DownloadRuleTarget { override val label get() = "Smart playlist · $name" }
 }
 
 /**

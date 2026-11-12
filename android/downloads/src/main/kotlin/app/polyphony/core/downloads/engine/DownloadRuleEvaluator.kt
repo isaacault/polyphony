@@ -134,6 +134,10 @@ class DownloadRuleEvaluator @Inject constructor(
             is DownloadRuleTarget.MostPlayed ->
                 library.tracksSlice(TrackSort.MOST_PLAYED, ascending = true, offset = 0, limit = t.trackCount)
             is DownloadRuleTarget.RecentlyPlayed -> library.recentlyPlayedTracks(t.trackCount).first()
+            is DownloadRuleTarget.Smart -> settingsRepository.current().library.smartPlaylists
+                .firstOrNull { it.id == t.playlistId }
+                ?.let { library.smartPlaylistTracks(it).first() }
+                .orEmpty()
         }
         return if (rule.maxTracks > 0) tracks.take(rule.maxTracks) else tracks
     }
