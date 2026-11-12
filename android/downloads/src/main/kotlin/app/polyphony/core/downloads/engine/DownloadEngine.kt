@@ -114,6 +114,13 @@ class DownloadEngine @Inject constructor(
         if (dao.pendingCount() > 0) scheduler.enqueueDrain(settingsRepository.current().downloads)
     }
 
+    /** One failed download queued again, its error cleared (#18). */
+    suspend fun retry(trackId: String) {
+        if (dao.get(trackId)?.status != DownloadStatus.FAILED) return
+        dao.setStatus(trackId, DownloadStatus.QUEUED, error = null)
+        scheduler.enqueueDrain(settingsRepository.current().downloads)
+    }
+
     /** Verified local file, or null. Marks the row FAILED if the file vanished. */
     suspend fun localFile(trackId: String): DownloadedTrack? {
         val row = dao.get(trackId) ?: return null

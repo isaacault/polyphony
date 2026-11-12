@@ -129,6 +129,8 @@ interface DownloadRepository {
     suspend fun pauseAll()
     suspend fun resumeAll()
     suspend fun retryFailed()
+    /** Tries one failed download again (#18). */
+    suspend fun retry(trackId: String) = retryFailed()
     /** Local file for playback, or null when not fully downloaded. Also bumps lastAccessAt. */
     suspend fun localFile(trackId: String): DownloadedTrack?
 

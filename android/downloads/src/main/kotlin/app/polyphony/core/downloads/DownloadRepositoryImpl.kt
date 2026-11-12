@@ -122,6 +122,7 @@ class DownloadRepositoryImpl @Inject constructor(
     override suspend fun pauseAll() = engine.pauseAll()
     override suspend fun resumeAll() = engine.resumeAll()
     override suspend fun retryFailed() = engine.retryFailed()
+    override suspend fun retry(trackId: String) = engine.retry(trackId)
     override suspend fun localFile(trackId: String): DownloadedTrack? = engine.localFile(trackId)
 
     // ---- Rules ----
