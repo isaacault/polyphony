@@ -53,4 +53,14 @@ class QueuePersistence @Inject constructor(@ApplicationContext context: Context)
         val ticket = file.ticket()
         withContext(Dispatchers.IO) { runCatching { file.clear(ticket) } }
     }
+
+    /** Where long songs were left (LongTrackPositions, #37), beside the queue. */
+    private val longPositions = AtomicTextFile(File(context.filesDir, "playback/long-positions.txt"))
+
+    suspend fun saveLongPositions(text: String) {
+        val ticket = longPositions.ticket()
+        withContext(Dispatchers.IO) { runCatching { longPositions.write(ticket, text) } }
+    }
+
+    suspend fun loadLongPositions(): String? = withContext(Dispatchers.IO) { longPositions.read { it } }
 }

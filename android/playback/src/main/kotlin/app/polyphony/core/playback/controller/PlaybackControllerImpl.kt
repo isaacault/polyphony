@@ -238,6 +238,8 @@ class PlaybackControllerImpl @Inject constructor(
                 queueTitle = extras.getString(SessionExtras.QUEUE_TITLE),
                 playContext = PlayContextCodec.decode(extras.getString(SessionExtras.PLAY_CONTEXT)),
                 sleepTimerEndsAtEpochMs = extras.getLong(SessionExtras.SLEEP_TIMER_ENDS_AT, -1L).takeIf { v -> v > 0 },
+                resumedTrackId = extras.getString(SessionExtras.RESUMED_TRACK_ID),
+                resumedAtMs = extras.getLong(SessionExtras.RESUMED_AT_MS, -1L).takeIf { v -> v >= 0 },
                 audioSessionId = extras.getInt(SessionExtras.AUDIO_SESSION_ID, 0),
             )
         }

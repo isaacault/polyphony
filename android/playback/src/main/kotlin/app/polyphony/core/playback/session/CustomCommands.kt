@@ -43,4 +43,7 @@ object SessionExtras {
     const val DECISION_PROFILE_NAME = "app.polyphony.extras.DECISION_PROFILE_NAME"
     const val DECISION_REASON = "app.polyphony.extras.DECISION_REASON"
     const val DECISION_CAPPED = "app.polyphony.extras.DECISION_CAPPED"
+    /** A long song just resumed where it was left (#37): its id, and where (ms). */
+    const val RESUMED_TRACK_ID = "app.polyphony.extras.RESUMED_TRACK_ID"
+    const val RESUMED_AT_MS = "app.polyphony.extras.RESUMED_AT_MS"
 }

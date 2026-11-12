@@ -28,6 +28,9 @@ data class PlaybackState(
     /** Whether the adaptive latency monitor currently caps quality. */
     val latencyDegraded: Boolean = false,
     val sleepTimerEndsAtEpochMs: Long? = null,
+    /** A long song resumed where it was left (#37): which, and where (ms); for "Start over". */
+    val resumedTrackId: String? = null,
+    val resumedAtMs: Long? = null,
     val queueTitle: String? = null,
     /** The collection the queue was started from, when it was started from one. */
     val playContext: PlayContext? = null,
