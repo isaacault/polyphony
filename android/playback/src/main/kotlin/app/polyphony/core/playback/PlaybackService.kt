@@ -929,7 +929,13 @@ class PlaybackService : MediaLibraryService() {
         items[index].mediaId.takeIf { it.isNotEmpty() }?.let(streamResolver::unpin)
         val position = atPositionMs ?: player.currentPosition
         val playWhenReady = player.playWhenReady
-        player.setMediaItems(items, index, position)
+        // The same song again, not a new choice: a long one doesn't resume over where it is.
+        reloading = true
+        try {
+            player.setMediaItems(items, index, position)
+        } finally {
+            reloading = false
+        }
         player.prepare()
         player.playWhenReady = playWhenReady
     }
@@ -1076,9 +1082,14 @@ class PlaybackService : MediaLibraryService() {
         val serverId = MediaItemFactory.serverIdFrom(item) ?: return
         scope.launch(Dispatchers.IO) {
             val provider = serverLookup.providerFor(serverId) ?: return@launch
-            runCatching {
-                if (change == LongTrackPositions.Change.KEPT) provider.saveBookmark(item.mediaId, positionMs)
-                else provider.deleteBookmark(item.mediaId)
+            if (change == LongTrackPositions.Change.KEPT) {
+                runCatching { provider.saveBookmark(item.mediaId, positionMs) }
+            } else if (runCatching { provider.deleteBookmark(item.mediaId) }.isSuccess) {
+                // Gone from the server too: its old bookmark can't bring the place back now.
+                withContext(Dispatchers.Main) {
+                    longPositions.bookmarkDeleted(item.mediaId)
+                    saveLongPositions()
+                }
             }
         }
     }
@@ -1093,19 +1104,17 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    /** The song playing before the last change of song, to tell a reload of it from a new choice. */
-    private var lastSongId: String? = null
+    /** [reloadCurrentItem] is putting the same song back (a retry, a changed quality), not a new choice. */
+    private var reloading = false
 
     /**
      * A long song chosen (not reached by playing on) resumes where it was left. Not a crossfade
-     * moving on to it (a seek, but the crossfader's), and not the same song reloaded (a retry, a
-     * changed quality), which would undo a "Start over".
+     * moving on to it (a seek, but the crossfader's), and not the same song reloaded, which would
+     * undo a "Start over". Choosing the same song again (from search, its album) does resume.
      */
     private fun resumeLongTrack(item: MediaItem?, reason: Int) {
+        if (reloading) return
         val before = resumed
-        val reloaded = item != null && item.mediaId == lastSongId
-        lastSongId = item?.mediaId
-        if (reloaded) return
         resumed = null
         val chosen = when (reason) {
             Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED -> true
