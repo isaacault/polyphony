@@ -54,14 +54,20 @@ class LongTrackPositionsTest {
         val p = LongTrackPositions()
         p.left("mix", 34 * 60_000L, hour)
         p.finished("mix")
-        p.merge(mapOf("mix" to 34 * 60_000L))   // the delete failed, offline
+        // The delete failed, offline: the stale bookmark is to be deleted again, not taken.
+        assertEquals(listOf("mix"), p.merge(mapOf("mix" to 34 * 60_000L)))
         assertNull(p.resumeAt("mix", hour))
         val restarted = LongTrackPositions().apply { load(p.serialize()) }
-        restarted.merge(mapOf("mix" to 34 * 60_000L))
+        assertEquals(listOf("mix"), restarted.merge(mapOf("mix" to 34 * 60_000L)))
         assertNull("still after a restart", restarted.resumeAt("mix", hour))
-        restarted.bookmarkDeleted("mix")
-        restarted.merge(mapOf("mix" to 20 * 60_000L))   // left on another device since
-        assertEquals(20 * 60_000L, restarted.resumeAt("mix", hour))
+    }
+
+    @Test fun `a newer place from another device is taken over a forgotten one`() {
+        val p = LongTrackPositions()
+        p.left("mix", 34 * 60_000L, hour)
+        p.finished("mix")
+        assertEquals(emptyList<String>(), p.merge(mapOf("mix" to 20 * 60_000L)))   // left on a tablet since
+        assertEquals(20 * 60_000L, p.resumeAt("mix", hour))
     }
 
     @Test fun `the phone's own places outlast the server's bookmarks`() {

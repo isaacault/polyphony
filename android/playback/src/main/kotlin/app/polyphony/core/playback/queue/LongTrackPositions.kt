@@ -8,8 +8,11 @@ package app.polyphony.core.playback.queue
  */
 class LongTrackPositions {
     private val positions = LinkedHashMap<String, Long>()   // track id -> ms, least recently left first
-    /** Places forgotten here whose bookmark the server may still hold (its delete not yet confirmed). */
-    private val forgotten = LinkedHashSet<String>()
+    /**
+     * Places forgotten here whose bookmark the server may still hold (its delete not yet
+     * confirmed): track id to the position that bookmark has.
+     */
+    private val forgotten = LinkedHashMap<String, Long>()
 
     /** What leaving a song did to its place, for the server's bookmark to follow. */
     enum class Change { KEPT, FORGOTTEN, NONE }
@@ -17,22 +20,22 @@ class LongTrackPositions {
     /** The song was left at [positionMs] of [durationMs] (paused, skipped, another one chosen). */
     fun left(trackId: String, positionMs: Long, durationMs: Long): Change {
         if (durationMs < LONG_MS) return Change.NONE
-        val had = positions.remove(trackId) != null
+        val had = positions.remove(trackId)
         if (remembers(positionMs, durationMs)) {
             positions[trackId] = positionMs
             forgotten.remove(trackId)
             trim()
             return Change.KEPT
         }
-        if (!had) return Change.NONE
-        forget(trackId)
+        if (had == null) return Change.NONE
+        forget(trackId, had)
         return Change.FORGOTTEN
     }
 
     /** Played to its end: next time it starts from the beginning. True when it had a place. */
     fun finished(trackId: String): Boolean {
-        if (positions.remove(trackId) == null) return false
-        forget(trackId)
+        val had = positions.remove(trackId) ?: return false
+        forget(trackId, had)
         return true
     }
 
@@ -42,25 +45,42 @@ class LongTrackPositions {
     }
 
     /**
-     * The server's bookmarks (track id to ms), for songs with no place on this phone. Not for
-     * places forgotten here (their bookmark may linger after a delete that failed), and placed
-     * as the oldest, so the phone's own places are the last to go.
+     * The server's bookmarks (track id to ms), for songs with no place on this phone, placed as
+     * the oldest so the phone's own places are the last to go. A bookmark still at a place
+     * forgotten here is the one whose delete failed: it isn't taken, and its id is returned to be
+     * deleted again. One at another place was left on another device since, and is taken.
      */
-    fun merge(bookmarks: Map<String, Long>) {
-        val fromServer = bookmarks.filter { (id, ms) -> id !in positions && id !in forgotten && ms >= MARGIN_MS }
-        if (fromServer.isEmpty()) return
-        val own = LinkedHashMap(positions)
-        positions.clear()
-        positions.putAll(fromServer)
-        positions.putAll(own)
-        trim()
+    fun merge(bookmarks: Map<String, Long>): List<String> {
+        val stale = ArrayList<String>()
+        val fromServer = LinkedHashMap<String, Long>()
+        for ((id, ms) in bookmarks) {
+            if (id in positions || ms < MARGIN_MS) continue
+            val gone = forgotten[id]
+            if (gone != null) {
+                if (gone == ms) {
+                    stale += id
+                    continue
+                }
+                forgotten.remove(id)
+            }
+            fromServer[id] = ms
+        }
+        if (fromServer.isNotEmpty()) {
+            val own = LinkedHashMap(positions)
+            positions.clear()
+            positions.putAll(fromServer)
+            positions.putAll(own)
+            trim()
+        }
+        return stale
     }
 
     /** Where to start [trackId], [durationMs] long, when it's chosen, or null for its beginning. */
     fun resumeAt(trackId: String, durationMs: Long): Long? = positions[trackId]?.takeIf { remembers(it, durationMs) }
 
     fun serialize(): String =
-        (positions.entries.map { (id, ms) -> "$ms\t$id" } + forgotten.map { "$FORGOTTEN_MARK\t$it" }).joinToString("\n")
+        (positions.entries.map { (id, ms) -> "$ms\t$id" } + forgotten.entries.map { (id, ms) -> "$FORGOTTEN_MARK$ms\t$id" })
+            .joinToString("\n")
 
     /** Reads what [serialize] wrote; lines it can't read are skipped. */
     fun load(text: String) {
@@ -71,14 +91,18 @@ class LongTrackPositions {
             if (tab <= 0) continue
             val id = line.substring(tab + 1)
             val head = line.substring(0, tab)
-            if (head == FORGOTTEN_MARK) forgotten += id else head.toLongOrNull()?.let { positions[id] = it }
+            if (head.startsWith(FORGOTTEN_MARK)) {
+                forgotten[id] = head.removePrefix(FORGOTTEN_MARK).toLongOrNull() ?: -1L
+            } else {
+                head.toLongOrNull()?.let { positions[id] = it }
+            }
         }
     }
 
-    private fun forget(trackId: String) {
+    private fun forget(trackId: String, positionMs: Long) {
         forgotten.remove(trackId)
-        forgotten += trackId
-        while (forgotten.size > MAX) forgotten.remove(forgotten.first())
+        forgotten[trackId] = positionMs
+        while (forgotten.size > MAX) forgotten.remove(forgotten.keys.first())
     }
 
     private fun trim() {
