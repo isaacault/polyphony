@@ -111,11 +111,13 @@ class ContinuoRequestRepository internal constructor(
         return client.decode(ScrobbleLinksDto.serializer(), reply.body).toDomain()
     }
 
-    override suspend fun scrobblePlayNow(server: Server, streamId: String, listenedAtMs: Long?) {
+    override suspend fun scrobblePlayNow(server: Server, streamId: String, listenedAtMs: Long?): Set<app.polyphony.core.domain.model.ScrobbleService> {
         val body = if (listenedAtMs != null) """{"listenedAt":${listenedAtMs / 1000}}""" else "{}"
         val reply = client.post(server, "/v1/play-now/${URLEncoder.encode(streamId, "UTF-8")}/scrobble", body)
-        // 404/405: a continuo from before; best-effort either way.
-        if (reply.code !in 200..299 && reply.code !in setOf(404, 405)) throw client.serverError(reply, "scrobble failed")
+        // 405: a continuo from before Play now scrobbling; it reached nothing.
+        if (reply.code == 405) return emptySet()
+        if (reply.code !in 200..299) throw client.serverError(reply, "scrobble failed")
+        return runCatching { scrobbleServices(client.decode(ScrobbleSentDto.serializer(), reply.body).sent) }.getOrDefault(emptySet())
     }
 
     override suspend fun discoveryPlaylist(server: Server, id: String): app.polyphony.core.domain.model.DiscoveryPlaylistPage? {

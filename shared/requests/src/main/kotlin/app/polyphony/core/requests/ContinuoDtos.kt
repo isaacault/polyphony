@@ -192,7 +192,26 @@ internal data class SingleAlbumDto(val navidromeAlbumId: String, val have: Int =
 internal data class ScrobbleLinksDto(
     val listenbrainz: ScrobbleLinkDto = ScrobbleLinkDto(),
     val lastfm: ScrobbleLinkDto = ScrobbleLinkDto(),
+    /** What Navidrome scrobbles the account's library songs to; absent from a continuo that can't say. */
+    val library: LibraryScrobblingDto? = null,
 )
+
+@Serializable
+internal data class LibraryScrobblingDto(val listenbrainz: Boolean = false, val lastfm: Boolean = false)
+
+/** `POST /v1/play-now/{id}/scrobble`: the services continuo reached. */
+@Serializable
+internal data class ScrobbleSentDto(val sent: List<String> = emptyList())
+
+/** Service names as continuo writes them; unknown ones are left out. */
+internal fun scrobbleServices(names: Collection<String>): Set<app.polyphony.core.domain.model.ScrobbleService> =
+    names.mapNotNullTo(LinkedHashSet()) { name ->
+        when (name.lowercase()) {
+            "listenbrainz" -> app.polyphony.core.domain.model.ScrobbleService.LISTENBRAINZ
+            "lastfm" -> app.polyphony.core.domain.model.ScrobbleService.LASTFM
+            else -> null
+        }
+    }
 
 @Serializable
 internal data class ScrobbleLinkDto(val available: Boolean = false, val connected: Boolean = false, val account: String? = null)
@@ -205,7 +224,11 @@ internal data class LastFmStartDto(val token: String, val url: String)
 
 internal fun ScrobbleLinkDto.toDomain() = app.polyphony.core.domain.model.ScrobbleLink(available, connected, account?.takeIf { it.isNotBlank() })
 
-internal fun ScrobbleLinksDto.toDomain() = app.polyphony.core.domain.model.ScrobbleLinks(listenbrainz.toDomain(), lastfm.toDomain())
+internal fun ScrobbleLinksDto.toDomain() = app.polyphony.core.domain.model.ScrobbleLinks(
+    listenbrainz.toDomain(),
+    lastfm.toDomain(),
+    library?.let { scrobbleServices(listOfNotNull("listenbrainz".takeIf { _ -> it.listenbrainz }, "lastfm".takeIf { _ -> it.lastfm })) },
+)
 
 /** `GET /v1/library/lyrics`: a song's lyrics from LRCLIB. */
 @Serializable

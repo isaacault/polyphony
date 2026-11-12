@@ -10,11 +10,13 @@ import app.polyphony.core.domain.repository.ScrobbleAuthException
 import app.polyphony.core.domain.repository.ScrobbleRepository
 import app.polyphony.core.scrobble.db.QueuedScrobbleEntity
 import app.polyphony.core.scrobble.db.ScrobbleDao
+import app.polyphony.core.scrobble.db.ServerPlayEntity
 import app.polyphony.core.scrobble.lastfm.LastFmClient
 import app.polyphony.core.scrobble.lastfm.LastFmConfig
 import app.polyphony.core.scrobble.listenbrainz.ListenBrainzClient
 import app.polyphony.core.scrobble.queue.toDomain
 import app.polyphony.core.scrobble.queue.toEntity
+import app.polyphony.core.scrobble.server.ServerPlays
 import app.polyphony.core.scrobble.work.ScrobbleScheduler
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -33,6 +35,7 @@ class ScrobbleRepositoryImpl @Inject constructor(
     private val lastFmConfig: LastFmConfig,
     private val scheduler: ScrobbleScheduler,
     private val json: Json,
+    private val server: ServerPlays,
 ) : ScrobbleRepository {
 
     override val accounts: Flow<List<ScrobbleAccount>> =
@@ -78,8 +81,11 @@ class ScrobbleRepositoryImpl @Inject constructor(
 
     override suspend fun setNowPlaying(service: ScrobbleService, enabled: Boolean) = dao.setNowPlaying(service.name, enabled)
 
-    override suspend fun nowPlaying(track: Track) {
-        val accounts = runCatching { connected() }.getOrDefault(emptyList()).filter { it.nowPlaying && !it.needsReconnect }
+    override suspend fun nowPlaying(track: Track, toServer: Boolean) {
+        // The server first: the services it told needn't hear it from this phone too.
+        val covered = if (toServer) server.nowPlaying(track.serverId, track.id) else emptySet()
+        val accounts = runCatching { connected() }.getOrDefault(emptyList())
+            .filter { it.nowPlaying && !it.needsReconnect && it.service !in covered }
         if (accounts.isEmpty()) return
         val scrobble = scrobbleOf(track, System.currentTimeMillis()) ?: return
         for (account in accounts) {
@@ -95,14 +101,21 @@ class ScrobbleRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun played(track: Track, playedAtEpochMs: Long) {
+    override suspend fun played(track: Track, playedAtEpochMs: Long, toServer: Boolean) {
         val accounts = runCatching { connected() }.getOrDefault(emptyList())
-        if (accounts.isEmpty()) return
-        val scrobble = scrobbleOf(track, playedAtEpochMs) ?: return
-        val payload = json.encodeToString(Scrobble.serializer(), scrobble)
+        val payload = if (accounts.isEmpty()) null
+        else scrobbleOf(track, playedAtEpochMs)?.let { json.encodeToString(Scrobble.serializer(), it) }
         val now = System.currentTimeMillis()
-        // Queued even for an account waiting to be connected again: sent once it is.
-        dao.enqueue(accounts.map { QueuedScrobbleEntity(service = it.service.name, payload = payload, createdAt = now) })
+        if (toServer) {
+            // Kept until the server has it; then on to the accounts it doesn't scrobble to itself.
+            dao.enqueueServerPlay(
+                ServerPlayEntity(serverId = track.serverId, trackId = track.id, playedAt = playedAtEpochMs, payload = payload, createdAt = now),
+            )
+        } else {
+            if (payload == null) return
+            // Queued even for an account waiting to be connected again: sent once it is.
+            dao.enqueue(accounts.map { QueuedScrobbleEntity(service = it.service.name, payload = payload, createdAt = now) })
+        }
         runCatching { scheduler.drain() }
     }
 

@@ -6,18 +6,23 @@ import app.polyphony.core.domain.model.Track
 import kotlinx.coroutines.flow.Flow
 
 /**
- * What playback tells the scrobblers: a track started, a play counted
- * ([app.polyphony.core.domain.playback.ScrobbleRule]). Neither may block or throw: a counted play is
- * written to a queue and sent when the network allows.
+ * What playback tells the server and the scrobblers: a track started, a play counted
+ * ([app.polyphony.core.domain.playback.ScrobbleRule]). Neither may block or throw.
+ *
+ * The server is told first when [toServer] (the "report plays" setting): Navidrome for a library
+ * song, continuo for a Play now song. It scrobbles to the accounts linked there, so this phone's own
+ * accounts get only what the server didn't cover; a service linked in both places hears a play
+ * once. A counted play is kept on the phone until the server has it (offline, it waits with the
+ * time it was played), and only then goes on to this phone's accounts.
  */
 interface Scrobbler {
-    suspend fun nowPlaying(track: Track)
-    suspend fun played(track: Track, playedAtEpochMs: Long)
+    suspend fun nowPlaying(track: Track, toServer: Boolean)
+    suspend fun played(track: Track, playedAtEpochMs: Long, toServer: Boolean)
 
     companion object {
         val NONE = object : Scrobbler {
-            override suspend fun nowPlaying(track: Track) = Unit
-            override suspend fun played(track: Track, playedAtEpochMs: Long) = Unit
+            override suspend fun nowPlaying(track: Track, toServer: Boolean) = Unit
+            override suspend fun played(track: Track, playedAtEpochMs: Long, toServer: Boolean) = Unit
         }
     }
 }
@@ -36,9 +41,9 @@ interface ScrobbleAccounts {
 }
 
 /**
- * Scrobbling straight from this phone to ListenBrainz and Last.fm (#39), on top of what the server
- * reports. Opt-in: nothing is sent until an account is connected, and this is the only traffic that
- * leaves the user's own server.
+ * Scrobbling straight from this phone to ListenBrainz and Last.fm (#39), for what the server doesn't
+ * scrobble itself. Opt-in: nothing is sent until an account is connected, and this is the only
+ * traffic that leaves the user's own server.
  */
 interface ScrobbleRepository : Scrobbler, ScrobbleAccounts {
     val accounts: Flow<List<ScrobbleAccount>>

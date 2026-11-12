@@ -1,5 +1,6 @@
 package app.polyphony.core.scrobble.db
 
+import androidx.room.AutoMigration
 import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
@@ -9,6 +10,7 @@ import androidx.room.Insert
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
@@ -28,6 +30,23 @@ data class QueuedScrobbleEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val service: String,
     val payload: String,
+    val attempts: Int = 0,
+    val createdAt: Long,
+)
+
+/**
+ * A counted play the server hasn't been told of yet: [trackId] on [serverId] (a Play now song's
+ * id carries its stream), started at [playedAt]. [payload] is the play as this phone's accounts take
+ * it ([app.polyphony.core.scrobble.Scrobble] JSON; null when they can't, a song without an artist):
+ * once the server has the play, it goes to the accounts the server didn't cover.
+ */
+@Entity(tableName = "server_plays")
+data class ServerPlayEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val serverId: String,
+    val trackId: String,
+    val playedAt: Long,
+    val payload: String?,
     val attempts: Int = 0,
     val createdAt: Long,
 )
@@ -74,6 +93,25 @@ interface ScrobbleDao {
 
     @Query("SELECT COUNT(*) FROM queue")
     suspend fun pendingCount(): Int
+
+    @Insert
+    suspend fun enqueueServerPlay(row: ServerPlayEntity)
+
+    @Query("SELECT * FROM server_plays ORDER BY id LIMIT :limit")
+    suspend fun oldestServerPlays(limit: Int): List<ServerPlayEntity>
+
+    @Query("DELETE FROM server_plays WHERE id = :id")
+    suspend fun deleteServerPlay(id: Long)
+
+    @Query("UPDATE server_plays SET attempts = attempts + 1 WHERE id = :id")
+    suspend fun recordServerPlayFailure(id: Long)
+
+    /** The server has play [id] (or never will): its listen goes on to this phone's accounts, in one step. */
+    @Transaction
+    suspend fun releaseServerPlay(id: Long, rows: List<QueuedScrobbleEntity>) {
+        if (rows.isNotEmpty()) enqueue(rows)
+        deleteServerPlay(id)
+    }
 }
 
 /**
@@ -81,7 +119,12 @@ interface ScrobbleDao {
  * library database is for the servers' passwords) and plays not yet sent, which a library rebuild
  * must never lose.
  */
-@Database(entities = [ScrobbleAccountEntity::class, QueuedScrobbleEntity::class], version = 1, exportSchema = true)
+@Database(
+    entities = [ScrobbleAccountEntity::class, QueuedScrobbleEntity::class, ServerPlayEntity::class],
+    version = 2,
+    exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
+)
 abstract class ScrobbleDatabase : RoomDatabase() {
     abstract fun scrobbleDao(): ScrobbleDao
 
