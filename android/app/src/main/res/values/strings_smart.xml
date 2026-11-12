@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Smart playlists (#33): rule-based playlists over the library on the phone. -->
+<resources>
+    <string name="smart_section">Smart playlists</string>
+    <string name="smart_new">New smart playlist</string>
+    <string name="smart_title_new">New smart playlist</string>
+    <string name="smart_title_edit">Edit smart playlist</string>
+    <string name="smart_default_name">Smart playlist</string>
+    <string name="smart_name">Name</string>
+    <string name="smart_match_all">All rules</string>
+    <string name="smart_match_any">Any rule</string>
+    <string name="smart_rules">Songs matching</string>
+    <string name="smart_add_rule">Add rule</string>
+    <string name="smart_remove_rule">Remove rule</string>
+    <string name="smart_value">Value</string>
+    <string name="smart_order">Order</string>
+    <string name="smart_reversed">Reversed</string>
+    <string name="smart_limit">At most this many songs (empty for all)</string>
+    <string name="smart_counting">Counting…</string>
+    <plurals name="smart_matches">
+        <item quantity="one">%d song matches now</item>
+        <item quantity="other">%d songs match now</item>
+    </plurals>
+    <string name="smart_save">Save</string>
+    <string name="smart_edit">Edit rules</string>
+    <string name="smart_delete">Delete</string>
+    <string name="smart_delete_title">Delete this smart playlist?</string>
+    <string name="smart_delete_body">Only its rules go; the songs stay in your library.</string>
+    <string name="smart_empty">No songs match these rules now</string>
+    <string name="smart_empty_hint">The list follows your library: songs appear as they come to match.</string>
+    <string name="smart_every_song">Every song</string>
+    <string name="smart_join_all">and</string>
+    <string name="smart_join_any">or</string>
+
+    <string name="smart_field_title">Title</string>
+    <string name="smart_field_artist">Artist</string>
+    <string name="smart_field_album">Album</string>
+    <string name="smart_field_genre">Genre</string>
+    <string name="smart_field_format">Format</string>
+    <string name="smart_field_year">Year</string>
+    <string name="smart_field_rating">Rating (stars)</string>
+    <string name="smart_field_play_count">Play count</string>
+    <string name="smart_field_duration">Length (minutes)</string>
+    <string name="smart_field_bitrate">Bitrate (kbit/s)</string>
+    <string name="smart_field_added">Added</string>
+    <string name="smart_field_last_played">Last played</string>
+    <string name="smart_field_favourite">Favourite</string>
+
+    <string name="smart_op_is">is</string>
+    <string name="smart_op_is_not">is not</string>
+    <string name="smart_op_contains">contains</string>
+    <string name="smart_op_not_contains">doesn\'t contain</string>
+    <string name="smart_op_at_least">at least</string>
+    <string name="smart_op_at_most">at most</string>
+    <string name="smart_op_within">in the last (days)</string>
+    <string name="smart_op_not_within">not in the last (days)</string>
+    <string name="smart_op_yes">yes</string>
+    <string name="smart_op_no">no</string>
+
+    <string name="smart_sort_title">Title</string>
+    <string name="smart_sort_artist">Artist</string>
+    <string name="smart_sort_album">Album</string>
+    <string name="smart_sort_duration">Longest first</string>
+    <string name="smart_sort_added">Newest first</string>
+    <string name="smart_sort_most_played">Most played first</string>
+    <string name="smart_sort_rating">Highest rated first</string>
+</resources>

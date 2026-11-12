@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import app.polyphony.core.domain.model.LetterIndex
+import app.polyphony.core.domain.model.SmartPlaylist
 import app.polyphony.core.domain.model.Album
 import app.polyphony.core.domain.model.AlbumSort
 import app.polyphony.core.domain.model.Artist
@@ -109,6 +110,9 @@ class LibraryViewModel @Inject constructor(
     val artistsGrid: StateFlow<Boolean> = settings.settings.map { it.appearance.artistsLayout == LibraryLayout.GRID }.asState(false)
     val albumsGrid: StateFlow<Boolean> = settings.settings.map { it.appearance.albumsLayout == LibraryLayout.GRID }.asState(false)
     val playlistsGrid: StateFlow<Boolean> = settings.settings.map { it.appearance.playlistsLayout == LibraryLayout.GRID }.asState(false)
+
+    /** Rule-based playlists over the library on the phone (#33), shown above the server's. */
+    val smartPlaylists: StateFlow<List<SmartPlaylist>> = settings.settings.map { it.library.smartPlaylists }.distinctUntilChanged().asState(emptyList())
 
     fun setArtistSort(sort: ArtistSort) = updateAppearance { it.copy(artistSort = sort) }
     fun setAlbumSort(sort: AlbumSort, ascending: Boolean) = updateAppearance { it.copy(albumSort = sort, albumAscending = ascending) }
