@@ -41,6 +41,11 @@ class QueuePrefetcher(
     private var job: Job? = null
     private var planned: List<Song> = emptyList()
 
+    private val _fetchedHls: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /** Adaptive songs fetched ahead in full this session: playable offline from the stream cache. */
+    val fetchedHls: Set<String> get() = _fetchedHls
+
     /** Bring the fetching in line with the plan: [songs] to have cached, nearest first. */
     fun update(songs: List<Song>) {
         if (songs == planned && job?.isActive == true) return
@@ -67,6 +72,7 @@ class QueuePrefetcher(
                 try {
                     val bytes = fetchHls(factory, song.hls) { fetched += it }
                     Log.i(TAG, "Fetched ${song.trackId} ahead at ${song.hls.kbps} kbit/s (${bytes / KB} KB)")
+                    _fetchedHls += song.trackId
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: IOException) {
