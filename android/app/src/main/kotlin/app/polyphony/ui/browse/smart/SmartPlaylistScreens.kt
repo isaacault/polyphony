@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +65,8 @@ import app.polyphony.core.ui.components.listContentPadding
 import app.polyphony.navigation.LocalNavigator
 import app.polyphony.ui.common.TrackOptionsSheet
 import app.polyphony.ui.common.TrackSwipeRow
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 
 // ---- labels ----
 
@@ -132,6 +135,7 @@ internal fun describe(playlist: SmartPlaylist): String {
 @Composable
 fun SmartPlaylistScreen(viewModel: SmartPlaylistViewModel = hiltViewModel()) {
     val navigator = LocalNavigator.current
+    val scope = rememberCoroutineScope()
     val playlist by viewModel.playlist.collectAsStateWithLifecycle()
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
     val playback by viewModel.playbackState.collectAsStateWithLifecycle()
@@ -219,7 +223,13 @@ fun SmartPlaylistScreen(viewModel: SmartPlaylistViewModel = hiltViewModel()) {
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
-                    viewModel.delete { navigator.back() }
+                    scope.launch {
+                        // This scope ends with the screen: no going back from wherever the listener went.
+                        if (viewModel.delete()) {
+                            ensureActive()
+                            navigator.back()
+                        }
+                    }
                 }) { Text(stringResource(R.string.smart_delete)) }
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(android.R.string.cancel)) } },

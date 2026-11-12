@@ -18,7 +18,9 @@ import app.polyphony.navigation.SmartPlaylistRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -71,13 +73,13 @@ class SmartPlaylistViewModel @Inject constructor(
         if (list.isNotEmpty()) playback.playTracks(list, 0, shuffle, playlist.value?.name)
     }
 
-    /** Deletes it, then [onDone] (leaving the screen only once it is written). */
-    fun delete(onDone: () -> Unit) {
-        viewModelScope.launch {
-            settings.updateSmartPlaylists { list -> list.filterNot { it.id == id } }
-            onDone()
-        }
-    }
+    /**
+     * Deletes it; true once written. The write finishes even if the screen goes meanwhile, and
+     * the caller leaves the screen only if it's still there to leave.
+     */
+    suspend fun delete(): Boolean = runCatching {
+        withContext(NonCancellable) { settings.updateSmartPlaylists { list -> list.filterNot { it.id == id } } }
+    }.isSuccess
 
     fun togglePinnedToHome() {
         viewModelScope.launch {
