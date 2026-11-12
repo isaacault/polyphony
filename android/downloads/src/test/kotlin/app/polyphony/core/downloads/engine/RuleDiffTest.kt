@@ -143,4 +143,22 @@ class RuleDiffTest {
         assertEquals(emptySet<String>(), holding.held)
         assertEquals(emptySet<String>(), holding.empty)
     }
+
+    @Test
+    fun `a pinned song a rule also wants is tied to it, stays pinned, and is untied when the rule lets go`() {
+        val wants = RuleDiff.mergeDesired(listOf(rule("r1") to listOf(track("mine"))), TranscodeProfile.ORIGINAL_ID, profiles)
+        val pinned = have("mine", pinned = true, ruleId = null)
+        val tied = RuleDiff.compute(wants, listOf(pinned), removeWhenRuleNoLongerMatches = true, profiles)
+        assertEquals(listOf("mine" to "r1"), tied.retag)
+        assertTrue("nothing downloaded again", tied.enqueue.isEmpty())
+
+        val none = RuleDiff.mergeDesired(listOf(rule("r1") to emptyList()), TranscodeProfile.ORIGINAL_ID, profiles)
+        val linked = have("mine", pinned = true, ruleId = "r1")
+        val untied = RuleDiff.compute(none, listOf(linked), removeWhenRuleNoLongerMatches = true, profiles)
+        assertEquals(listOf("mine" to null), untied.retag)
+        assertTrue("a pinned song is never removed by a rule", untied.remove.isEmpty())
+
+        val heldRule = RuleDiff.compute(none, listOf(linked), removeWhenRuleNoLongerMatches = true, profiles, held = setOf("r1"))
+        assertTrue("a rule that couldn't say keeps its tie", heldRule.retag.isEmpty())
+    }
 }

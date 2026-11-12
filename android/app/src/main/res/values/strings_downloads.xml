@@ -65,6 +65,9 @@
     <string name="dl_status_paused">Paused</string>
     <string name="dl_status_failed">Failed</string>
     <string name="dl_status_completed">Downloaded</string>
+    <string name="dl_origin_pinned">Downloaded by you</string>
+    <string name="dl_origin_rule">By rule: %1$s</string>
+    <string name="dl_origin_pinned_and_rule">Downloaded by you, and by rule: %1$s. Kept if the rule lets go.</string>
     <string name="dl_rule_evaluating">Checking rules…</string>
     <string name="dl_rule_last_evaluated">Last checked %1$s</string>
     <string name="dl_rule_disabled">Disabled</string>

@@ -446,15 +446,20 @@ private fun DownloadedTab(state: DownloadsUiState, vm: DownloadsViewModel, onTra
                     ListItem(
                         headlineContent = { Text(group.albumName, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium) },
                         supportingContent = {
-                            Text(
-                                listOfNotNull(
-                                    group.artistName,
-                                    pluralStringResource(R.plurals.dl_count_songs, group.tracks.size, group.tracks.size),
-                                    formatBytes(group.sizeBytes),
-                                ).joinToString(" · "),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            Column {
+                                Text(
+                                    listOfNotNull(
+                                        group.artistName,
+                                        pluralStringResource(R.plurals.dl_count_songs, group.tracks.size, group.tracks.size),
+                                        formatBytes(group.sizeBytes),
+                                    ).joinToString(" · "),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                downloadOrigin(group)?.let {
+                                    Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
                         },
                         leadingContent = {
                             ArtworkImage(url = group.artworkUrl, contentDescription = null, modifier = Modifier.size(Dimens.listArtwork), shape = ArtworkShapes.listThumb)
@@ -506,6 +511,18 @@ private fun DownloadedTab(state: DownloadsUiState, vm: DownloadsViewModel, onTra
             onConfirm = { vm.remove(group.trackIds); groupToRemove = null },
             onDismiss = { groupToRemove = null },
         )
+    }
+}
+
+/** Where an album's downloads come from: pinned by hand, a rule, or both (#17). */
+@Composable
+private fun downloadOrigin(group: DownloadedAlbumGroup): String? {
+    val rules = group.rules.joinToString(", ")
+    return when {
+        group.pinned && group.rules.isNotEmpty() -> stringResource(R.string.dl_origin_pinned_and_rule, rules)
+        group.pinned -> stringResource(R.string.dl_origin_pinned)
+        group.rules.isNotEmpty() -> stringResource(R.string.dl_origin_rule, rules)
+        else -> null
     }
 }
 
