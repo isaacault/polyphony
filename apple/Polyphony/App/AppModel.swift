@@ -225,16 +225,6 @@ final class AppModel {
         return URL(string: ReceiverURL.rewrite(url.absoluteString, baseURL: base, receiver: receiverAddress)) ?? url
     }
 
-    private static func mime(for container: String?) -> String {
-        switch container?.lowercased() {
-        case "mp3": "audio/mpeg"
-        case "m4a", "aac", "alac": "audio/mp4"
-        case "ogg", "oga": "audio/ogg"
-        case "opus": "audio/opus"
-        case "wav": "audio/wav"
-        default: "audio/flac"
-        }
-    }
     @ObservationIgnored private let nowPlaying: NowPlayingCenter
     @ObservationIgnored private let store = KeychainServerStore()
     @ObservationIgnored private let arrivals = ArrivalNotifier()
@@ -847,10 +837,17 @@ final class AppModel {
                                                                 mimeType: mime, durationMs: Int(t.duration * 1000)))
         case let .playNow(stream, song):
             if !isLocalOutput {
-                // A speaker sends no token: continuo signs it a link, on the LAN door, to the file as it is.
+                // A speaker sends no token: continuo signs it a link, on the LAN door, to the file as it is,
+                // told its real format, or converted when the speaker doesn't play it (the Yamaha: Opus).
                 guard let link = await playNowLink(stream.id) else { return nil }
-                return AudioSource(url: link, info: .init(title: song.title, artist: song.artist, album: song.albumTitle,
-                                                          mimeType: Self.mime(for: stream.format),
+                let choice = PlayNowSpeakerFormat.choose(format: stream.format,
+                                                         formats: speaker == nil ? RendererFormats.unknownFormats : speakerFormats)
+                if let fmt = choice.convertTo {
+                    DiagnosticLog.shared.log("output", "Play now \"\(song.title)\" (\(stream.format ?? "unknown")): converted to \(fmt) for the speaker")
+                }
+                return AudioSource(url: PlayNowSpeakerFormat.link(link, choice),
+                                   info: .init(title: song.title, artist: song.artist, album: song.albumTitle,
+                                                          mimeType: choice.mimeType,
                                                           durationMs: stream.durationMs ?? song.durationMs))
             }
             guard let continuo, let token = try? await continuo.account.accessToken() else { return nil }
